@@ -19,8 +19,9 @@ services:
         value: "60"
 
   # React + Vite + Tailwind frontend as static site
-  - type: static
+  - type: static_site
     name: ppf-rejection-frontend
+    env: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
