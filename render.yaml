@@ -28,7 +28,7 @@ services:
         value: "sqlite+aiosqlite:///./rejections_dev.db"
 
   # React + Vite frontend on Render (static site)
-  - type: static
+  - type: static_site
     name: ppf-frontend
     rootDir: frontend
     plan: free
