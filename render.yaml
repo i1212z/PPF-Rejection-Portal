@@ -1,32 +1,51 @@
 services:
   # FastAPI backend on Render
   - type: web
-    name: ppf-rejection-backend
+    name: ppf-backend
     env: python
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    autoDeploy: true
+
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+
+    startCommand: |
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
     envVars:
-      # Set these in the Render dashboard (do NOT commit secrets)
-      - key: DATABASE_URL
-        sync: false
+      # JWT / auth settings
       - key: SECRET_KEY
-        sync: false
+        generateValue: true
       - key: ALGORITHM
         value: HS256
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "60"
 
-  # React + Vite + Tailwind frontend as static site via Blueprint
-  - type: web
-    name: ppf-rejection-frontend
-    env: static
+      # Use SQLite file inside the service container (demo / non-persistent)
+      - key: DATABASE_URL
+        value: "sqlite+aiosqlite:///./rejections_dev.db"
+
+staticSites:
+  # React + Vite frontend on Render
+  - type: static
+    name: ppf-frontend
     rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
+    plan: free
+    autoDeploy: true
+
+    buildCommand: |
+      npm install
+      npm run build
+
+    publishDir: dist
+
     envVars:
-      # After the backend is deployed, update this to the backend URL
-      # e.g. https://ppf-rejection-backend.onrender.com
+      # Point frontend API to backend Render service URL
       - key: VITE_API_BASE_URL
-        value: ""
+        fromService:
+          type: web
+          name: ppf-backend
+          envVarName: RENDER_EXTERNAL_URL
 
