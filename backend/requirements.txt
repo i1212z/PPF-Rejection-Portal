@@ -5,6 +5,7 @@ asyncpg
 alembic
 python-jose[cryptography]
 passlib[bcrypt]
+bcrypt
 python-multipart
 pydantic[email]
 pydantic-settings
