@@ -38,3 +38,31 @@ async def login(
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
+
+@router.get("/seed-users")
+async def seed_users(db: AsyncSession = Depends(get_db)):
+    from passlib.context import CryptContext
+    from ..models import User, UserRole
+
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+    users = [
+        ("B2B Exec", "b2b@ppf.local", "b2b123", UserRole.B2B),
+        ("B2C Exec", "b2c@ppf.local", "b2c123", UserRole.B2C),
+        ("Manager", "manager@ppf.local", "manager123", UserRole.MANAGER),
+        ("Admin", "admin@ppf.local", "admin123", UserRole.ADMIN),
+    ]
+
+    for name, email, password, role in users:
+        user = User(
+            name=name,
+            email=email,
+            password_hash=pwd_context.hash(password),
+            role=role
+        )
+        db.add(user)
+
+    await db.commit()
+
+    return {"status": "users created"}
+
