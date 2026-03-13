@@ -4,8 +4,6 @@ SQLAlchemy>=2.0
 asyncpg
 alembic
 python-jose[cryptography]
-passlib[bcrypt]
-bcrypt
 python-multipart
 pydantic[email]
 pydantic-settings
@@ -15,4 +13,5 @@ fastapi
 uvicorn
 sqlalchemy
 asyncpg
-
+bcrypt==3.2.2
+passlib[bcrypt]==1.7.4
