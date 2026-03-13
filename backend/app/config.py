@@ -28,6 +28,6 @@ def get_settings() -> Settings:
     settings = Settings()
     # Fallback to local sqlite for easy localhost development
     if not settings.database_url:
-        settings.database_url = "sqlite+aiosqlite:///./rejections_dev.db"
+        settings.database_url = "postgresql://ppf_rejection_db_user:yaaPJ10LWPeOYHhPYRghsIEYVgyKGZhI@dpg-d6plfan5gffc73dme5qg-a/ppf_rejection_db"
     return settings
 
