@@ -43,6 +43,11 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def seed_users(db: AsyncSession = Depends(get_db)):
     from passlib.context import CryptContext
     from ..models import User, UserRole
+    from ..database import engine, Base
+
+    # ensure tables exist
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -65,4 +70,3 @@ async def seed_users(db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     return {"status": "users created"}
-
