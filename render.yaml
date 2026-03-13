@@ -1,10 +1,11 @@
 services:
-  # FastAPI backend on Render
+  # -----------------------------
+  # FastAPI Backend
+  # -----------------------------
   - type: web
     name: ppf-backend
     env: python
     rootDir: backend
-    plan: free
     autoDeploy: true
 
     buildCommand: |
@@ -15,40 +16,38 @@ services:
       uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
     envVars:
-      # JWT / auth settings
+      # Auth settings
       - key: SECRET_KEY
         generateValue: true
+
       - key: ALGORITHM
         value: HS256
+
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "60"
 
-      # Use SQLite file inside the service container (demo / non-persistent)
+      # PostgreSQL database
       - key: DATABASE_URL
-        value: "sqlite+aiosqlite:///./rejections_dev.db"
+        value: postgresql+asyncpg://ppf_rejection_db_user:yaaPJ10LWPeOYHhPYRghsIEYVgyKGZhI@dpg-d6plfan5gffc73dme5qg-a/ppf_rejection_db
 
-  # React + Vite frontend on Render (static site)
+  # -----------------------------
+  # React + Vite Frontend
+  # -----------------------------
   - type: web
     name: ppf-frontend
-    rootDir: frontend
-    plan: free
-    autoDeploy: true
-
-    # Static runtime tells Render this is a static site
     runtime: static
+    rootDir: frontend
+    autoDeploy: true
 
     buildCommand: |
       npm install
       npm run build
 
-    # Path to built static files, relative to repo root (Blueprint: staticPublishPath)
-    staticPublishPath: ./frontend/dist
+    staticPublishPath: dist
 
     envVars:
-      # Point frontend API to backend Render service URL (Blueprint: use envVarKey)
       - key: VITE_API_BASE_URL
         fromService:
           type: web
           name: ppf-backend
           envVarKey: RENDER_EXTERNAL_URL
-
