@@ -3,12 +3,12 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.deps import get_current_user, require_roles, get_channel_filter_for_user
 from ..database import get_db
-from ..models import RejectionTicket, User, UserRole, Channel, TicketStatus
+from ..models import RejectionTicket, User, UserRole, Channel, TicketStatus, Approval, Decision
 from ..schemas import TicketCreate, TicketRead, PaginatedTickets
 
 
@@ -87,26 +87,37 @@ async def list_tickets(
     result = await db.execute(query)
     tickets = result.scalars().unique().all()
 
+    # Fetch approval remarks for all decided tickets for display in UI
+    ticket_ids = [t.id for t in tickets]
+    remarks_query = select(Approval.ticket_id, Approval.remarks).where(
+        Approval.ticket_id.in_(ticket_ids),
+    )
+    remarks_result = await db.execute(remarks_query)
+    approval_remarks_map = {str(r[0]): r[1] for r in remarks_result.all()}
+
     # Build Pydantic models manually to avoid lazy-loading relationships
-    # (which would trigger MissingGreenlet errors in async context).
-    ticket_items = [
-        TicketRead(
-            id=t.id,
-            product_name=t.product_name,
-            quantity=t.quantity,
-            cost=t.cost,
-            reason=t.reason,
-            delivery_batch=t.delivery_batch,
-            delivery_date=t.delivery_date,
-            photo_proof_url=t.photo_proof_url,
-            channel=t.channel,
-            status=t.status,
-            created_by=t.created_by,
-            created_at=t.created_at,
-            creator=None,  # Skip nested creator to keep things simple and non-lazy
+    ticket_items = []
+    for t in tickets:
+        rem = approval_remarks_map.get(str(t.id))
+        ticket_items.append(
+            TicketRead(
+                id=t.id,
+                product_name=t.product_name,
+                quantity=t.quantity,
+                cost=t.cost,
+                reason=t.reason,
+                delivery_batch=t.delivery_batch,
+                delivery_date=t.delivery_date,
+                photo_proof_url=t.photo_proof_url,
+                channel=t.channel,
+                status=t.status,
+                created_by=t.created_by,
+                created_at=t.created_at,
+                creator=None,
+                rejection_remarks=rem if t.status == TicketStatus.REJECTED else None,
+                approval_remarks=rem,
+            )
         )
-        for t in tickets
-    ]
 
     return PaginatedTickets(items=ticket_items, total=total)
 
@@ -126,7 +137,32 @@ async def get_ticket(
     ticket = result.scalars().first()
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
-    return ticket
+
+    approval_remarks = None
+    approval_result = await db.execute(
+        select(Approval.remarks).where(Approval.ticket_id == ticket.id)
+    )
+    approval_row = approval_result.first()
+    if approval_row:
+        approval_remarks = approval_row[0]
+
+    return TicketRead(
+        id=ticket.id,
+        product_name=ticket.product_name,
+        quantity=ticket.quantity,
+        cost=ticket.cost,
+        reason=ticket.reason,
+        delivery_batch=ticket.delivery_batch,
+        delivery_date=ticket.delivery_date,
+        photo_proof_url=ticket.photo_proof_url,
+        channel=ticket.channel,
+        status=ticket.status,
+        created_by=ticket.created_by,
+        created_at=ticket.created_at,
+        creator=None,
+        rejection_remarks=approval_remarks if ticket.status == TicketStatus.REJECTED else None,
+        approval_remarks=approval_remarks,
+    )
 
 
 @router.patch("/{ticket_id}", response_model=TicketRead)
@@ -134,7 +170,7 @@ async def update_ticket(
     ticket_id: UUID,
     payload: TicketCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.MANAGER)),
 ):
     result = await db.execute(select(RejectionTicket).where(RejectionTicket.id == ticket_id))
     ticket = result.scalars().first()
@@ -151,20 +187,47 @@ async def update_ticket(
 
     await db.commit()
     await db.refresh(ticket)
-    return ticket
+
+    approval_remarks = None
+    approval_result = await db.execute(
+        select(Approval.remarks).where(Approval.ticket_id == ticket.id)
+    )
+    approval_row = approval_result.first()
+    if approval_row:
+        approval_remarks = approval_row[0]
+
+    return TicketRead(
+        id=ticket.id,
+        product_name=ticket.product_name,
+        quantity=ticket.quantity,
+        cost=float(ticket.cost),
+        reason=ticket.reason,
+        delivery_batch=ticket.delivery_batch,
+        delivery_date=ticket.delivery_date,
+        photo_proof_url=ticket.photo_proof_url,
+        channel=ticket.channel,
+        status=ticket.status,
+        created_by=ticket.created_by,
+        created_at=ticket.created_at,
+        creator=None,
+        rejection_remarks=approval_remarks if ticket.status == TicketStatus.REJECTED else None,
+        approval_remarks=approval_remarks,
+    )
 
 
 @router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_ticket(
     ticket_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.MANAGER)),
 ):
     result = await db.execute(select(RejectionTicket).where(RejectionTicket.id == ticket_id))
     ticket = result.scalars().first()
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
+    # Delete approval first (FK from approvals.ticket_id -> rejection_tickets.id)
+    await db.execute(sql_delete(Approval).where(Approval.ticket_id == ticket_id))
     await db.delete(ticket)
     await db.commit()
     return None

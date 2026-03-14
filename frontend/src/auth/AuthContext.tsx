@@ -14,6 +14,7 @@ interface User {
 interface AuthContextValue {
   user: User | null;
   token: string | null;
+  isInitialized: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -35,14 +36,19 @@ function decodeToken(token: string): { userId: string; role: UserRole } | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('ppf_token');
-    if (!stored) return;
+    if (!stored) {
+      setIsInitialized(true);
+      return;
+    }
 
     const decoded = decodeToken(stored);
     if (!decoded) {
       localStorage.removeItem('ppf_token');
+      setIsInitialized(true);
       return;
     }
 
@@ -53,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: '',
       role: decoded.role,
     });
+    setIsInitialized(true);
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -97,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isInitialized, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

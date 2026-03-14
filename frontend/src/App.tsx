@@ -12,7 +12,14 @@ import AdminPanelPage from './pages/AdminPanelPage';
 import AppLayout from './layout/AppLayout';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, isInitialized } = useAuth();
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-sm text-gray-500">Loading…</div>
+      </div>
+    );
+  }
   if (!user) {
     return <Navigate to="/login" replace />;
   }

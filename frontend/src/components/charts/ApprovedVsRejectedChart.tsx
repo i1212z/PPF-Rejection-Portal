@@ -9,24 +9,29 @@ import {
   YAxis,
 } from 'recharts';
 
-interface RejectionValueVsQuantityChartProps {
-  data: { channel: string; value: number; quantity: number }[];
+export interface ApprovedRejectedPoint {
+  name: string;
+  value: number;
+  count: number;
 }
 
-export function RejectionValueVsQuantityChart({
-  data,
-}: RejectionValueVsQuantityChartProps) {
+interface ApprovedVsRejectedChartProps {
+  data: ApprovedRejectedPoint[];
+}
+
+export function ApprovedVsRejectedChart({ data }: ApprovedVsRejectedChartProps) {
   return (
-    <div className="w-full" style={{ minHeight: 200, height: 240 }}>
+    <div className="w-full" style={{ minHeight: 200, height: 224 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="channel" tickLine={false} axisLine={false} />
+          <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
           <YAxis
             yAxisId="left"
             tickLine={false}
             axisLine={false}
             tick={{ fontSize: 10 }}
+            tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : String(v))}
           />
           <YAxis
             yAxisId="right"
@@ -40,13 +45,13 @@ export function RejectionValueVsQuantityChart({
           <Bar
             yAxisId="left"
             dataKey="value"
-            name="Rejection value"
+            name="Ticket value"
             fill="#4f46e5"
             radius={[6, 6, 0, 0]}
           />
           <Bar
             yAxisId="right"
-            dataKey="quantity"
+            dataKey="count"
             name="Quantity"
             fill="#0f766e"
             radius={[6, 6, 0, 0]}
@@ -56,4 +61,3 @@ export function RejectionValueVsQuantityChart({
     </div>
   );
 }
-

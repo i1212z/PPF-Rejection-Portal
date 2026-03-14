@@ -8,7 +8,7 @@ const COLORS = ['#22c55e', '#fb923c'];
 
 export function ChannelDistributionPie({ data }: ChannelDistributionPieProps) {
   return (
-    <div className="h-60">
+    <div className="w-full" style={{ minHeight: 200, height: 240 }}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie

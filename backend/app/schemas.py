@@ -59,6 +59,8 @@ class TicketRead(TicketBase):
     created_by: UUID
     created_at: datetime
     creator: Optional[UserBase]
+    rejection_remarks: Optional[str] = None  # when status is rejected
+    approval_remarks: Optional[str] = None  # admin/manager remark when approved or rejected
 
     class Config:
         from_attributes = True

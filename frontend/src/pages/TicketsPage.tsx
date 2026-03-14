@@ -17,6 +17,8 @@ interface Ticket {
   channel: 'B2B' | 'B2C';
   status: TicketStatus;
   created_at: string;
+  rejection_remarks?: string | null;
+  approval_remarks?: string | null;
 }
 
 export default function TicketsPage() {
@@ -35,9 +37,62 @@ export default function TicketsPage() {
   const [errorB2C, setErrorB2C] = useState<string | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>('all');
+  const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
+  const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
 
   const isManagerView =
     user?.role === 'manager' || user?.role === 'admin';
+
+  const handleDelete = async (e: React.MouseEvent, ticketId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm('Delete this ticket? This cannot be undone.')) return;
+    setDeleteLoadingId(ticketId);
+    setError(null);
+    try {
+      await apiClient.delete(`/tickets/${ticketId}`);
+      if (isManagerView) {
+        await loadTicketsByChannel();
+      } else {
+        await loadTickets();
+      }
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'response' in err && err.response && typeof err.response === 'object' && 'data' in err.response && typeof (err.response as { data?: { detail?: string } }).data?.detail === 'string'
+        ? (err.response as { data: { detail: string } }).data.detail
+        : 'Failed to delete ticket.';
+      setError(msg);
+    } finally {
+      setDeleteLoadingId(null);
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTicket) return;
+    const form = e.currentTarget;
+    const get = (name: string) => form.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
+    const payload = {
+      product_name: get('product_name')?.value ?? '',
+      quantity: Number(get('quantity')?.value ?? 0),
+      cost: Number(get('cost')?.value ?? 0),
+      reason: get('reason')?.value ?? '',
+      delivery_batch: get('delivery_batch')?.value ?? '',
+      delivery_date: get('delivery_date')?.value ?? '',
+      photo_proof_url: get('photo_proof_url')?.value || null,
+    };
+    setError(null);
+    try {
+      await apiClient.patch(`/tickets/${editingTicket.id}`, payload);
+      setEditingTicket(null);
+      if (isManagerView) await loadTicketsByChannel();
+      else await loadTickets();
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'response' in err && err.response && typeof err.response === 'object' && 'data' in err.response && typeof (err.response as { data?: { detail?: string } }).data?.detail === 'string'
+        ? (err.response as { data: { detail: string } }).data.detail
+        : 'Failed to update ticket.';
+      setError(msg);
+    }
+  };
 
   const loadTickets = async () => {
     // For B2B/B2C users, backend already filters by channel.
@@ -136,6 +191,12 @@ export default function TicketsPage() {
         </div>
       </div>
 
+      {(error || errorB2B || errorB2C) && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error || errorB2B || errorB2C}
+        </div>
+      )}
+
       {!isManagerView && (
         <Card title="All tickets" subtitle="Based on your role and channel access" className="text-sm">
           {loading && <div className="text-gray-500">Loading tickets…</div>}
@@ -163,7 +224,7 @@ export default function TicketsPage() {
                       <StatusBadge status={t.status} />
                     </div>
                     <div className="mt-1 text-[11px] text-gray-500">
-                      {t.channel} • Batch {t.delivery_batch}
+                      {t.channel} • {t.delivery_batch}
                     </div>
                     <div className="mt-2 flex justify-between text-[11px] text-gray-600">
                       <span>
@@ -177,6 +238,12 @@ export default function TicketsPage() {
                         })}
                       </span>
                     </div>
+                    {(t.reason || t.approval_remarks) && (
+                      <div className="mt-1 text-[11px] text-gray-600">
+                        {t.reason && <span>Creator: {t.reason.length > 60 ? `${t.reason.slice(0, 60)}…` : t.reason}</span>}
+                        {(t.approval_remarks ?? t.rejection_remarks) && <span className="block mt-0.5">Admin: {((t.approval_remarks ?? t.rejection_remarks)!.length > 60 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 60)}…` : (t.approval_remarks ?? t.rejection_remarks))}</span>}
+                      </div>
+                    )}
                     <div className="mt-1 text-[11px] text-gray-400">
                       {new Date(t.created_at).toLocaleString()}
                     </div>
@@ -194,8 +261,10 @@ export default function TicketsPage() {
                       <th className="px-4 py-2 text-left">Qty</th>
                       <th className="px-4 py-2 text-left">Cost</th>
                       <th className="px-4 py-2 text-left">Channel</th>
-                      <th className="px-4 py-2 text-left">Delivery</th>
+                      <th className="px-4 py-2 text-left">Customer</th>
                       <th className="px-4 py-2 text-left">Status</th>
+                      <th className="px-4 py-2 text-left">Creator reason</th>
+                      <th className="px-4 py-2 text-left">Admin remark</th>
                       <th className="px-4 py-2 text-left">Created</th>
                     </tr>
                   </thead>
@@ -235,6 +304,12 @@ export default function TicketsPage() {
                         </td>
                         <td className="px-4 py-2">
                           <StatusBadge status={t.status} />
+                        </td>
+                        <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.reason}>
+                          {t.reason ? (t.reason.length > 40 ? `${t.reason.slice(0, 40)}…` : t.reason) : '–'}
+                        </td>
+                        <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.approval_remarks ?? t.rejection_remarks ?? ''}>
+                          {(t.approval_remarks ?? t.rejection_remarks) ? ((t.approval_remarks ?? t.rejection_remarks)!.length > 40 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 40)}…` : (t.approval_remarks ?? t.rejection_remarks)) : '–'}
                         </td>
                         <td className="px-4 py-2 text-[11px] text-gray-500">
                           {new Date(t.created_at).toLocaleString()}
@@ -288,8 +363,14 @@ export default function TicketsPage() {
                         <StatusBadge status={t.status} />
                       </div>
                       <div className="mt-1 text-[11px] text-gray-500">
-                        Batch {t.delivery_batch}
+                        {t.delivery_batch}
                       </div>
+                      {(t.reason || t.approval_remarks) && (
+                        <div className="mt-1 text-[11px] text-gray-600">
+                          {t.reason && <span>Creator: {t.reason.length > 50 ? `${t.reason.slice(0, 50)}…` : t.reason}</span>}
+                          {(t.approval_remarks ?? t.rejection_remarks) && <span className="block mt-0.5">Admin: {((t.approval_remarks ?? t.rejection_remarks)!.length > 50 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 50)}…` : (t.approval_remarks ?? t.rejection_remarks))}</span>}
+                        </div>
+                      )}
                       <div className="mt-2 flex justify-between text-[11px] text-gray-600">
                         <span>
                           Qty: <span className="font-medium">{t.quantity}</span>
@@ -318,8 +399,11 @@ export default function TicketsPage() {
                         <th className="px-4 py-2 text-left">Product</th>
                         <th className="px-4 py-2 text-left">Qty</th>
                         <th className="px-4 py-2 text-left">Cost</th>
-                        <th className="px-4 py-2 text-left">Delivery</th>
+                        <th className="px-4 py-2 text-left">Customer</th>
                         <th className="px-4 py-2 text-left">Status</th>
+                        <th className="px-4 py-2 text-left">Creator reason</th>
+                        <th className="px-4 py-2 text-left">Admin remark</th>
+                        {isManagerView && <th className="px-4 py-2 text-left">Action</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -351,6 +435,33 @@ export default function TicketsPage() {
                           <td className="px-4 py-2">
                             <StatusBadge status={t.status} />
                           </td>
+                          <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.reason}>
+                            {t.reason ? (t.reason.length > 40 ? `${t.reason.slice(0, 40)}…` : t.reason) : '–'}
+                          </td>
+                          <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.approval_remarks ?? t.rejection_remarks ?? ''}>
+                            {(t.approval_remarks ?? t.rejection_remarks) ? ((t.approval_remarks ?? t.rejection_remarks)!.length > 40 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 40)}…` : (t.approval_remarks ?? t.rejection_remarks)) : '–'}
+                          </td>
+                          {isManagerView && (
+                            <td className="px-4 py-2">
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setEditingTicket(t); }}
+                                  className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => void handleDelete(e, t.id)}
+                                  disabled={deleteLoadingId === t.id}
+                                  className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                                >
+                                  {deleteLoadingId === t.id ? '…' : 'Delete'}
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -397,8 +508,14 @@ export default function TicketsPage() {
                         <StatusBadge status={t.status} />
                       </div>
                       <div className="mt-1 text-[11px] text-gray-500">
-                        Batch {t.delivery_batch}
+                        {t.delivery_batch}
                       </div>
+                      {(t.reason || t.approval_remarks) && (
+                        <div className="mt-1 text-[11px] text-gray-600">
+                          {t.reason && <span>Creator: {t.reason.length > 50 ? `${t.reason.slice(0, 50)}…` : t.reason}</span>}
+                          {(t.approval_remarks ?? t.rejection_remarks) && <span className="block mt-0.5">Admin: {((t.approval_remarks ?? t.rejection_remarks)!.length > 50 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 50)}…` : (t.approval_remarks ?? t.rejection_remarks))}</span>}
+                        </div>
+                      )}
                       <div className="mt-2 flex justify-between text-[11px] text-gray-600">
                         <span>
                           Qty: <span className="font-medium">{t.quantity}</span>
@@ -427,8 +544,11 @@ export default function TicketsPage() {
                         <th className="px-4 py-2 text-left">Product</th>
                         <th className="px-4 py-2 text-left">Qty</th>
                         <th className="px-4 py-2 text-left">Cost</th>
-                        <th className="px-4 py-2 text-left">Delivery</th>
+                        <th className="px-4 py-2 text-left">Customer</th>
                         <th className="px-4 py-2 text-left">Status</th>
+                        <th className="px-4 py-2 text-left">Creator reason</th>
+                        <th className="px-4 py-2 text-left">Admin remark</th>
+                        {isManagerView && <th className="px-4 py-2 text-left">Action</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -460,6 +580,33 @@ export default function TicketsPage() {
                           <td className="px-4 py-2">
                             <StatusBadge status={t.status} />
                           </td>
+                          <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.reason}>
+                            {t.reason ? (t.reason.length > 40 ? `${t.reason.slice(0, 40)}…` : t.reason) : '–'}
+                          </td>
+                          <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.approval_remarks ?? t.rejection_remarks ?? ''}>
+                            {(t.approval_remarks ?? t.rejection_remarks) ? ((t.approval_remarks ?? t.rejection_remarks)!.length > 40 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 40)}…` : (t.approval_remarks ?? t.rejection_remarks)) : '–'}
+                          </td>
+                          {isManagerView && (
+                            <td className="px-4 py-2">
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setEditingTicket(t); }}
+                                  className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => void handleDelete(e, t.id)}
+                                  disabled={deleteLoadingId === t.id}
+                                  className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                                >
+                                  {deleteLoadingId === t.id ? '…' : 'Delete'}
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -468,6 +615,58 @@ export default function TicketsPage() {
               </>
             )}
           </Card>
+        </div>
+      )}
+
+      {/* Edit ticket modal */}
+      {editingTicket && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Edit ticket</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Ticket ID: {editingTicket.id.slice(0, 8)}</p>
+            </div>
+            <form onSubmit={handleEditSubmit} className="p-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Product name</label>
+                <input name="product_name" defaultValue={editingTicket.product_name} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
+                  <input name="quantity" type="number" min={0} defaultValue={editingTicket.quantity} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Cost</label>
+                  <input name="cost" type="number" min={0} step="0.01" defaultValue={editingTicket.cost} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Customer</label>
+                <input name="delivery_batch" defaultValue={editingTicket.delivery_batch} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Delivery date</label>
+                <input name="delivery_date" type="date" defaultValue={editingTicket.delivery_date} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Creator reason</label>
+                <textarea name="reason" defaultValue={editingTicket.reason} className="w-full rounded border border-gray-200 px-3 py-2 text-sm min-h-[60px]" required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Photo proof URL (optional)</label>
+                <input name="photo_proof_url" defaultValue={(editingTicket as { photo_proof_url?: string }).photo_proof_url ?? ''} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setEditingTicket(null)} className="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button type="submit" className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500">
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

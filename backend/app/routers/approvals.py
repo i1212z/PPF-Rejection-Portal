@@ -41,6 +41,8 @@ async def list_pending_tickets(
             created_by=t.created_by,
             created_at=t.created_at,
             creator=None,
+            rejection_remarks=None,
+            approval_remarks=None,
         )
         for t in tickets
     ]

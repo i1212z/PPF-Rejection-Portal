@@ -105,7 +105,7 @@ export default function ApprovalsPage() {
                         {t.product_name}
                       </div>
                       <div className="mt-0.5 text-[11px] text-gray-500">
-                        {t.channel} • Batch {t.delivery_batch}
+                        {t.channel} • {t.delivery_batch}
                       </div>
                     </div>
                     <StatusBadge status="pending" />
@@ -153,7 +153,7 @@ export default function ApprovalsPage() {
                     <th className="px-4 py-2 text-left">Qty</th>
                     <th className="px-4 py-2 text-left">Cost</th>
                     <th className="px-4 py-2 text-left">Channel</th>
-                    <th className="px-4 py-2 text-left">Delivery</th>
+                    <th className="px-4 py-2 text-left">Customer</th>
                     <th className="px-4 py-2 text-left">Status</th>
                     <th className="px-4 py-2 text-left">Created</th>
                     <th className="px-4 py-2 text-left">Action</th>

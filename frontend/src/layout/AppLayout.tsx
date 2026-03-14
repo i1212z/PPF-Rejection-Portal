@@ -65,14 +65,14 @@ export default function AppLayout() {
                 Control
               </div>
               <SidebarLink to="/approvals" icon={<CheckCircle2 className="w-4 h-4" />} label="Approvals" />
+              <SidebarLink to="/reports" icon={<BarChart3 className="w-4 h-4" />} label="Reports" />
             </>
           )}
           {user?.role === 'admin' && (
             <>
               <div className="px-2 pt-4 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
-                Insights
+                Admin
               </div>
-              <SidebarLink to="/reports" icon={<BarChart3 className="w-4 h-4" />} label="Reports" />
               <SidebarLink to="/admin" icon={<Settings className="w-4 h-4" />} label="Admin Panel" />
             </>
           )}
@@ -162,21 +162,19 @@ export default function AppLayout() {
               Tickets
             </NavLink>
             {(user?.role === 'manager' || user?.role === 'admin') && (
-              <NavLink
-                to="/approvals"
-                className={({ isActive }) =>
-                  `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
-                    isActive
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-200 bg-gray-50 text-gray-600'
-                  }`
-                }
-              >
-                Approvals
-              </NavLink>
-            )}
-            {user?.role === 'admin' && (
               <>
+                <NavLink
+                  to="/approvals"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  Approvals
+                </NavLink>
                 <NavLink
                   to="/reports"
                   className={({ isActive }) =>
@@ -189,19 +187,21 @@ export default function AppLayout() {
                 >
                   Reports
                 </NavLink>
-                <NavLink
-                  to="/admin"
-                  className={({ isActive }) =>
-                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
-                      isActive
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 bg-gray-50 text-gray-600'
-                    }`
-                  }
-                >
-                  Admin
-                </NavLink>
               </>
+            )}
+            {user?.role === 'admin' && (
+              <NavLink
+                to="/admin"
+                className={({ isActive }) =>
+                  `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                    isActive
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-200 bg-gray-50 text-gray-600'
+                  }`
+                }
+              >
+                Admin
+              </NavLink>
             )}
           </div>
         </nav>
