@@ -26,7 +26,10 @@ services:
       - key: database_url
         value: postgresql+asyncpg://ppf_rejection_db_user:yaaPJ10LWPeOYHhPYRghsIEYVgyKGZhI@dpg-d6plfan5gffc73dme5qg-a.oregon-postgres.render.com:5432/ppf_rejection_db
 
-  # React + Vite Frontend
+  # React + Vite Frontend (SPA)
+  # Required: In Render Dashboard → ppf-frontend → Redirects/Rewrites:
+  #   Add rule: Source /* → Destination /index.html, Action: Rewrite
+  #   (so /login, /tickets, etc. work on direct load/refresh)
   - type: web
     name: ppf-frontend
     runtime: static
