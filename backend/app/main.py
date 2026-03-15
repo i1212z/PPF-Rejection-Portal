@@ -20,7 +20,7 @@ settings = get_settings()
 app = FastAPI(title=settings.app_name)
 
 # CORS: allow dev frontend origins so browser never blocks on 4xx/5xx
-CORS_ORIGINS = ["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174"]
+CORS_ORIGINS = ["https://ppf-rejection-portal.onrender.com"]
 
 
 def _add_cors_headers(response, request: Request):
