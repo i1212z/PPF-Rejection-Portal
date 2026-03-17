@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 
 const navItemBase =
@@ -121,7 +121,7 @@ export default function AppLayout() {
             </span>
             <span className="text-sm sm:text-base text-gray-700">{pageTitle}</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             {/* Search: hide on very small screens to keep header compact */}
             <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1.5 text-xs text-gray-500 w-40 md:w-56">
               <Search className="w-3.5 h-3.5" />
@@ -134,6 +134,14 @@ export default function AppLayout() {
             <button className="relative rounded-full p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100">
               <Bell className="w-4 h-4" />
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500" />
+            </button>
+            {/* Compact logout for mobile (always visible, but mainly helps on small screens) */}
+            <button
+              onClick={logout}
+              className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600 hover:bg-gray-100 hover:text-gray-900 sm:hidden"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
             </button>
           </div>
         </header>
@@ -185,11 +193,11 @@ export default function AppLayout() {
             <NavLink
               to="/tickets/new"
               className={({ isActive }) =>
-                `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                `inline-flex items-center rounded-full border px-4 py-1.5 whitespace-nowrap text-[11px] font-semibold ${
                   isActive
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-gray-200 bg-gray-50 text-gray-600'
-                }`
+                    ? 'border-indigo-600 bg-indigo-600 text-white'
+                    : 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                } shadow-sm`
               }
             >
               New ticket
