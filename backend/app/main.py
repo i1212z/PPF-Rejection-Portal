@@ -78,6 +78,19 @@ async def on_startup():
         except Exception:
             # If not Postgres or type doesn't exist yet, ignore.
             pass
+
+        # Ensure schema drift doesn't break production (Render Postgres).
+        # SQLAlchemy create_all() does not add missing columns to existing tables.
+        try:
+            await conn.execute(
+                text(
+                    "ALTER TABLE rejection_tickets "
+                    "ADD COLUMN IF NOT EXISTS uom VARCHAR(16) NOT NULL DEFAULT 'EA'"
+                )
+            )
+        except Exception:
+            # If not Postgres or table doesn't exist yet, ignore.
+            pass
         await conn.run_sync(Base.metadata.create_all)
     print("PPF Backend started. POST /tickets (create) is allowed for any authenticated user.")
 
