@@ -100,12 +100,6 @@ function TicketRow({
 }) {
   const statuses = Array.from(new Set(g.items.map((i) => i.status)));
   const singleStatus = statuses.length === 1 ? statuses[0] : null;
-  const allReasons = g.items.map((i) => i.reason).filter(Boolean) as string[];
-  const creatorSummary = allReasons.join(' | ');
-  const allRemarks = g.items
-    .map((i) => i.approval_remarks ?? i.rejection_remarks)
-    .filter(Boolean) as string[];
-  const remarksSummary = allRemarks.join(' | ');
 
   return (
     <>

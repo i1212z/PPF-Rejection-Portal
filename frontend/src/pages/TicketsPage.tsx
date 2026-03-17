@@ -101,7 +101,7 @@ export default function TicketsPage() {
     return Array.from(byId.values());
   }, [tickets, ticketsB2B, ticketsB2C]);
 
-  const { globalDisplayByKey, getDisplayId, getLineId } = useMemo(() => {
+  const { getDisplayId, getLineId } = useMemo(() => {
     const allGroupsNewest = groupTickets(mergedTickets);
     const allGroupsAsc = [...allGroupsNewest].sort((a, b) => {
       const tA = new Date(a.created_at).getTime();
@@ -128,7 +128,7 @@ export default function TicketsPage() {
       const lineNum = byItemId.get(itemId);
       return lineNum != null ? `${displayId}-${lineNum}` : `${displayId}-?`;
     };
-    return { globalDisplayByKey: byKey, getDisplayId, getLineId };
+    return { getDisplayId, getLineId };
   }, [mergedTickets]);
 
   const handleDelete = async (e: React.MouseEvent, ticketId: string) => {
