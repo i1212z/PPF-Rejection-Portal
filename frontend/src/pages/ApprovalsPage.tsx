@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -9,7 +9,7 @@ interface PendingTicket {
   id: string;
   product_name: string;
   quantity: number;
-  cost: number;
+  uom?: string | null;
   reason: string;
   delivery_batch: string;
   delivery_date: string;
@@ -17,8 +17,19 @@ interface PendingTicket {
   created_at: string;
 }
 
+interface PendingGroup {
+  key: string;
+  ids: string[];
+  delivery_batch: string;
+  delivery_date: string;
+  channel: 'B2B' | 'B2C';
+  created_at: string;
+  items: { id: string; product_name: string; quantity: number; uom?: string | null; reason: string }[];
+}
+
 export default function ApprovalsPage() {
   const [tickets, setTickets] = useState<PendingTicket[]>([]);
+  const [allTickets, setAllTickets] = useState<PendingTicket[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -29,9 +40,14 @@ export default function ApprovalsPage() {
     try {
       const res = await apiClient.get<PendingTicket[]>('/approvals/pending');
       setTickets(res.data);
+      const allRes = await apiClient.get<{ items: PendingTicket[]; total: number }>('/tickets', {
+        params: { limit: 500 },
+      });
+      setAllTickets(allRes.data.items);
     } catch (err: unknown) {
       // If unauthorized, just show empty queue without noisy errors.
       setTickets([]);
+      setAllTickets([]);
       setError(null);
       // eslint-disable-next-line no-console
       console.warn('Approvals load failed', err);
@@ -44,17 +60,75 @@ export default function ApprovalsPage() {
     void loadPending();
   }, []);
 
-  const handleDecision = async (ticketId: string, decision: Decision) => {
+  const groupTickets = (list: PendingTicket[]): PendingGroup[] => {
+    const groups: Record<string, PendingGroup> = {};
+    list.forEach((t) => {
+      const key = `${t.delivery_batch}|${t.delivery_date}|${t.channel}|${t.created_at.slice(0, 16)}`;
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          ids: [],
+          delivery_batch: t.delivery_batch,
+          delivery_date: t.delivery_date,
+          channel: t.channel,
+          created_at: t.created_at,
+          items: [],
+        };
+      }
+      groups[key].ids.push(t.id);
+      groups[key].items.push({
+        id: t.id,
+        product_name: t.product_name,
+        quantity: t.quantity,
+        uom: t.uom,
+        reason: t.reason,
+      });
+    });
+    return Object.values(groups).sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+  };
+
+  const displayIdByGroupKey = useMemo(() => {
+    const groups = groupTickets(allTickets);
+    const groupsAsc = [...groups].sort((a, b) => {
+      const tA = new Date(a.created_at).getTime();
+      const tB = new Date(b.created_at).getTime();
+      if (tA !== tB) return tA - tB;
+      return a.key.localeCompare(b.key);
+    });
+    const counters: Record<string, number> = {};
+    const map = new Map<string, number>();
+    groupsAsc.forEach((g) => {
+      const chan = g.channel;
+      const next = (counters[chan] ?? 0) + 1;
+      counters[chan] = next;
+      map.set(g.key, next);
+    });
+    return map;
+  }, [allTickets]);
+
+  const getDisplayId = (g: PendingGroup) => {
+    const num = displayIdByGroupKey.get(g.key);
+    return num != null ? `${g.channel}-${String(num).padStart(3, '0')}` : `${g.channel}-???`;
+  };
+
+  const handleDecision = async (group: PendingGroup, decision: Decision) => {
     const remarks =
       decision === 'approved'
         ? 'Approved'
         : window.prompt('Remarks for rejection?') || 'Rejected';
-    setActionLoadingId(ticketId);
+    setActionLoadingId(group.key);
     try {
-      await apiClient.post(`/approvals/${ticketId}/decision`, {
-        decision,
-        remarks,
-      });
+      await Promise.all(
+        group.ids.map((id) =>
+          apiClient.post(`/approvals/${id}/decision`, {
+            decision,
+            remarks,
+          }),
+        ),
+      );
       await loadPending();
     } catch (err) {
       setError('Could not submit decision.');
@@ -94,46 +168,47 @@ export default function ApprovalsPage() {
           <>
             {/* Mobile card list */}
             <div className="space-y-3 md:hidden">
-              {tickets.map((t) => (
+              {groupTickets(tickets).map((g) => (
                 <div
-                  key={t.id}
+                  key={g.key}
                   className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {t.product_name}
-                      </div>
+                      <div className="text-sm font-medium text-gray-900">{getDisplayId(g)}</div>
                       <div className="mt-0.5 text-[11px] text-gray-500">
-                        {t.channel} • {t.delivery_batch}
+                        {g.delivery_batch} • {g.channel} • {new Date(g.delivery_date).toLocaleDateString()}
                       </div>
                     </div>
                     <StatusBadge status="pending" />
                   </div>
-                  <div className="mt-2 flex justify-between text-[11px] text-gray-600">
-                    <span>Qty: {t.quantity}</span>
-                    <span>
-                      {Number(t.cost || 0).toLocaleString('en-IN', {
-                        style: 'currency',
-                        currency: 'INR',
-                        maximumFractionDigits: 0,
-                      })}
-                    </span>
+                  <div className="mt-2 space-y-1 text-[11px] text-gray-600">
+                    {g.items.map((item) => (
+                      <div key={item.id} className="flex justify-between">
+                        <span>{item.product_name}</span>
+                        <span>
+                          Qty:{' '}
+                          <span className="font-medium">
+                            {item.quantity} {item.uom ?? 'EA'}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
                   </div>
                   <div className="mt-1 text-[11px] text-gray-400">
-                    {new Date(t.created_at).toLocaleString()}
+                    {new Date(g.created_at).toLocaleString()}
                   </div>
                   <div className="mt-2 flex justify-end gap-2">
                     <button
-                      disabled={actionLoadingId === t.id}
-                      onClick={() => void handleDecision(t.id, 'approved')}
+                      disabled={actionLoadingId === g.key}
+                      onClick={() => void handleDecision(g, 'approved')}
                       className="rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
                     >
                       Approve
                     </button>
                     <button
-                      disabled={actionLoadingId === t.id}
-                      onClick={() => void handleDecision(t.id, 'rejected')}
+                      disabled={actionLoadingId === g.key}
+                      onClick={() => void handleDecision(g, 'rejected')}
                       className="rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
                     >
                       Reject
@@ -143,53 +218,66 @@ export default function ApprovalsPage() {
               ))}
             </div>
 
-            {/* Desktop table */}
+            {/* Desktop table - grouped approvals */}
             <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full text-xs">
                 <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                   <tr>
                     <th className="px-4 py-2 text-left">Ticket ID</th>
-                    <th className="px-4 py-2 text-left">Product</th>
-                    <th className="px-4 py-2 text-left">Qty</th>
-                    <th className="px-4 py-2 text-left">Cost</th>
-                    <th className="px-4 py-2 text-left">Channel</th>
                     <th className="px-4 py-2 text-left">Customer</th>
+                    <th className="px-4 py-2 text-left">Delivery date</th>
+                    <th className="px-4 py-2 text-left">Products (name / qty / reason)</th>
+                    <th className="px-4 py-2 text-left">Channel</th>
                     <th className="px-4 py-2 text-left">Status</th>
                     <th className="px-4 py-2 text-left">Created</th>
                     <th className="px-4 py-2 text-left">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {tickets.map((t) => (
-                    <tr key={t.id} className="hover:bg-gray-50">
+                  {groupTickets(tickets).map((g) => (
+                    <tr key={g.key} className="hover:bg-gray-50 align-top">
                       <td className="px-4 py-2 font-mono text-[11px] text-gray-600">
-                        {t.id.slice(0, 8)}
+                        {getDisplayId(g)}
                       </td>
-                      <td className="px-4 py-2">{t.product_name}</td>
-                      <td className="px-4 py-2">{t.quantity}</td>
+                      <td className="px-4 py-2">{g.delivery_batch}</td>
                       <td className="px-4 py-2">
-                        {Number(t.cost || 0).toLocaleString('en-IN', {
-                          style: 'currency',
-                          currency: 'INR',
-                          maximumFractionDigits: 0,
-                        })}
+                        {new Date(g.delivery_date).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="space-y-1">
+                          {g.items.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex justify-between gap-3 text-[11px] text-gray-700"
+                            >
+                              <span className="flex-1">{item.product_name}</span>
+                              <span className="w-20 text-right">
+                                Qty: {item.quantity} {item.uom ?? 'EA'}
+                              </span>
+                              <span className="flex-[2] text-gray-500">
+                                {item.reason.length > 40
+                                  ? `${item.reason.slice(0, 40)}…`
+                                  : item.reason}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </td>
                       <td className="px-4 py-2 text-xs">
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            t.channel === 'B2B'
+                            g.channel === 'B2B'
                               ? 'bg-sky-50 text-sky-700'
                               : 'bg-orange-50 text-orange-700'
                           }`}
                         >
-                          {t.channel}
+                          {g.channel}
                         </span>
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex flex-col">
-                          <span>{t.delivery_batch}</span>
                           <span className="text-[11px] text-gray-500">
-                            {new Date(t.delivery_date).toLocaleDateString()}
+                            {g.ids.length} product(s)
                           </span>
                         </div>
                       </td>
@@ -197,20 +285,20 @@ export default function ApprovalsPage() {
                         <StatusBadge status="pending" />
                       </td>
                       <td className="px-4 py-2 text-[11px] text-gray-500">
-                        {new Date(t.created_at).toLocaleString()}
+                        {new Date(g.created_at).toLocaleString()}
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex gap-2">
                           <button
-                            disabled={actionLoadingId === t.id}
-                            onClick={() => void handleDecision(t.id, 'approved')}
+                            disabled={actionLoadingId === g.key}
+                            onClick={() => void handleDecision(g, 'approved')}
                             className="rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
                           >
                             Approve
                           </button>
                           <button
-                            disabled={actionLoadingId === t.id}
-                            onClick={() => void handleDecision(t.id, 'rejected')}
+                            disabled={actionLoadingId === g.key}
+                            onClick={() => void handleDecision(g, 'rejected')}
                             className="rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
                           >
                             Reject
