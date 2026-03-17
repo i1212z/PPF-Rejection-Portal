@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
@@ -71,6 +71,13 @@ app.add_middleware(
 async def on_startup():
     # Auto-create tables for local development. In production, prefer Alembic migrations.
     async with engine.begin() as conn:
+        # Ensure new enum values exist in Postgres (Render) even without migrations.
+        # This is safe to run repeatedly.
+        try:
+            await conn.execute(text("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'TALLY'"))
+        except Exception:
+            # If not Postgres or type doesn't exist yet, ignore.
+            pass
         await conn.run_sync(Base.metadata.create_all)
     print("PPF Backend started. POST /tickets (create) is allowed for any authenticated user.")
 
