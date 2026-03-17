@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -10,7 +10,6 @@ interface Ticket {
   id: string;
   product_name: string;
   quantity: number;
-  cost: number;
   reason: string;
   delivery_batch: string;
   delivery_date: string;
@@ -19,6 +18,23 @@ interface Ticket {
   created_at: string;
   rejection_remarks?: string | null;
   approval_remarks?: string | null;
+}
+
+interface TicketGroup {
+  id: string;
+  delivery_batch: string;
+  delivery_date: string;
+  channel: 'B2B' | 'B2C';
+  created_at: string;
+  items: {
+    id: string;
+    product_name: string;
+    quantity: number;
+    reason: string;
+    status: TicketStatus;
+    approval_remarks?: string | null;
+    rejection_remarks?: string | null;
+  }[];
 }
 
 export default function TicketsPage() {
@@ -39,9 +55,81 @@ export default function TicketsPage() {
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>('all');
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const isManagerView =
     user?.role === 'manager' || user?.role === 'admin';
+
+  const groupTickets = (list: Ticket[]): TicketGroup[] => {
+    const groups: Record<string, TicketGroup> = {};
+    list.forEach((t) => {
+      const key = `${t.delivery_batch}|${t.delivery_date}|${t.channel}|${t.created_at.slice(0, 16)}`;
+      if (!groups[key]) {
+        groups[key] = {
+          id: t.id,
+          delivery_batch: t.delivery_batch,
+          delivery_date: t.delivery_date,
+          channel: t.channel,
+          created_at: t.created_at,
+          items: [],
+        };
+      }
+      groups[key].items.push({
+        id: t.id,
+        product_name: t.product_name,
+        quantity: t.quantity,
+        reason: t.reason,
+        status: t.status,
+        approval_remarks: t.approval_remarks,
+        rejection_remarks: t.rejection_remarks,
+      });
+    });
+    return Object.values(groups).sort((a, b) => {
+      const tA = new Date(a.created_at).getTime();
+      const tB = new Date(b.created_at).getTime();
+      if (tB !== tA) return tB - tA;
+      return (a.id || '').localeCompare(b.id || '');
+    });
+  };
+
+  const groupKey = (g: TicketGroup): string =>
+    `${g.delivery_batch}|${g.delivery_date}|${g.channel}|${g.created_at.slice(0, 16)}`;
+
+  const mergedTickets = useMemo(() => {
+    const byId = new Map<string, Ticket>();
+    [...tickets, ...ticketsB2B, ...ticketsB2C].forEach((t) => byId.set(t.id, t));
+    return Array.from(byId.values());
+  }, [tickets, ticketsB2B, ticketsB2C]);
+
+  const { globalDisplayByKey, getDisplayId, getLineId } = useMemo(() => {
+    const allGroupsNewest = groupTickets(mergedTickets);
+    const allGroupsAsc = [...allGroupsNewest].sort((a, b) => {
+      const tA = new Date(a.created_at).getTime();
+      const tB = new Date(b.created_at).getTime();
+      if (tA !== tB) return tA - tB;
+      return groupKey(a).localeCompare(groupKey(b));
+    });
+    const byKey = new Map<string, number>();
+    const byItemId = new Map<string, number>();
+    const channelCounters: Record<string, number> = {};
+    allGroupsAsc.forEach((g) => {
+      const chan = g.channel;
+      const next = (channelCounters[chan] ?? 0) + 1;
+      channelCounters[chan] = next;
+      byKey.set(groupKey(g), next);
+      const itemsSorted = [...g.items].sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+      itemsSorted.forEach((item, lineIdx) => byItemId.set(item.id, lineIdx + 1));
+    });
+    const getDisplayId = (g: TicketGroup) => {
+      const num = byKey.get(groupKey(g));
+      return num != null ? `${g.channel}-${String(num).padStart(3, "0")}` : `${g.channel}-???`;
+    };
+    const getLineId = (displayId: string, itemId: string) => {
+      const lineNum = byItemId.get(itemId);
+      return lineNum != null ? `${displayId}-${lineNum}` : `${displayId}-?`;
+    };
+    return { globalDisplayByKey: byKey, getDisplayId, getLineId };
+  }, [mergedTickets]);
 
   const handleDelete = async (e: React.MouseEvent, ticketId: string) => {
     e.preventDefault();
@@ -74,11 +162,10 @@ export default function TicketsPage() {
     const payload = {
       product_name: get('product_name')?.value ?? '',
       quantity: Number(get('quantity')?.value ?? 0),
-      cost: Number(get('cost')?.value ?? 0),
       reason: get('reason')?.value ?? '',
       delivery_batch: get('delivery_batch')?.value ?? '',
       delivery_date: get('delivery_date')?.value ?? '',
-      photo_proof_url: get('photo_proof_url')?.value || null,
+      photo_proof_url: null,
     };
     setError(null);
     try {
@@ -212,110 +299,236 @@ export default function TicketsPage() {
             <>
               {/* Mobile-friendly card list */}
               <div className="space-y-3 md:hidden">
-                {tickets.map((t) => (
+                {groupTickets(tickets).map((g) => (
                   <div
-                    key={t.id}
+                    key={g.id}
                     className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-medium text-gray-900">
-                        {t.product_name}
+                        {g.delivery_batch}
                       </div>
-                      <StatusBadge status={t.status} />
+                      {(() => {
+                        const statuses = Array.from(new Set(g.items.map((i) => i.status)));
+                        if (statuses.length === 1) {
+                          return <StatusBadge status={statuses[0]} />;
+                        }
+                        return (
+                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+                            Multiple
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="mt-1 text-[11px] text-gray-500">
-                      {t.channel} • {t.delivery_batch}
+                      {g.channel} • {new Date(g.delivery_date).toLocaleDateString()}
                     </div>
-                    <div className="mt-2 flex justify-between text-[11px] text-gray-600">
-                      <span>
-                        Qty: <span className="font-medium">{t.quantity}</span>
-                      </span>
-                      <span>
-                        {Number(t.cost || 0).toLocaleString('en-IN', {
-                          style: 'currency',
-                          currency: 'INR',
-                          maximumFractionDigits: 0,
-                        })}
-                      </span>
+                    <div className="mt-2 space-y-1 text-[11px] text-gray-600">
+                      {g.items.map((item) => (
+                        <div key={item.id} className="flex justify-between items-start gap-2">
+                          <div>
+                            <div>{item.product_name}</div>
+                            <div className="text-[10px] text-gray-500">
+                              {item.reason.length > 40 ? `${item.reason.slice(0, 40)}…` : item.reason}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div>
+                              Qty:{' '}
+                              <span className="font-medium">
+                                {item.quantity}
+                              </span>
+                            </div>
+                            <div className="mt-0.5">
+                              <StatusBadge status={item.status} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {(t.reason || t.approval_remarks) && (
-                      <div className="mt-1 text-[11px] text-gray-600">
-                        {t.reason && <span>Creator: {t.reason.length > 60 ? `${t.reason.slice(0, 60)}…` : t.reason}</span>}
-                        {(t.approval_remarks ?? t.rejection_remarks) && <span className="block mt-0.5">Admin: {((t.approval_remarks ?? t.rejection_remarks)!.length > 60 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 60)}…` : (t.approval_remarks ?? t.rejection_remarks))}</span>}
-                      </div>
-                    )}
                     <div className="mt-1 text-[11px] text-gray-400">
-                      {new Date(t.created_at).toLocaleString()}
+                      {new Date(g.created_at).toLocaleString()}
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* Desktop table */}
+              {/* Desktop table - grouped with expandable product details */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="min-w-full text-xs">
                   <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                     <tr>
-                      <th className="px-4 py-2 text-left">Ticket ID</th>
-                      <th className="px-4 py-2 text-left">Product</th>
-                      <th className="px-4 py-2 text-left">Qty</th>
-                      <th className="px-4 py-2 text-left">Cost</th>
-                      <th className="px-4 py-2 text-left">Channel</th>
+                      <th className="px-4 py-2 text-left">Ticket</th>
+                      <th className="px-4 py-2 text-left">Delivery date</th>
                       <th className="px-4 py-2 text-left">Customer</th>
+                      <th className="px-4 py-2 text-left">Channel</th>
                       <th className="px-4 py-2 text-left">Status</th>
-                      <th className="px-4 py-2 text-left">Creator reason</th>
                       <th className="px-4 py-2 text-left">Admin remark</th>
                       <th className="px-4 py-2 text-left">Created</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {tickets.map((t) => (
-                      <tr key={t.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 font-mono text-[11px] text-gray-600">
-                          {t.id.slice(0, 8)}
-                        </td>
-                        <td className="px-4 py-2">{t.product_name}</td>
-                        <td className="px-4 py-2">{t.quantity}</td>
-                        <td className="px-4 py-2">
-                          {Number(t.cost || 0).toLocaleString('en-IN', {
-                            style: 'currency',
-                            currency: 'INR',
-                            maximumFractionDigits: 0,
-                          })}
-                        </td>
-                        <td className="px-4 py-2 text-xs">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                              t.channel === 'B2B'
-                                ? 'bg-sky-50 text-sky-700'
-                                : 'bg-orange-50 text-orange-700'
-                            }`}
+                    {groupTickets(tickets).map((g) => {
+                      const displayId = getDisplayId(g);
+                      const statuses = Array.from(
+                        new Set(g.items.map((i) => i.status)),
+                      );
+                      const singleStatus =
+                        statuses.length === 1 ? statuses[0] : null;
+                      const allRemarks = g.items
+                        .map((i) => i.approval_remarks ?? i.rejection_remarks)
+                        .filter(Boolean) as string[];
+                      const remarksSummary = allRemarks.join(' | ');
+                      const isExpanded = expandedGroupId === g.id;
+                      return (
+                        <>
+                          <tr
+                            key={g.id}
+                            role="button"
+                            tabIndex={0}
+                            className="hover:bg-gray-50 cursor-pointer"
+                            onClick={() =>
+                              setExpandedGroupId((id) =>
+                                id === g.id ? null : g.id,
+                              )
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setExpandedGroupId((id) =>
+                                  id === g.id ? null : g.id,
+                                );
+                              }
+                            }}
                           >
-                            {t.channel}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2">
-                          <div className="flex flex-col">
-                            <span>{t.delivery_batch}</span>
-                            <span className="text-[11px] text-gray-500">
-                              {new Date(t.delivery_date).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2">
-                          <StatusBadge status={t.status} />
-                        </td>
-                        <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.reason}>
-                          {t.reason ? (t.reason.length > 40 ? `${t.reason.slice(0, 40)}…` : t.reason) : '–'}
-                        </td>
-                        <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.approval_remarks ?? t.rejection_remarks ?? ''}>
-                          {(t.approval_remarks ?? t.rejection_remarks) ? ((t.approval_remarks ?? t.rejection_remarks)!.length > 40 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 40)}…` : (t.approval_remarks ?? t.rejection_remarks)) : '–'}
-                        </td>
-                        <td className="px-4 py-2 text-[11px] text-gray-500">
-                          {new Date(t.created_at).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
+                            <td className="px-4 py-2 font-medium text-[11px] text-gray-700">
+                              {displayId}
+                            </td>
+                            <td className="px-4 py-2">
+                              {new Date(g.delivery_date).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-2">
+                              <span>{g.delivery_batch}</span>
+                            </td>
+                            <td className="px-4 py-2 text-xs">
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                  g.channel === 'B2B'
+                                    ? 'bg-sky-50 text-sky-700'
+                                    : 'bg-orange-50 text-orange-700'
+                                }`}
+                              >
+                                {g.channel}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2">
+                              {singleStatus ? (
+                                <StatusBadge status={singleStatus} />
+                              ) : (
+                                <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+                                  Multiple
+                                </span>
+                              )}
+                            </td>
+                            <td
+                              className="px-4 py-2 text-[11px] text-gray-600 max-w-[180px]"
+                              title={remarksSummary || ''}
+                            >
+                              {remarksSummary
+                                ? remarksSummary.length > 60
+                                  ? `${remarksSummary.slice(0, 60)}…`
+                                  : remarksSummary
+                                : '–'}
+                            </td>
+                            <td className="px-4 py-2 text-[11px] text-gray-500">
+                              {new Date(g.created_at).toLocaleString()}
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="bg-gray-50 border-l-4 border-l-indigo-300">
+                              <td colSpan={7} className="px-4 py-3 text-xs">
+                                <div className="space-y-2">
+                                  <div className="font-medium text-gray-700">
+                                    Products on this ticket (Ticket ID: {displayId})
+                                  </div>
+                                  <div className="border border-gray-200 rounded-md bg-white">
+                                    <table className="min-w-full text-[11px]">
+                                      <thead className="bg-gray-50 text-gray-500 uppercase">
+                                        <tr>
+                                          <th className="px-3 py-1 text-left">Line</th>
+                                          <th className="px-3 py-1 text-left">
+                                            Product
+                                          </th>
+                                          <th className="px-3 py-1 text-left">
+                                            Qty
+                                          </th>
+                                          <th className="px-3 py-1 text-left">
+                                            Status
+                                          </th>
+                                          <th className="px-3 py-1 text-left">
+                                            Creator reason
+                                          </th>
+                                          <th className="px-3 py-1 text-left">
+                                            Admin remark
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-100">
+                                        {g.items.map((item) => (
+                                          <tr key={item.id}>
+                                            <td className="px-3 py-1 font-medium text-gray-700">{getLineId(displayId, item.id)}</td>
+                                            <td className="px-3 py-1">
+                                              {item.product_name}
+                                            </td>
+                                            <td className="px-3 py-1">
+                                              {item.quantity}
+                                            </td>
+                                            <td className="px-3 py-1">
+                                              <StatusBadge
+                                                status={item.status}
+                                              />
+                                            </td>
+                                            <td
+                                              className="px-3 py-1 text-gray-700 max-w-[180px]"
+                                              title={item.reason}
+                                            >
+                                              {item.reason.length > 60
+                                                ? `${item.reason.slice(0, 60)}…`
+                                                : item.reason}
+                                            </td>
+                                            <td
+                                              className="px-3 py-1 text-gray-700 max-w-[180px]"
+                                              title={
+                                                item.approval_remarks ??
+                                                item.rejection_remarks ??
+                                                ''
+                                              }
+                                            >
+                                              {(item.approval_remarks ??
+                                                item.rejection_remarks ??
+                                                ''
+                                              ).length > 60
+                                                ? `${(
+                                                    item.approval_remarks ??
+                                                    item.rejection_remarks ??
+                                                    ''
+                                                  ).slice(0, 60)}…`
+                                                : item.approval_remarks ??
+                                                  item.rejection_remarks ??
+                                                  '–'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -325,7 +538,7 @@ export default function TicketsPage() {
       )}
 
       {isManagerView && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <Card
             title="B2B tickets"
             subtitle="Rejection tickets for B2B customers"
@@ -351,119 +564,252 @@ export default function TicketsPage() {
               <>
                 {/* Mobile cards */}
                 <div className="space-y-3 md:hidden">
-                  {ticketsB2B.map((t) => (
+                  {groupTickets(ticketsB2B).map((g) => {
+                    const statuses = Array.from(
+                      new Set(g.items.map((i) => i.status)),
+                    );
+                    const singleStatus =
+                      statuses.length === 1 ? statuses[0] : null;
+                    return (
                     <div
-                      key={t.id}
+                      key={g.id}
                       className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-sm font-medium text-gray-900">
-                          {t.product_name}
+                          {g.delivery_batch}
                         </div>
-                        <StatusBadge status={t.status} />
+                        {singleStatus ? (
+                          <StatusBadge status={singleStatus} />
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+                            Multiple
+                          </span>
+                        )}
                       </div>
                       <div className="mt-1 text-[11px] text-gray-500">
-                        {t.delivery_batch}
+                        {new Date(g.delivery_date).toLocaleDateString()}
                       </div>
-                      {(t.reason || t.approval_remarks) && (
-                        <div className="mt-1 text-[11px] text-gray-600">
-                          {t.reason && <span>Creator: {t.reason.length > 50 ? `${t.reason.slice(0, 50)}…` : t.reason}</span>}
-                          {(t.approval_remarks ?? t.rejection_remarks) && <span className="block mt-0.5">Admin: {((t.approval_remarks ?? t.rejection_remarks)!.length > 50 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 50)}…` : (t.approval_remarks ?? t.rejection_remarks))}</span>}
-                        </div>
-                      )}
-                      <div className="mt-2 flex justify-between text-[11px] text-gray-600">
-                        <span>
-                          Qty: <span className="font-medium">{t.quantity}</span>
-                        </span>
-                        <span>
-                          {Number(t.cost || 0).toLocaleString('en-IN', {
-                            style: 'currency',
-                            currency: 'INR',
-                            maximumFractionDigits: 0,
-                          })}
-                        </span>
+                      <div className="mt-2 space-y-1 text-[11px] text-gray-600">
+                        {g.items.map((item) => (
+                          <div key={item.id} className="flex justify-between items-start gap-2">
+                            <div>
+                              <div>{item.product_name}</div>
+                              <div className="text-[10px] text-gray-500">
+                                {item.reason.length > 40
+                                  ? `${item.reason.slice(0, 40)}…`
+                                  : item.reason}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div>
+                                Qty:{' '}
+                                <span className="font-medium">
+                                  {item.quantity}
+                                </span>
+                              </div>
+                              <div className="mt-0.5">
+                                <StatusBadge status={item.status} />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                       <div className="mt-1 text-[11px] text-gray-400">
-                        {new Date(t.delivery_date).toLocaleDateString()}
+                        {new Date(g.created_at).toLocaleString()}
                       </div>
                     </div>
-                  ))}
+                  );})}
                 </div>
 
-                {/* Desktop table */}
+                {/* Desktop table - grouped for B2B, clickable expandable rows */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="min-w-full text-xs">
                     <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                       <tr>
-                        <th className="px-4 py-2 text-left">Ticket ID</th>
-                        <th className="px-4 py-2 text-left">Product</th>
-                        <th className="px-4 py-2 text-left">Qty</th>
-                        <th className="px-4 py-2 text-left">Cost</th>
+                        <th className="px-4 py-2 text-left">Ticket</th>
+                        <th className="px-4 py-2 text-left">Delivery date</th>
                         <th className="px-4 py-2 text-left">Customer</th>
+                        <th className="px-4 py-2 text-left">Channel</th>
                         <th className="px-4 py-2 text-left">Status</th>
-                        <th className="px-4 py-2 text-left">Creator reason</th>
                         <th className="px-4 py-2 text-left">Admin remark</th>
+                        <th className="px-4 py-2 text-left">Created</th>
                         {isManagerView && <th className="px-4 py-2 text-left">Action</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {ticketsB2B.map((t) => (
-                        <tr
-                          key={t.id}
-                          className="hover:bg-gray-50"
-                        >
-                          <td className="px-4 py-2 font-mono text-[11px] text-gray-600">
-                            {t.id.slice(0, 8)}
-                          </td>
-                          <td className="px-4 py-2">{t.product_name}</td>
-                          <td className="px-4 py-2">{t.quantity}</td>
-                          <td className="px-4 py-2">
-                            {Number(t.cost || 0).toLocaleString('en-IN', {
-                              style: 'currency',
-                              currency: 'INR',
-                              maximumFractionDigits: 0,
-                            })}
-                          </td>
-                          <td className="px-4 py-2">
-                            <div className="flex flex-col">
-                              <span>{t.delivery_batch}</span>
-                              <span className="text-[11px] text-gray-500">
-                                {new Date(t.delivery_date).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2">
-                            <StatusBadge status={t.status} />
-                          </td>
-                          <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.reason}>
-                            {t.reason ? (t.reason.length > 40 ? `${t.reason.slice(0, 40)}…` : t.reason) : '–'}
-                          </td>
-                          <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.approval_remarks ?? t.rejection_remarks ?? ''}>
-                            {(t.approval_remarks ?? t.rejection_remarks) ? ((t.approval_remarks ?? t.rejection_remarks)!.length > 40 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 40)}…` : (t.approval_remarks ?? t.rejection_remarks)) : '–'}
-                          </td>
-                          {isManagerView && (
-                            <td className="px-4 py-2">
-                              <div className="flex gap-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); setEditingTicket(t); }}
-                                  className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => void handleDelete(e, t.id)}
-                                  disabled={deleteLoadingId === t.id}
-                                  className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
-                                >
-                                  {deleteLoadingId === t.id ? '…' : 'Delete'}
-                                </button>
-                              </div>
+                      {groupTickets(ticketsB2B).map((g) => {
+                        const displayId = getDisplayId(g);
+                        const statuses = Array.from(
+                          new Set(g.items.map((i) => i.status)),
+                        );
+                        const singleStatus =
+                          statuses.length === 1 ? statuses[0] : null;
+                        const allRemarks = g.items
+                          .map((i) => i.approval_remarks ?? i.rejection_remarks)
+                          .filter(Boolean) as string[];
+                        const remarksSummary = allRemarks.join(' | ');
+                        const isExpanded = expandedGroupId === g.id;
+                        return (
+                        <Fragment key={g.id}>
+                          <tr
+                            role="button"
+                            tabIndex={0}
+                            className="hover:bg-gray-50 cursor-pointer"
+                            onClick={() =>
+                              setExpandedGroupId((id) =>
+                                id === g.id ? null : g.id,
+                              )
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setExpandedGroupId((id) =>
+                                  id === g.id ? null : g.id,
+                                );
+                              }
+                            }}
+                          >
+                            <td className="px-4 py-2 font-medium text-[11px] text-gray-700">
+                              {displayId}
                             </td>
+                            <td className="px-4 py-2">
+                              {new Date(g.delivery_date).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-2">
+                              <span>{g.delivery_batch}</span>
+                            </td>
+                            <td className="px-4 py-2 text-xs">
+                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-sky-50 text-sky-700">
+                                B2B
+                              </span>
+                            </td>
+                            <td className="px-4 py-2">
+                              {singleStatus ? (
+                                <StatusBadge status={singleStatus} />
+                              ) : (
+                                <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+                                  Multiple
+                                </span>
+                              )}
+                            </td>
+                            <td
+                              className="px-4 py-2 text-[11px] text-gray-600 max-w-[180px]"
+                              title={remarksSummary || ''}
+                            >
+                              {remarksSummary
+                                ? remarksSummary.length > 60
+                                  ? `${remarksSummary.slice(0, 60)}…`
+                                  : remarksSummary
+                                : '–'}
+                            </td>
+                            <td className="px-4 py-2 text-[11px] text-gray-500">
+                              {new Date(g.created_at).toLocaleString()}
+                            </td>
+                            {isManagerView && (
+                              <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const firstId = g.items[0]?.id;
+                                      if (!firstId) return;
+                                      const base = ticketsB2B.find(
+                                        (t) => t.id === firstId,
+                                      );
+                                      if (base) setEditingTicket(base);
+                                    }}
+                                    className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      const firstId = g.items[0]?.id;
+                                      if (!firstId) return;
+                                      void handleDelete(e, firstId);
+                                    }}
+                                    disabled={deleteLoadingId === g.items[0]?.id}
+                                    className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                                  >
+                                    {deleteLoadingId === g.items[0]?.id
+                                      ? '…'
+                                      : 'Delete'}
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                          {isExpanded && (
+                            <tr className="bg-gray-50 border-l-4 border-l-indigo-300">
+                              <td colSpan={isManagerView ? 8 : 7} className="px-4 py-3 text-xs">
+                                <div className="space-y-2">
+                                  <div className="font-medium text-gray-700">
+                                    Products on this ticket (Ticket ID: {displayId})
+                                  </div>
+                                  <div className="border border-gray-200 rounded-md bg-white">
+                                    <table className="min-w-full text-[11px]">
+                                      <thead className="bg-gray-50 text-gray-500 uppercase">
+                                        <tr>
+                                          <th className="px-3 py-1 text-left">Line</th>
+                                          <th className="px-3 py-1 text-left">Product</th>
+                                          <th className="px-3 py-1 text-left">Qty</th>
+                                          <th className="px-3 py-1 text-left">Status</th>
+                                          <th className="px-3 py-1 text-left">Creator reason</th>
+                                          <th className="px-3 py-1 text-left">Admin remark</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-100">
+                                        {g.items.map((item) => (
+                                          <tr key={item.id}>
+                                            <td className="px-3 py-1 font-medium text-gray-700">{getLineId(displayId, item.id)}</td>
+                                            <td className="px-3 py-1">{item.product_name}</td>
+                                            <td className="px-3 py-1">{item.quantity}</td>
+                                            <td className="px-3 py-1">
+                                              <StatusBadge status={item.status} />
+                                            </td>
+                                            <td
+                                              className="px-3 py-1 text-gray-700 max-w-[180px]"
+                                              title={item.reason}
+                                            >
+                                              {item.reason.length > 60
+                                                ? `${item.reason.slice(0, 60)}…`
+                                                : item.reason}
+                                            </td>
+                                            <td
+                                              className="px-3 py-1 text-gray-700 max-w-[180px]"
+                                              title={
+                                                item.approval_remarks ??
+                                                item.rejection_remarks ??
+                                                ''
+                                              }
+                                            >
+                                              {(item.approval_remarks ??
+                                                item.rejection_remarks ??
+                                                ''
+                                              ).length > 60
+                                                ? `${(
+                                                    item.approval_remarks ??
+                                                    item.rejection_remarks ??
+                                                    ''
+                                                  ).slice(0, 60)}…`
+                                                : item.approval_remarks ??
+                                                  item.rejection_remarks ??
+                                                  '–'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
                           )}
-                        </tr>
-                      ))}
+                        </Fragment>
+                      );})}
                     </tbody>
                   </table>
                 </div>
@@ -494,121 +840,250 @@ export default function TicketsPage() {
             )}
             {!loadingB2C && ticketsB2C.length > 0 && (
               <>
-                {/* Mobile cards */}
+                {/* Mobile cards - grouped */}
                 <div className="space-y-3 md:hidden">
-                  {ticketsB2C.map((t) => (
-                    <div
-                      key={t.id}
-                      className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-medium text-gray-900">
-                          {t.product_name}
+                  {groupTickets(ticketsB2C).map((g) => {
+                    const statuses = Array.from(new Set(g.items.map((i) => i.status)));
+                    const singleStatus = statuses.length === 1 ? statuses[0] : null;
+                    return (
+                      <div
+                        key={g.id}
+                        className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-medium text-gray-900">
+                            {g.delivery_batch}
+                          </div>
+                          {singleStatus ? (
+                            <StatusBadge status={singleStatus} />
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+                              Multiple
+                            </span>
+                          )}
                         </div>
-                        <StatusBadge status={t.status} />
-                      </div>
-                      <div className="mt-1 text-[11px] text-gray-500">
-                        {t.delivery_batch}
-                      </div>
-                      {(t.reason || t.approval_remarks) && (
-                        <div className="mt-1 text-[11px] text-gray-600">
-                          {t.reason && <span>Creator: {t.reason.length > 50 ? `${t.reason.slice(0, 50)}…` : t.reason}</span>}
-                          {(t.approval_remarks ?? t.rejection_remarks) && <span className="block mt-0.5">Admin: {((t.approval_remarks ?? t.rejection_remarks)!.length > 50 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 50)}…` : (t.approval_remarks ?? t.rejection_remarks))}</span>}
+                        <div className="mt-1 text-[11px] text-gray-500">
+                          {new Date(g.delivery_date).toLocaleDateString()}
                         </div>
-                      )}
-                      <div className="mt-2 flex justify-between text-[11px] text-gray-600">
-                        <span>
-                          Qty: <span className="font-medium">{t.quantity}</span>
-                        </span>
-                        <span>
-                          {Number(t.cost || 0).toLocaleString('en-IN', {
-                            style: 'currency',
-                            currency: 'INR',
-                            maximumFractionDigits: 0,
-                          })}
-                        </span>
+                        <div className="mt-2 space-y-1 text-[11px] text-gray-600">
+                          {g.items.map((item) => (
+                            <div key={item.id} className="flex justify-between items-start gap-2">
+                              <div>
+                                <div>{item.product_name}</div>
+                                <div className="text-[10px] text-gray-500">
+                                  {item.reason.length > 40
+                                    ? `${item.reason.slice(0, 40)}…`
+                                    : item.reason}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div>
+                                  Qty: <span className="font-medium">{item.quantity}</span>
+                                </div>
+                                <div className="mt-0.5">
+                                  <StatusBadge status={item.status} />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-1 text-[11px] text-gray-400">
+                          {new Date(g.created_at).toLocaleString()}
+                        </div>
                       </div>
-                      <div className="mt-1 text-[11px] text-gray-400">
-                        {new Date(t.delivery_date).toLocaleDateString()}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                {/* Desktop table */}
+                {/* Desktop table - grouped for B2C, clickable expandable rows */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="min-w-full text-xs">
                     <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                       <tr>
-                        <th className="px-4 py-2 text-left">Ticket ID</th>
-                        <th className="px-4 py-2 text-left">Product</th>
-                        <th className="px-4 py-2 text-left">Qty</th>
-                        <th className="px-4 py-2 text-left">Cost</th>
+                        <th className="px-4 py-2 text-left">Ticket</th>
+                        <th className="px-4 py-2 text-left">Delivery date</th>
                         <th className="px-4 py-2 text-left">Customer</th>
+                        <th className="px-4 py-2 text-left">Channel</th>
                         <th className="px-4 py-2 text-left">Status</th>
-                        <th className="px-4 py-2 text-left">Creator reason</th>
                         <th className="px-4 py-2 text-left">Admin remark</th>
+                        <th className="px-4 py-2 text-left">Created</th>
                         {isManagerView && <th className="px-4 py-2 text-left">Action</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {ticketsB2C.map((t) => (
-                        <tr
-                          key={t.id}
-                          className="hover:bg-gray-50"
-                        >
-                          <td className="px-4 py-2 font-mono text-[11px] text-gray-600">
-                            {t.id.slice(0, 8)}
-                          </td>
-                          <td className="px-4 py-2">{t.product_name}</td>
-                          <td className="px-4 py-2">{t.quantity}</td>
-                          <td className="px-4 py-2">
-                            {Number(t.cost || 0).toLocaleString('en-IN', {
-                              style: 'currency',
-                              currency: 'INR',
-                              maximumFractionDigits: 0,
-                            })}
-                          </td>
-                          <td className="px-4 py-2">
-                            <div className="flex flex-col">
-                              <span>{t.delivery_batch}</span>
-                              <span className="text-[11px] text-gray-500">
-                                {new Date(t.delivery_date).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2">
-                            <StatusBadge status={t.status} />
-                          </td>
-                          <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.reason}>
-                            {t.reason ? (t.reason.length > 40 ? `${t.reason.slice(0, 40)}…` : t.reason) : '–'}
-                          </td>
-                          <td className="px-4 py-2 text-[11px] text-gray-600 max-w-[140px]" title={t.approval_remarks ?? t.rejection_remarks ?? ''}>
-                            {(t.approval_remarks ?? t.rejection_remarks) ? ((t.approval_remarks ?? t.rejection_remarks)!.length > 40 ? `${(t.approval_remarks ?? t.rejection_remarks)!.slice(0, 40)}…` : (t.approval_remarks ?? t.rejection_remarks)) : '–'}
-                          </td>
-                          {isManagerView && (
-                            <td className="px-4 py-2">
-                              <div className="flex gap-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); setEditingTicket(t); }}
-                                  className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => void handleDelete(e, t.id)}
-                                  disabled={deleteLoadingId === t.id}
-                                  className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
-                                >
-                                  {deleteLoadingId === t.id ? '…' : 'Delete'}
-                                </button>
-                              </div>
-                            </td>
-                          )}
-                        </tr>
-                      ))}
+                      {groupTickets(ticketsB2C).map((g) => {
+                        const displayId = getDisplayId(g);
+                        const statuses = Array.from(
+                          new Set(g.items.map((i) => i.status)),
+                        );
+                        const singleStatus =
+                          statuses.length === 1 ? statuses[0] : null;
+                        const allRemarks = g.items
+                          .map((i) => i.approval_remarks ?? i.rejection_remarks)
+                          .filter(Boolean) as string[];
+                        const remarksSummary = allRemarks.join(' | ');
+                        const isExpanded = expandedGroupId === g.id;
+                        return (
+                          <Fragment key={g.id}>
+                            <tr
+                              role="button"
+                              tabIndex={0}
+                              className="hover:bg-gray-50 cursor-pointer"
+                              onClick={() =>
+                                setExpandedGroupId((id) =>
+                                  id === g.id ? null : g.id,
+                                )
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setExpandedGroupId((id) =>
+                                    id === g.id ? null : g.id,
+                                  );
+                                }
+                              }}
+                            >
+                              <td className="px-4 py-2 font-medium text-[11px] text-gray-700">
+                                {displayId}
+                              </td>
+                              <td className="px-4 py-2">
+                                {new Date(g.delivery_date).toLocaleDateString()}
+                              </td>
+                              <td className="px-4 py-2">
+                                <span>{g.delivery_batch}</span>
+                              </td>
+                              <td className="px-4 py-2 text-xs">
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-orange-50 text-orange-700">
+                                  B2C
+                                </span>
+                              </td>
+                              <td className="px-4 py-2">
+                                {singleStatus ? (
+                                  <StatusBadge status={singleStatus} />
+                                ) : (
+                                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+                                    Multiple
+                                  </span>
+                                )}
+                              </td>
+                              <td
+                                className="px-4 py-2 text-[11px] text-gray-600 max-w-[180px]"
+                                title={remarksSummary || ''}
+                              >
+                                {remarksSummary
+                                  ? remarksSummary.length > 60
+                                    ? `${remarksSummary.slice(0, 60)}…`
+                                    : remarksSummary
+                                  : '–'}
+                              </td>
+                              <td className="px-4 py-2 text-[11px] text-gray-500">
+                                {new Date(g.created_at).toLocaleString()}
+                              </td>
+                              {isManagerView && (
+                                <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const firstId = g.items[0]?.id;
+                                        if (!firstId) return;
+                                        const base = ticketsB2C.find(
+                                          (t) => t.id === firstId,
+                                        );
+                                        if (base) setEditingTicket(base);
+                                      }}
+                                      className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        const firstId = g.items[0]?.id;
+                                        if (!firstId) return;
+                                        void handleDelete(e, firstId);
+                                      }}
+                                      disabled={deleteLoadingId === g.items[0]?.id}
+                                      className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                                    >
+                                      {deleteLoadingId === g.items[0]?.id
+                                        ? '…'
+                                        : 'Delete'}
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                            {isExpanded && (
+                              <tr className="bg-gray-50 border-l-4 border-l-indigo-300">
+                                <td colSpan={isManagerView ? 8 : 7} className="px-4 py-3 text-xs">
+                                  <div className="space-y-2">
+                                    <div className="font-medium text-gray-700">
+                                      Products on this ticket (Ticket ID: {displayId})
+                                    </div>
+                                    <div className="border border-gray-200 rounded-md bg-white">
+                                      <table className="min-w-full text-[11px]">
+                                        <thead className="bg-gray-50 text-gray-500 uppercase">
+                                          <tr>
+                                            <th className="px-3 py-1 text-left">Line</th>
+                                            <th className="px-3 py-1 text-left">Product</th>
+                                            <th className="px-3 py-1 text-left">Qty</th>
+                                            <th className="px-3 py-1 text-left">Status</th>
+                                            <th className="px-3 py-1 text-left">Creator reason</th>
+                                            <th className="px-3 py-1 text-left">Admin remark</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                          {g.items.map((item) => (
+                                            <tr key={item.id}>
+                                              <td className="px-3 py-1 font-medium text-gray-700">{getLineId(displayId, item.id)}</td>
+                                              <td className="px-3 py-1">{item.product_name}</td>
+                                              <td className="px-3 py-1">{item.quantity}</td>
+                                              <td className="px-3 py-1">
+                                                <StatusBadge status={item.status} />
+                                              </td>
+                                              <td
+                                                className="px-3 py-1 text-gray-700 max-w-[180px]"
+                                                title={item.reason}
+                                              >
+                                                {item.reason.length > 60
+                                                  ? `${item.reason.slice(0, 60)}…`
+                                                  : item.reason}
+                                              </td>
+                                              <td
+                                                className="px-3 py-1 text-gray-700 max-w-[180px]"
+                                                title={
+                                                  item.approval_remarks ??
+                                                  item.rejection_remarks ??
+                                                  ''
+                                                }
+                                              >
+                                                {(item.approval_remarks ??
+                                                  item.rejection_remarks ??
+                                                  ''
+                                                ).length > 60
+                                                  ? `${(
+                                                      item.approval_remarks ??
+                                                      item.rejection_remarks ??
+                                                      ''
+                                                    ).slice(0, 60)}…`
+                                                  : item.approval_remarks ??
+                                                    item.rejection_remarks ??
+                                                    '–'}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -619,27 +1094,25 @@ export default function TicketsPage() {
       )}
 
       {/* Edit ticket modal */}
-      {editingTicket && (
+      {editingTicket && (() => {
+        const groups = groupTickets(mergedTickets);
+        const group = groups.find((gg) => gg.items.some((it) => it.id === editingTicket.id));
+        const displayId = group ? getDisplayId(group) : `${editingTicket.channel}-???`;
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900">Edit ticket</h3>
-              <p className="text-xs text-gray-500 mt-0.5">Ticket ID: {editingTicket.id.slice(0, 8)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">Ticket ID: {displayId}</p>
             </div>
             <form onSubmit={handleEditSubmit} className="p-4 space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Product name</label>
                 <input name="product_name" defaultValue={editingTicket.product_name} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
-                  <input name="quantity" type="number" min={0} defaultValue={editingTicket.quantity} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Cost</label>
-                  <input name="cost" type="number" min={0} step="0.01" defaultValue={editingTicket.cost} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
+                <input name="quantity" type="number" min={0} defaultValue={editingTicket.quantity} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Customer</label>
@@ -653,10 +1126,6 @@ export default function TicketsPage() {
                 <label className="block text-xs font-medium text-gray-700 mb-1">Creator reason</label>
                 <textarea name="reason" defaultValue={editingTicket.reason} className="w-full rounded border border-gray-200 px-3 py-2 text-sm min-h-[60px]" required />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Photo proof URL (optional)</label>
-                <input name="photo_proof_url" defaultValue={(editingTicket as { photo_proof_url?: string }).photo_proof_url ?? ''} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" />
-              </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setEditingTicket(null)} className="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
                   Cancel
@@ -668,7 +1137,8 @@ export default function TicketsPage() {
             </form>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

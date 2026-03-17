@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 
 const navItemBase =
@@ -31,6 +31,8 @@ export default function AppLayout() {
   const location = useLocation();
 
   const pageTitle = (() => {
+    if (location.pathname.startsWith('/tally/approved')) return 'Approved (Tally)';
+    if (location.pathname.startsWith('/tally/rejected')) return 'Rejected (Tally)';
     if (location.pathname.startsWith('/tickets/new')) return 'Create Ticket';
     if (location.pathname.startsWith('/tickets')) return 'Tickets';
     if (location.pathname.startsWith('/approvals')) return 'Approvals';
@@ -38,6 +40,8 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/admin')) return 'Admin Panel';
     return 'Dashboard';
   })();
+
+  const isTally = user?.role === 'tally';
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 flex">
@@ -53,13 +57,23 @@ export default function AppLayout() {
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 text-sm">
-          <div className="px-2 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
-            Operations
-          </div>
-          <SidebarLink to="/" icon={<LayoutDashboard className="w-4 h-4" />} label="Dashboard" />
-          <SidebarLink to="/tickets/new" icon={<PlusCircle className="w-4 h-4" />} label="Create Ticket" />
-          <SidebarLink to="/tickets" icon={<Ticket className="w-4 h-4" />} label="Tickets" />
-          {(user?.role === 'manager' || user?.role === 'admin') && (
+          {isTally ? (
+            <>
+              <div className="px-2 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
+                Tally
+              </div>
+              <SidebarLink to="/tally/approved" icon={<CheckCircle className="w-4 h-4" />} label="Approved" />
+              <SidebarLink to="/tally/rejected" icon={<XCircle className="w-4 h-4" />} label="Rejected" />
+            </>
+          ) : (
+            <>
+              <div className="px-2 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
+                Operations
+              </div>
+              <SidebarLink to="/" icon={<LayoutDashboard className="w-4 h-4" />} label="Dashboard" />
+              <SidebarLink to="/tickets/new" icon={<PlusCircle className="w-4 h-4" />} label="Create Ticket" />
+              <SidebarLink to="/tickets" icon={<Ticket className="w-4 h-4" />} label="Tickets" />
+              {(user?.role === 'manager' || user?.role === 'admin') && (
             <>
               <div className="px-2 pt-4 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
                 Control
@@ -68,12 +82,14 @@ export default function AppLayout() {
               <SidebarLink to="/reports" icon={<BarChart3 className="w-4 h-4" />} label="Reports" />
             </>
           )}
-          {user?.role === 'admin' && (
+          {user?.role === 'admin' && !isTally && (
             <>
               <div className="px-2 pt-4 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
                 Admin
               </div>
               <SidebarLink to="/admin" icon={<Settings className="w-4 h-4" />} label="Admin Panel" />
+            </>
+          )}
             </>
           )}
         </nav>
@@ -125,6 +141,35 @@ export default function AppLayout() {
         {/* Mobile primary nav for quick access (desktop uses sidebar) */}
         <nav className="border-b border-gray-200 bg-white px-4 py-2 lg:hidden">
           <div className="flex gap-2 overflow-x-auto text-xs">
+            {isTally ? (
+              <>
+                <NavLink
+                  to="/tally/approved"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  Approved
+                </NavLink>
+                <NavLink
+                  to="/tally/rejected"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  Rejected
+                </NavLink>
+              </>
+            ) : (
+              <>
             <NavLink
               to="/"
               className={({ isActive }) =>
@@ -202,6 +247,8 @@ export default function AppLayout() {
               >
                 Admin
               </NavLink>
+            )}
+              </>
             )}
           </div>
         </nav>

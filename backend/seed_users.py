@@ -35,6 +35,7 @@ async def main():
     await ensure_user("B2C Exec", "b2c@ppf.local", "b2c123", UserRole.B2C)
     await ensure_user("Manager", "manager@ppf.local", "manager123", UserRole.MANAGER)
     await ensure_user("Admin", "admin@ppf.local", "admin123", UserRole.ADMIN)
+    await ensure_user("Tally Dept", "tally@ppf.local", "tally123", UserRole.TALLY)
 
 
 if __name__ == "__main__":

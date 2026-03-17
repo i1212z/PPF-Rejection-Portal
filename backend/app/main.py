@@ -9,9 +9,9 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .routers import auth, tickets, approvals, admin
+from .routers import auth, tickets, approvals, admin, tally
 from .database import engine, Base, get_db
-from .models import User, UserRole, Approval, RejectionTicket
+from .models import User, UserRole, Approval, RejectionTicket, TallyPending
 from .auth.deps import require_roles
 
 
@@ -72,6 +72,7 @@ async def on_startup():
     # Auto-create tables for local development. In production, prefer Alembic migrations.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    print("PPF Backend started. POST /tickets (create) is allowed for any authenticated user.")
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -92,7 +93,8 @@ async def reset_database(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
-    """Delete all tickets and approvals. Users are kept. Admin only."""
+    """Delete all tickets, approvals, and tally marks. Users are kept. Admin only."""
+    await db.execute(delete(TallyPending))
     await db.execute(delete(Approval))
     await db.execute(delete(RejectionTicket))
     await db.commit()
@@ -102,5 +104,6 @@ async def reset_database(
 app.include_router(auth.router)
 app.include_router(tickets.router)
 app.include_router(approvals.router)
+app.include_router(tally.router)
 app.include_router(admin.router)
 

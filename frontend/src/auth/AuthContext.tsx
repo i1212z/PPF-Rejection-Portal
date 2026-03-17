@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 import axios from 'axios';
 
-type UserRole = 'b2b' | 'b2c' | 'manager' | 'admin';
+type UserRole = 'b2b' | 'b2c' | 'manager' | 'admin' | 'tally';
 
 interface User {
   id: string;
@@ -21,7 +21,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://ppf-backend-exsn.onrender.com';
+// Keep auth pointed at the same backend as the rest of the app.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 function decodeToken(token: string): { userId: string; role: UserRole } | null {
   try {

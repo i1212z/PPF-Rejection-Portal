@@ -24,6 +24,7 @@ class UserRole(str, enum.Enum):
     B2C = "b2c"
     MANAGER = "manager"
     ADMIN = "admin"
+    TALLY = "tally"
 
 
 class TicketStatus(str, enum.Enum):
@@ -88,4 +89,12 @@ class Approval(Base):
 
     ticket = relationship("RejectionTicket", back_populates="approval")
     manager = relationship("User", back_populates="approvals")
+
+
+class TallyPending(Base):
+    """Tickets marked by Tally department for update to Tally."""
+    __tablename__ = "tally_pending"
+
+    ticket_id = Column(UUID(as_uuid=True), ForeignKey("rejection_tickets.id"), primary_key=True)
+    marked_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 

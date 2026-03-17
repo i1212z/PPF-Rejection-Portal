@@ -56,6 +56,7 @@ async def seed_users(db: AsyncSession = Depends(get_db)):
         ("B2C Exec", "b2c@ppf.local", "b2c123", UserRole.B2C),
         ("Manager", "manager@ppf.local", "manager123", UserRole.MANAGER),
         ("Admin", "admin@ppf.local", "admin123", UserRole.ADMIN),
+        ("Tally Dept", "tally@ppf.local", "tally123", UserRole.TALLY),
     ]
 
     for name, email, password, role in users:

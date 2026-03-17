@@ -9,6 +9,8 @@ import CreateTicketPage from './pages/CreateTicketPage';
 import ApprovalsPage from './pages/ApprovalsPage';
 import ReportsPage from './pages/ReportsPage';
 import AdminPanelPage from './pages/AdminPanelPage';
+import TallyApprovedPage from './pages/TallyApprovedPage';
+import TallyRejectedPage from './pages/TallyRejectedPage';
 import AppLayout from './layout/AppLayout';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -26,6 +28,14 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return children;
 }
 
+function DefaultPage() {
+  const { user } = useAuth();
+  if (user?.role === 'tally') {
+    return <Navigate to="/tally/approved" replace />;
+  }
+  return <DashboardPage />;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -40,11 +50,13 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<DashboardPage />} />
+            <Route index element={<DefaultPage />} />
             <Route path="tickets" element={<TicketsPage />} />
             <Route path="tickets/new" element={<CreateTicketPage />} />
             <Route path="approvals" element={<ApprovalsPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="tally/approved" element={<TallyApprovedPage />} />
+            <Route path="tally/rejected" element={<TallyRejectedPage />} />
             <Route path="admin" element={<AdminPanelPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

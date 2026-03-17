@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func, delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth.deps import get_current_user, require_roles, get_channel_filter_for_user
+from ..auth.deps import get_current_user, get_current_user_for_ticket_create, require_roles, get_channel_filter_for_user
 from ..database import get_db
 from ..models import RejectionTicket, User, UserRole, Channel, TicketStatus, Approval, Decision
 from ..schemas import TicketCreate, TicketRead, PaginatedTickets
@@ -15,18 +15,28 @@ from ..schemas import TicketCreate, TicketRead, PaginatedTickets
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
 
+def _role_value(user: User) -> str:
+    """Normalize role to string value for comparison (handles enum or string from DB)."""
+    r = user.role
+    if hasattr(r, "value"):
+        return r.value
+    return str(r).lower() if r else ""
+
+
 @router.post("", response_model=TicketRead, status_code=status.HTTP_201_CREATED)
 async def create_ticket(
     payload: TicketCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.B2B, UserRole.B2C)),
+    current_user: User = Depends(get_current_user_for_ticket_create),
 ):
-    if current_user.role == UserRole.B2B:
+    # Any authenticated user can create tickets. Channel: B2B/B2C from role, else from payload (default B2B).
+    rv = _role_value(current_user)
+    if rv == "b2b":
         channel = Channel.B2B
-    elif current_user.role == UserRole.B2C:
+    elif rv == "b2c":
         channel = Channel.B2C
     else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role for ticket creation")
+        channel = payload.channel if payload.channel is not None else Channel.B2B
 
     ticket = RejectionTicket(
         product_name=payload.product_name,

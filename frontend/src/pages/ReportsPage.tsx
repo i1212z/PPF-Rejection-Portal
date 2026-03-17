@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import * as XLSX from 'xlsx';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
+import { StatusBadge } from '../components/ui/StatusBadge';
 
 type TicketStatus = 'pending' | 'approved' | 'rejected';
 
@@ -11,7 +12,6 @@ interface Ticket {
   id: string;
   product_name: string;
   quantity: number;
-  cost: number;
   reason: string;
   channel: 'B2B' | 'B2C';
   status: TicketStatus;
@@ -22,11 +22,66 @@ interface Ticket {
   approval_remarks?: string | null;
 }
 
+interface TicketGroup {
+  id: string;
+  delivery_batch: string;
+  delivery_date: string;
+  channel: 'B2B' | 'B2C';
+  created_at: string;
+  items: {
+    id: string;
+    product_name: string;
+    quantity: number;
+    reason: string;
+    status: TicketStatus;
+    approval_remarks?: string | null;
+    rejection_remarks?: string | null;
+  }[];
+}
+
+function groupTickets(list: Ticket[]): TicketGroup[] {
+  const groups: Record<string, TicketGroup> = {};
+  list.forEach((t) => {
+    const key = `${t.delivery_batch}|${t.delivery_date}|${t.channel}|${t.created_at.slice(0, 16)}`;
+    if (!groups[key]) {
+      groups[key] = {
+        id: t.id,
+        delivery_batch: t.delivery_batch,
+        delivery_date: t.delivery_date,
+        channel: t.channel,
+        created_at: t.created_at,
+        items: [],
+      };
+    }
+    groups[key].items.push({
+      id: t.id,
+      product_name: t.product_name,
+      quantity: t.quantity,
+      reason: t.reason,
+      status: t.status,
+      approval_remarks: t.approval_remarks,
+      rejection_remarks: t.rejection_remarks,
+    });
+  });
+  return Object.values(groups).sort((a, b) => {
+    const tA = new Date(a.created_at).getTime();
+    const tB = new Date(b.created_at).getTime();
+    if (tB !== tA) return tB - tA; // newest first
+    return (a.id || '').localeCompare(b.id || ''); // stable: same created_at → sort by id
+  });
+}
+
+/** Stable key for a group so lookups work across filtered lists (section vs all) */
+function groupKey(g: TicketGroup): string {
+  return `${g.delivery_batch}|${g.delivery_date}|${g.channel}|${g.created_at.slice(0, 16)}`;
+}
+
 const CHART_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444'];
 
 export default function ReportsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -62,27 +117,27 @@ export default function ReportsPage() {
       dailyMap[key] = 0;
     }
 
-    let b2bValue = 0;
-    let b2cValue = 0;
-    const approvedValue = { B2B: 0, B2C: 0 };
-    const rejectedValue = { B2B: 0, B2C: 0 };
+    let b2bQty = 0;
+    let b2cQty = 0;
+    const approvedQty = { B2B: 0, B2C: 0 };
+    const rejectedQty = { B2B: 0, B2C: 0 };
 
     tickets.forEach((t) => {
       const created = new Date(t.created_at);
       const key = created.toISOString().slice(0, 10);
       if (key in dailyMap) {
-        dailyMap[key] += Number(t.cost || 0);
+        dailyMap[key] += Number(t.quantity || 0);
       }
 
       if (created >= thisMonthStart) {
         if (t.channel === 'B2B') {
-          b2bValue += Number(t.cost || 0);
-          if (t.status === 'approved') approvedValue.B2B += Number(t.cost || 0);
-          if (t.status === 'rejected') rejectedValue.B2B += Number(t.cost || 0);
+          b2bQty += Number(t.quantity || 0);
+          if (t.status === 'approved') approvedQty.B2B += Number(t.quantity || 0);
+          if (t.status === 'rejected') rejectedQty.B2B += Number(t.quantity || 0);
         } else {
-          b2cValue += Number(t.cost || 0);
-          if (t.status === 'approved') approvedValue.B2C += Number(t.cost || 0);
-          if (t.status === 'rejected') rejectedValue.B2C += Number(t.cost || 0);
+          b2cQty += Number(t.quantity || 0);
+          if (t.status === 'approved') approvedQty.B2C += Number(t.quantity || 0);
+          if (t.status === 'rejected') rejectedQty.B2C += Number(t.quantity || 0);
         }
       }
     });
@@ -92,20 +147,20 @@ export default function ReportsPage() {
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const channelComparisonData = [
-      { channel: 'B2B', value: b2bValue },
-      { channel: 'B2C', value: b2cValue },
+      { channel: 'B2B', value: b2bQty },
+      { channel: 'B2C', value: b2cQty },
     ];
 
     const channelPieData = [
-      { name: 'B2B', value: b2bValue },
-      { name: 'B2C', value: b2cValue },
+      { name: 'B2B', value: b2bQty },
+      { name: 'B2C', value: b2cQty },
     ].filter((d) => d.value > 0);
 
     const approvalRejectionData = [
-      { name: 'B2B Approved', value: approvedValue.B2B },
-      { name: 'B2B Rejected', value: rejectedValue.B2B },
-      { name: 'B2C Approved', value: approvedValue.B2C },
-      { name: 'B2C Rejected', value: rejectedValue.B2C },
+      { name: 'B2B Approved', value: approvedQty.B2B },
+      { name: 'B2B Rejected', value: rejectedQty.B2B },
+      { name: 'B2C Approved', value: approvedQty.B2C },
+      { name: 'B2C Rejected', value: rejectedQty.B2C },
     ].filter((d) => d.value > 0);
 
     return {
@@ -133,51 +188,95 @@ export default function ReportsPage() {
     return d.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
+  /** Export columns match Dashboard product lines exactly: Line, Product, Qty, Status, Creator reason, Admin remark (+ Ticket ID for grouping) */
   const headers = [
     'Ticket ID',
+    'Line',
     'Product',
-    'Customer',
     'Qty',
-    'Cost',
-    'Channel',
     'Status',
     'Creator reason',
     'Admin remark',
-    'Delivery Date',
-    'Created',
   ];
 
-  const row = (t: Ticket) => [
-    t.id,
-    t.product_name,
-    t.delivery_batch,
-    t.quantity,
-    Number(t.cost),
-    t.channel,
-    t.status,
-    t.reason ?? '',
-    t.approval_remarks ?? '',
-    formatDeliveryDate(t.delivery_date),
-    formatDateTime(t.created_at),
+  const statusForExport = (s: string) =>
+    s === 'approved' ? 'Approved' : s === 'rejected' ? 'Rejected' : s === 'pending' ? 'Pending' : s;
+
+  const rowFromGroup = (
+    _g: TicketGroup,
+    item: TicketGroup['items'][0],
+    displayId: string,
+    lineId: string,
+  ) => [
+    displayId,
+    lineId,
+    item.product_name,
+    item.quantity,
+    statusForExport(item.status),
+    item.reason ?? '',
+    (item.approval_remarks ?? item.rejection_remarks ?? ''),
   ];
 
-  const segments = useMemo(() => ({
-    b2bRejected: tickets.filter((t) => t.channel === 'B2B' && t.status === 'rejected'),
-    b2bApproved: tickets.filter((t) => t.channel === 'B2B' && t.status === 'approved'),
-    b2cRejected: tickets.filter((t) => t.channel === 'B2C' && t.status === 'rejected'),
-    b2cApproved: tickets.filter((t) => t.channel === 'B2C' && t.status === 'approved'),
-  }), [tickets]);
+  const reportSections = useMemo(
+    () => [
+      { key: 'b2bApproved', title: 'B2B Approved', tickets: tickets.filter((t) => t.channel === 'B2B' && t.status === 'approved') },
+      { key: 'b2bRejected', title: 'B2B Rejected', tickets: tickets.filter((t) => t.channel === 'B2B' && t.status === 'rejected') },
+      { key: 'b2cApproved', title: 'B2C Approved', tickets: tickets.filter((t) => t.channel === 'B2C' && t.status === 'approved') },
+      { key: 'b2cRejected', title: 'B2C Rejected', tickets: tickets.filter((t) => t.channel === 'B2C' && t.status === 'rejected') },
+    ],
+    [tickets],
+  );
 
+  /** Global display IDs and per-item line numbers from full groups so B2CT1-1 / B2CT1-2 are fixed everywhere */
+  const { globalDisplayIdByGroupKey, globalItemLineByItemId } = useMemo(() => {
+    const allGroupsNewest = groupTickets(tickets);
+    const allGroupsAsc = [...allGroupsNewest].sort((a, b) => {
+      const tA = new Date(a.created_at).getTime();
+      const tB = new Date(b.created_at).getTime();
+      if (tA !== tB) return tA - tB; // oldest first for stable numbering
+      return groupKey(a).localeCompare(groupKey(b));
+    });
+    const byGroupKey = new Map<string, number>();
+    const byItemId = new Map<string, number>();
+    const channelCounters: Record<string, number> = {};
+    allGroupsAsc.forEach((g) => {
+      const chan = g.channel;
+      const next = (channelCounters[chan] ?? 0) + 1;
+      channelCounters[chan] = next;
+      byGroupKey.set(groupKey(g), next);
+      const itemsSorted = [...g.items].sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+      itemsSorted.forEach((item, lineIdx) => byItemId.set(item.id, lineIdx + 1));
+    });
+    return { globalDisplayIdByGroupKey: byGroupKey, globalItemLineByItemId: byItemId };
+  }, [tickets]);
+
+  const getDisplayId = (g: TicketGroup): string => {
+    const num = globalDisplayIdByGroupKey.get(groupKey(g));
+    return num != null ? `${g.channel}-${String(num).padStart(3, "0")}` : `${g.channel}-???`;
+  };
+
+  const getLineId = (displayId: string, itemId: string): string => {
+    const lineNum = globalItemLineByItemId.get(itemId);
+    return lineNum != null ? `${displayId}-${lineNum}` : `${displayId}-?`;
+  };
+
+  /** CSV/Excel use same global Ticket ID (B2BT1, B2CT1) and Line ID (B2CT1-1, B2CT1-2) as Reports table */
   const exportCsv = () => {
     const sections: string[] = [];
-    const sectionNames = ['B2B Rejected', 'B2B Approved', 'B2C Rejected', 'B2C Approved'] as const;
-    const segmentKeys = ['b2bRejected', 'b2bApproved', 'b2cRejected', 'b2cApproved'] as const;
-    segmentKeys.forEach((key, i) => {
-      const list = segments[key];
-      sections.push(`\n=== ${sectionNames[i]} ===`);
+    reportSections.forEach((sec) => {
+      const groups = groupTickets(sec.tickets);
+      sections.push(`\n=== ${sec.title} ===`);
       sections.push(headers.join(','));
-      list.forEach((t) => {
-        sections.push(row(t).map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','));
+      groups.forEach((g) => {
+        const displayId = getDisplayId(g);
+        g.items.forEach((item) => {
+          const lineId = getLineId(displayId, item.id);
+          sections.push(
+            rowFromGroup(g, item, displayId, lineId)
+              .map((c) => `"${String(c).replace(/"/g, '""')}"`)
+              .join(','),
+          );
+        });
       });
     });
     const csv = sections.join('\n').replace(/^\n/, '');
@@ -191,13 +290,19 @@ export default function ReportsPage() {
 
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
-    const sheetNames = ['B2B Rejected', 'B2B Approved', 'B2C Rejected', 'B2C Approved'] as const;
-    const segmentKeys = ['b2bRejected', 'b2bApproved', 'b2cRejected', 'b2cApproved'] as const;
-    segmentKeys.forEach((key, i) => {
-      const list = segments[key];
-      const wsData = [headers, ...list.map((t) => row(t))];
+    reportSections.forEach((sec) => {
+      const groups = groupTickets(sec.tickets);
+      const rows: (string | number)[][] = [];
+      groups.forEach((g) => {
+        const displayId = getDisplayId(g);
+        g.items.forEach((item) => {
+          const lineId = getLineId(displayId, item.id);
+          rows.push(rowFromGroup(g, item, displayId, lineId));
+        });
+      });
+      const wsData = [headers, ...rows];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
-      XLSX.utils.book_append_sheet(wb, ws, sheetNames[i].replace(/\s/g, '_').slice(0, 31));
+      XLSX.utils.book_append_sheet(wb, ws, sec.title.replace(/\s/g, '_').slice(0, 31));
     });
     XLSX.writeFile(wb, `rejection-tickets-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
@@ -233,9 +338,168 @@ export default function ReportsPage() {
         <div className="text-sm text-gray-500">Loading reports…</div>
       ) : (
         <>
+          {/* B2B Approved, B2B Rejected, B2C Approved, B2C Rejected */}
+          {tickets.length > 0 &&
+            reportSections.map((sec) => {
+              const groups = groupTickets(sec.tickets);
+              return (
+                <Card
+                  key={sec.key}
+                  title={sec.title}
+                  subtitle="Ticket IDs (B2BT1, B2CT1…) are fixed globally. Export matches."
+                  className="text-sm"
+                >
+                  {groups.length === 0 ? (
+                    <p className="text-xs text-gray-500 py-2">No records.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
+                          <tr>
+                            <th className="px-4 py-2 text-left">Ticket ID</th>
+                            <th className="px-4 py-2 text-left">Customer</th>
+                            <th className="px-4 py-2 text-left">Delivery date</th>
+                            <th className="px-4 py-2 text-left">Channel</th>
+                            <th className="px-4 py-2 text-left">Status</th>
+                            <th className="px-4 py-2 text-left">Creator reason</th>
+                            <th className="px-4 py-2 text-left">Admin remark</th>
+                            <th className="px-4 py-2 text-left">Created</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {groups.map((g) => {
+                            const displayId = getDisplayId(g);
+                            const statuses = Array.from(new Set(g.items.map((i) => i.status)));
+                            const singleStatus = statuses.length === 1 ? statuses[0] : null;
+                            const rowKey = `${sec.key}:${g.id}`;
+                            const isExpanded = expandedGroupId === rowKey;
+                            return (
+                              <Fragment key={g.id}>
+                                <tr
+                                  role="button"
+                                  tabIndex={0}
+                                  className="hover:bg-gray-50 cursor-pointer"
+                                  onClick={() =>
+                                    setExpandedGroupId((id) => (id === rowKey ? null : rowKey))
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      setExpandedGroupId((id) => (id === rowKey ? null : rowKey));
+                                    }
+                                  }}
+                                >
+                                  <td className="px-4 py-2 font-medium text-[11px] text-gray-700">
+                                    {displayId}
+                                  </td>
+                                  <td className="px-4 py-2">{g.delivery_batch}</td>
+                                  <td className="px-4 py-2">{formatDeliveryDate(g.delivery_date)}</td>
+                                  <td className="px-4 py-2">
+                                    <span
+                                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                        g.channel === 'B2B' ? 'bg-sky-50 text-sky-700' : 'bg-orange-50 text-orange-700'
+                                      }`}
+                                    >
+                                      {g.channel}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2">
+                                    {singleStatus ? (
+                                      <StatusBadge status={singleStatus} />
+                                    ) : (
+                                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+                                        Multiple
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td
+                                    className="px-4 py-2 text-[11px] text-gray-700 max-w-[160px] truncate"
+                                    title={g.items.map((i) => i.reason).filter(Boolean).join(' | ') || ''}
+                                  >
+                                    {(() => {
+                                      const s = g.items.map((i) => i.reason).filter(Boolean).join(' | ');
+                                      return s.length > 60 ? `${s.slice(0, 60)}…` : s || '–';
+                                    })()}
+                                  </td>
+                                  <td
+                                    className="px-4 py-2 text-[11px] text-gray-700 max-w-[160px] truncate"
+                                    title={g.items.map((i) => i.approval_remarks ?? i.rejection_remarks ?? '').filter(Boolean).join(' | ') || ''}
+                                  >
+                                    {(() => {
+                                      const s = g.items.map((i) => i.approval_remarks ?? i.rejection_remarks ?? '').filter(Boolean).join(' | ');
+                                      return s.length > 60 ? `${s.slice(0, 60)}…` : s || '–';
+                                    })()}
+                                  </td>
+                                  <td className="px-4 py-2 text-[11px] text-gray-500">
+                                    {formatDateTime(g.created_at)}
+                                  </td>
+                                </tr>
+                                {isExpanded && (
+                                  <tr className="bg-gray-50 border-l-4 border-l-indigo-300">
+                                    <td colSpan={8} className="px-4 py-3 text-xs">
+                                      <div className="space-y-2">
+                                        <div className="font-medium text-gray-700">
+                                          Products on this ticket (Ticket ID: {displayId})
+                                        </div>
+                                        <div className="border border-gray-200 rounded-md bg-white">
+                                          <table className="min-w-full text-[11px]">
+                                            <thead className="bg-gray-50 text-gray-500 uppercase">
+                                              <tr>
+                                                <th className="px-3 py-1 text-left">Line</th>
+                                                <th className="px-3 py-1 text-left">Product</th>
+                                                <th className="px-3 py-1 text-left">Qty</th>
+                                                <th className="px-3 py-1 text-left">Status</th>
+                                                <th className="px-3 py-1 text-left">Creator reason</th>
+                                                <th className="px-3 py-1 text-left">Admin remark</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                              {g.items.map((item) => (
+                                                <tr key={item.id}>
+                                                  <td className="px-3 py-1 font-medium text-gray-700">
+                                                    {getLineId(displayId, item.id)}
+                                                  </td>
+                                                  <td className="px-3 py-1">{item.product_name}</td>
+                                                  <td className="px-3 py-1">{item.quantity}</td>
+                                                  <td className="px-3 py-1">
+                                                    <StatusBadge status={item.status} />
+                                                  </td>
+                                                  <td
+                                                    className="px-3 py-1 text-gray-700 max-w-[180px]"
+                                                    title={item.reason}
+                                                  >
+                                                    {item.reason.length > 60
+                                                      ? `${item.reason.slice(0, 60)}…`
+                                                      : item.reason}
+                                                  </td>
+                                                  <td className="px-3 py-1 text-gray-700 max-w-[180px]">
+                                                    {item.approval_remarks ??
+                                                      item.rejection_remarks ??
+                                                      '–'}
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+
           <Card
-            title="Daily rejection cost"
-            subtitle="Trend of total rejection value over the last 30 days"
+          title="Daily rejected quantity"
+          subtitle="Trend of total rejected quantity over the last 30 days"
             className="min-h-[280px]"
           >
             <div className="w-full" style={{ minHeight: 256, height: 256 }}>
@@ -244,9 +508,9 @@ export default function ReportsPage() {
                   <LineChart data={dailyCostData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
-                    <Tooltip formatter={(v: unknown) => [`₹${Number(v ?? 0).toLocaleString('en-IN')}`, 'Total cost']} />
-                    <Line type="monotone" dataKey="total_cost" stroke="#4f46e5" strokeWidth={2} dot={false} name="Total cost" />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v: unknown) => [Number(v ?? 0), 'Total quantity']} />
+                    <Line type="monotone" dataKey="total_cost" stroke="#4f46e5" strokeWidth={2} dot={false} name="Total quantity" />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
@@ -258,7 +522,7 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card
               title="B2B vs B2C comparison"
-              subtitle="Channel-level rejection value split for this month"
+              subtitle="Channel-level rejected quantity split for this month"
               className="min-h-[280px]"
             >
               <div className="w-full" style={{ minHeight: 256, height: 256 }}>
@@ -269,9 +533,9 @@ export default function ReportsPage() {
                         <BarChart data={channelComparisonData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
                           <XAxis dataKey="channel" tick={{ fontSize: 10 }} />
-                          <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
-                          <Tooltip formatter={(v: unknown) => [`₹${Number(v ?? 0).toLocaleString('en-IN')}`, 'Value']} />
-                          <Bar dataKey="value" fill="#4f46e5" radius={[4, 4, 0, 0]} name="Value" />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={(v: unknown) => [Number(v ?? 0), 'Quantity']} />
+                          <Bar dataKey="value" fill="#4f46e5" radius={[4, 4, 0, 0]} name="Quantity" />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -292,7 +556,7 @@ export default function ReportsPage() {
                               <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip formatter={(v: unknown) => [`₹${Number(v ?? 0).toLocaleString('en-IN')}`, 'Value']} />
+                          <Tooltip formatter={(v: unknown) => [Number(v ?? 0), 'Quantity']} />
                           <Legend />
                         </PieChart>
                       </ResponsiveContainer>
@@ -305,7 +569,7 @@ export default function ReportsPage() {
             </Card>
 
             <Card
-              title="Approved vs Rejected value"
+              title="Approved vs Rejected quantity"
               subtitle="By channel for this month"
               className="min-h-[280px]"
             >
@@ -314,10 +578,10 @@ export default function ReportsPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={approvalRejectionData} layout="vertical" margin={{ top: 8, right: 8, left: 80, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
+                      <XAxis type="number" tick={{ fontSize: 10 }} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={80} />
-                      <Tooltip formatter={(v: unknown) => [`₹${Number(v ?? 0).toLocaleString('en-IN')}`, 'Value']} />
-                      <Bar dataKey="value" fill="#22c55e" radius={[0, 4, 4, 0]} name="Value" />
+                      <Tooltip formatter={(v: unknown) => [Number(v ?? 0), 'Quantity']} />
+                      <Bar dataKey="value" fill="#22c55e" radius={[0, 4, 4, 0]} name="Quantity" />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (

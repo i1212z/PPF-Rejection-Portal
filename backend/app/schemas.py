@@ -49,7 +49,7 @@ class TicketBase(BaseModel):
 
 
 class TicketCreate(TicketBase):
-    pass
+    channel: Optional[Channel] = None  # required when created by admin/manager; ignored for B2B/B2C (uses role)
 
 
 class TicketRead(TicketBase):

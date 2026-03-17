@@ -36,6 +36,13 @@ async def get_current_user(
     return user
 
 
+def get_current_user_for_ticket_create(
+    user: User = Depends(get_current_user),
+) -> User:
+    """Use for POST /tickets only. Any authenticated user can create (no 403 by role)."""
+    return user
+
+
 def require_roles(*roles: UserRole):
     async def _require_roles(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
