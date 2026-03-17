@@ -119,7 +119,7 @@ export default function TallyPendingPage() {
   };
 
   const tickets = useMemo(
-    () => allTickets.filter((t) => t.status === 'approved' || t.status === 'rejected'),
+    () => allTickets.filter((t) => t.status === 'approved'),
     [allTickets],
   );
   const pendingTickets = useMemo(
@@ -233,15 +233,30 @@ export default function TallyPendingPage() {
                           </span>
                         </td>
                         <td className="px-4 py-2">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                              g.items[0]?.status === 'approved'
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-red-50 text-red-700'
-                            }`}
-                          >
-                            {g.items[0]?.status === 'approved' ? 'Approved' : 'Rejected'}
-                          </span>
+                          {(() => {
+                            const statuses = new Set(g.items.map((item) => item.status));
+                            let label: string;
+                            let className: string;
+                            if (statuses.size === 1) {
+                              if (statuses.has('approved')) {
+                                label = 'Approved';
+                                className = 'bg-emerald-50 text-emerald-700';
+                              } else {
+                                label = 'Rejected';
+                                className = 'bg-red-50 text-red-700';
+                              }
+                            } else {
+                              label = 'Multiple';
+                              className = 'bg-amber-50 text-amber-700';
+                            }
+                            return (
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${className}`}
+                              >
+                                {label}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-2 text-[11px] text-gray-500">
                           {new Date(g.created_at).toLocaleString()}
