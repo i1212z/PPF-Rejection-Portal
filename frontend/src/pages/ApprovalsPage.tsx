@@ -45,7 +45,6 @@ export default function ApprovalsPage() {
       });
       setAllTickets(allRes.data.items);
     } catch (err: unknown) {
-      // If unauthorized, just show empty queue without noisy errors.
       setTickets([]);
       setAllTickets([]);
       setError(null);
@@ -85,8 +84,7 @@ export default function ApprovalsPage() {
       });
     });
     return Object.values(groups).sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
   };
 
@@ -114,21 +112,17 @@ export default function ApprovalsPage() {
     return num != null ? `${g.channel}-${String(num).padStart(3, '0')}` : `${g.channel}-???`;
   };
 
-  const handleDecision = async (group: PendingGroup, decision: Decision) => {
+  const handleItemDecision = async (ticketId: string, decision: Decision) => {
     const remarks =
       decision === 'approved'
         ? 'Approved'
         : window.prompt('Remarks for rejection?') || 'Rejected';
-    setActionLoadingId(group.key);
+    setActionLoadingId(ticketId);
     try {
-      await Promise.all(
-        group.ids.map((id) =>
-          apiClient.post(`/approvals/${id}/decision`, {
-            decision,
-            remarks,
-          }),
-        ),
-      );
+      await apiClient.post(`/approvals/${ticketId}/decision`, {
+        decision,
+        remarks,
+      });
       await loadPending();
     } catch (err) {
       setError('Could not submit decision.');
@@ -137,17 +131,20 @@ export default function ApprovalsPage() {
     }
   };
 
+  const groups = groupTickets(tickets);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Pending approvals</h2>
           <p className="text-sm text-gray-500">
-            Manager and Admin can review, approve, or reject pending tickets here.
+            Manager and Admin can review, approve, or reject pending tickets here. Each product line
+            can be approved or rejected independently.
           </p>
         </div>
         <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] text-amber-700">
-          {tickets.length || 'No'} tickets awaiting decision
+          {tickets.length || 'No'} product(s) awaiting decision
         </div>
       </div>
       <Card
@@ -166,59 +163,60 @@ export default function ApprovalsPage() {
         )}
         {!loading && tickets.length > 0 && (
           <>
-            {/* Mobile card list */}
+            {/* Mobile card list - per product */}
             <div className="space-y-3 md:hidden">
-              {groupTickets(tickets).map((g) => (
+              {groups.map((g) => (
                 <div
                   key={g.key}
                   className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{getDisplayId(g)}</div>
-                      <div className="mt-0.5 text-[11px] text-gray-500">
-                        {g.delivery_batch} • {g.channel} • {new Date(g.delivery_date).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <StatusBadge status="pending" />
+                  <div className="text-sm font-medium text-gray-900">{getDisplayId(g)}</div>
+                  <div className="mt-0.5 text-[11px] text-gray-500">
+                    {g.delivery_batch} • {g.channel} •{' '}
+                    {new Date(g.delivery_date).toLocaleDateString()}
                   </div>
-                  <div className="mt-2 space-y-1 text-[11px] text-gray-600">
+                  <div className="mt-2 space-y-2">
                     {g.items.map((item) => (
-                      <div key={item.id} className="flex justify-between">
-                        <span>{item.product_name}</span>
-                        <span>
-                          Qty:{' '}
-                          <span className="font-medium">
-                            {item.quantity} {item.uom ?? 'EA'}
-                          </span>
-                        </span>
+                      <div
+                        key={item.id}
+                        className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5"
+                      >
+                        <div className="text-[11px] font-medium text-gray-700">
+                          {item.product_name}
+                        </div>
+                        <div className="text-[11px] text-gray-600">
+                          Qty: {item.quantity} {item.uom ?? 'EA'}
+                        </div>
+                        <div className="text-[11px] text-gray-500 truncate" title={item.reason}>
+                          {item.reason}
+                        </div>
+                        <div className="mt-1.5 flex gap-2">
+                          <button
+                            disabled={actionLoadingId === item.id}
+                            onClick={() => void handleItemDecision(item.id, 'approved')}
+                            className="rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 px-2 py-0.5 text-[11px] text-white"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            disabled={actionLoadingId === item.id}
+                            onClick={() => void handleItemDecision(item.id, 'rejected')}
+                            className="rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-60 px-2 py-0.5 text-[11px] text-white"
+                          >
+                            Reject
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                   <div className="mt-1 text-[11px] text-gray-400">
                     {new Date(g.created_at).toLocaleString()}
                   </div>
-                  <div className="mt-2 flex justify-end gap-2">
-                    <button
-                      disabled={actionLoadingId === g.key}
-                      onClick={() => void handleDecision(g, 'approved')}
-                      className="rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      disabled={actionLoadingId === g.key}
-                      onClick={() => void handleDecision(g, 'rejected')}
-                      className="rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
-                    >
-                      Reject
-                    </button>
-                  </div>
                 </div>
               ))}
             </div>
 
-            {/* Desktop table - grouped approvals */}
+            {/* Desktop table - one row per product, proper headings */}
             <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full text-xs">
                 <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
@@ -234,79 +232,70 @@ export default function ApprovalsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {groupTickets(tickets).map((g) => (
-                    <tr key={g.key} className="hover:bg-gray-50 align-top">
-                      <td className="px-4 py-2 font-mono text-[11px] text-gray-600">
-                        {getDisplayId(g)}
-                      </td>
-                      <td className="px-4 py-2">{g.delivery_batch}</td>
-                      <td className="px-4 py-2">
-                        {new Date(g.delivery_date).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="space-y-1">
-                          {g.items.map((item) => (
-                            <div
-                              key={item.id}
-                              className="flex justify-between gap-3 text-[11px] text-gray-700"
-                            >
-                              <span className="flex-1">{item.product_name}</span>
-                              <span className="w-20 text-right">
-                                Qty: {item.quantity} {item.uom ?? 'EA'}
-                              </span>
-                              <span className="flex-[2] text-gray-500">
-                                {item.reason.length > 40
-                                  ? `${item.reason.slice(0, 40)}…`
-                                  : item.reason}
-                              </span>
+                  {groups.flatMap((g) => {
+                    const displayId = getDisplayId(g);
+                    return g.items.map((item, idx) => (
+                      <tr key={item.id} className="hover:bg-gray-50 align-top">
+                        <td className="px-4 py-2 font-mono text-[11px] text-gray-700">
+                          {idx === 0 ? displayId : ''}
+                        </td>
+                        <td className="px-4 py-2">{idx === 0 ? g.delivery_batch : ''}</td>
+                        <td className="px-4 py-2">
+                          {idx === 0 ? new Date(g.delivery_date).toLocaleDateString() : ''}
+                        </td>
+                        <td className="px-4 py-2">
+                          <div className="text-[11px] text-gray-700">
+                            <div className="font-medium">{item.product_name}</div>
+                            <div className="text-gray-600">
+                              Qty: {item.quantity} {item.uom ?? 'EA'}
                             </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-xs">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            g.channel === 'B2B'
-                              ? 'bg-sky-50 text-sky-700'
-                              : 'bg-orange-50 text-orange-700'
-                          }`}
-                        >
-                          {g.channel}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex flex-col">
-                          <span className="text-[11px] text-gray-500">
-                            {g.ids.length} product(s)
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <StatusBadge status="pending" />
-                      </td>
-                      <td className="px-4 py-2 text-[11px] text-gray-500">
-                        {new Date(g.created_at).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex gap-2">
-                          <button
-                            disabled={actionLoadingId === g.key}
-                            onClick={() => void handleDecision(g, 'approved')}
-                            className="rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            disabled={actionLoadingId === g.key}
-                            onClick={() => void handleDecision(g, 'rejected')}
-                            className="rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            <div className="text-gray-500 max-w-[220px]" title={item.reason}>
+                              {item.reason}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">
+                          {idx === 0 ? (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                g.channel === 'B2B'
+                                  ? 'bg-sky-50 text-sky-700'
+                                  : 'bg-orange-50 text-orange-700'
+                              }`}
+                            >
+                              {g.channel}
+                            </span>
+                          ) : (
+                            ''
+                          )}
+                        </td>
+                        <td className="px-4 py-2">
+                          <StatusBadge status="pending" />
+                        </td>
+                        <td className="px-4 py-2 text-[11px] text-gray-500">
+                          {idx === 0 ? new Date(g.created_at).toLocaleString() : ''}
+                        </td>
+                        <td className="px-4 py-2">
+                          <div className="flex gap-2">
+                            <button
+                              disabled={actionLoadingId === item.id}
+                              onClick={() => void handleItemDecision(item.id, 'approved')}
+                              className="rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              disabled={actionLoadingId === item.id}
+                              onClick={() => void handleItemDecision(item.id, 'rejected')}
+                              className="rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ));
+                  })}
                 </tbody>
               </table>
             </div>

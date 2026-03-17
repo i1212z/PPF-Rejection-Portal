@@ -94,9 +94,10 @@ class Approval(Base):
 
 
 class TallyPending(Base):
-    """Tickets marked by Tally department for update to Tally."""
+    """Tickets marked by Tally department for update to Tally. posted_at set when Posted."""
     __tablename__ = "tally_pending"
 
     ticket_id = Column(UUID(as_uuid=True), ForeignKey("rejection_tickets.id"), primary_key=True)
     marked_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    posted_at = Column(DateTime(timezone=True), nullable=True)  # null = pending, set = posted
 

@@ -17,7 +17,10 @@ export function RejectionValueVsQuantityChart({
   data,
 }: RejectionValueVsQuantityChartProps) {
   return (
-    <div className="w-full" style={{ minHeight: 200, height: 240 }}>
+    <div
+      className="w-full"
+      style={{ minHeight: 200, height: 240, minWidth: 0 }}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -40,7 +43,7 @@ export function RejectionValueVsQuantityChart({
           <Bar
             yAxisId="left"
             dataKey="value"
-            name="Rejection value"
+            name="Quantity"
             fill="#4f46e5"
             radius={[6, 6, 0, 0]}
           />

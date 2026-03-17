@@ -76,6 +76,7 @@ async def on_startup():
         for stmt in (
             "ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'TALLY'",
             "ALTER TABLE rejection_tickets ADD COLUMN IF NOT EXISTS uom VARCHAR(16) NOT NULL DEFAULT 'EA'",
+            "ALTER TABLE tally_pending ADD COLUMN IF NOT EXISTS posted_at TIMESTAMP WITH TIME ZONE",
         ):
             try:
                 async with conn.begin():

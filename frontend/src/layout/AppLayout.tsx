@@ -31,8 +31,8 @@ export default function AppLayout() {
   const location = useLocation();
 
   const pageTitle = (() => {
-    if (location.pathname.startsWith('/tally/approved')) return 'Approved (Tally)';
-    if (location.pathname.startsWith('/tally/rejected')) return 'Rejected (Tally)';
+    if (location.pathname.startsWith('/tally/pending')) return 'Pending (Tally)';
+    if (location.pathname.startsWith('/tally/posted')) return 'Posted (Tally)';
     if (location.pathname.startsWith('/tickets/new')) return 'Create Ticket';
     if (location.pathname.startsWith('/tickets')) return 'Tickets';
     if (location.pathname.startsWith('/approvals')) return 'Approvals';
@@ -62,8 +62,8 @@ export default function AppLayout() {
               <div className="px-2 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
                 Tally
               </div>
-              <SidebarLink to="/tally/approved" icon={<CheckCircle className="w-4 h-4" />} label="Approved" />
-              <SidebarLink to="/tally/rejected" icon={<XCircle className="w-4 h-4" />} label="Rejected" />
+              <SidebarLink to="/tally/pending" icon={<CheckCircle className="w-4 h-4" />} label="Pending" />
+              <SidebarLink to="/tally/posted" icon={<XCircle className="w-4 h-4" />} label="Posted" />
             </>
           ) : (
             <>
@@ -144,7 +144,7 @@ export default function AppLayout() {
             {isTally ? (
               <>
                 <NavLink
-                  to="/tally/approved"
+                  to="/tally/pending"
                   className={({ isActive }) =>
                     `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
                       isActive
@@ -153,10 +153,10 @@ export default function AppLayout() {
                     }`
                   }
                 >
-                  Approved
+                  Pending
                 </NavLink>
                 <NavLink
-                  to="/tally/rejected"
+                  to="/tally/posted"
                   className={({ isActive }) =>
                     `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
                       isActive
@@ -165,7 +165,7 @@ export default function AppLayout() {
                     }`
                   }
                 >
-                  Rejected
+                  Posted
                 </NavLink>
               </>
             ) : (
