@@ -101,7 +101,7 @@ export default function ReportsPage() {
   }, []);
 
   const {
-    dailyCostData,
+    dailyQtyData,
     channelComparisonData,
     approvalRejectionData,
     channelPieData,
@@ -142,8 +142,8 @@ export default function ReportsPage() {
       }
     });
 
-    const dailyCostData = Object.entries(dailyMap)
-      .map(([date, total_cost]) => ({ date, total_cost }))
+    const dailyQtyData = Object.entries(dailyMap)
+      .map(([date, total_qty]) => ({ date, total_qty }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const channelComparisonData = [
@@ -164,7 +164,7 @@ export default function ReportsPage() {
     ].filter((d) => d.value > 0);
 
     return {
-      dailyCostData,
+      dailyQtyData,
       channelComparisonData,
       approvalRejectionData,
       channelPieData,
@@ -503,14 +503,14 @@ export default function ReportsPage() {
             className="min-h-[280px]"
           >
             <div className="w-full" style={{ minHeight: 256, height: 256 }}>
-              {dailyCostData.length > 0 ? (
+              {dailyQtyData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dailyCostData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <LineChart data={dailyQtyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                     <YAxis tick={{ fontSize: 10 }} />
                     <Tooltip formatter={(v: unknown) => [Number(v ?? 0), 'Total quantity']} />
-                    <Line type="monotone" dataKey="total_cost" stroke="#4f46e5" strokeWidth={2} dot={false} name="Total quantity" />
+                    <Line type="monotone" dataKey="total_qty" stroke="#4f46e5" strokeWidth={2} dot={false} name="Total quantity" />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (

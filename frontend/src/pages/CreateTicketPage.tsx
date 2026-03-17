@@ -2,38 +2,80 @@ import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
 
 export default function CreateTicketPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canChooseChannel = user?.role === 'admin' || user?.role === 'manager';
+  const [channel, setChannel] = useState<'B2B' | 'B2C'>('B2B');
+  const [productType, setProductType] = useState<'single' | 'multiple'>('single');
   const [productName, setProductName] = useState('');
   const [quantity, setQuantity] = useState<number | ''>('');
-  const [cost, setCost] = useState<number | ''>('');
   const [reason, setReason] = useState('');
   const [deliveryBatch, setDeliveryBatch] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
-  const [photoUrl, setPhotoUrl] = useState('');
+  const [lineItems, setLineItems] = useState<
+    { productName: string; quantity: number | ''; reason: string }[]
+  >([{ productName: '', quantity: '', reason: '' }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!quantity || !cost || !deliveryDate) {
-      setError('Please fill all required fields.');
-      return;
-    }
     setSubmitting(true);
     try {
-      await apiClient.post('/tickets', {
-        product_name: productName,
-        quantity,
-        cost,
-        reason,
-        delivery_batch: deliveryBatch,
-        delivery_date: deliveryDate,
-        photo_proof_url: photoUrl || null,
-      });
+      if (!deliveryDate || !deliveryBatch) {
+          setError('Please fill all required fields.');
+          setSubmitting(false);
+          return;
+        }
+
+      if (productType === 'single') {
+        if (!productName || !quantity || !reason) {
+          setError('Please fill all required fields.');
+          setSubmitting(false);
+          return;
+        }
+
+        await apiClient.post('/tickets', {
+          product_name: productName,
+          quantity,
+          reason,
+          delivery_batch: deliveryBatch,
+          delivery_date: deliveryDate,
+          ...(canChooseChannel && { channel }),
+        });
+      } else {
+        const validItems = lineItems.filter(
+          (item) =>
+            item.productName &&
+            item.quantity &&
+            Number(item.quantity) > 0 &&
+            item.reason,
+        );
+
+        if (validItems.length === 0) {
+          setError('Please add at least one valid rejected product.');
+          setSubmitting(false);
+          return;
+        }
+
+        await Promise.all(
+          validItems.map((item) =>
+            apiClient.post('/tickets', {
+              product_name: item.productName,
+              quantity: Number(item.quantity),
+              reason: item.reason,
+              delivery_batch: deliveryBatch,
+              delivery_date: deliveryDate,
+              ...(canChooseChannel && { channel }),
+            }),
+          ),
+        );
+      }
       navigate('/tickets');
     } catch (err) {
       setError('Could not create ticket. Please try again.');
@@ -48,7 +90,7 @@ export default function CreateTicketPage() {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Create rejection ticket</h2>
           <p className="text-sm text-gray-500">
-            Capture quantity, value, and reason for today&apos;s rejections.
+            Capture quantity and reason for today&apos;s rejections.
           </p>
         </div>
         <div className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] text-gray-600">
@@ -61,92 +103,206 @@ export default function CreateTicketPage() {
         className="text-sm"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Product Name
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-              value={productName}
-              onChange={(e) => setProductName(e.target.value)}
-              required
-            />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Delivery Date
+              </label>
+              <input
+                type="date"
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Customer Name
+              </label>
+              <input
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                value={deliveryBatch}
+                onChange={(e) => setDeliveryBatch(e.target.value)}
+                required
+                placeholder="Customer or account name"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Product type
+              </label>
+              <select
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                value={productType}
+                onChange={(e) => setProductType(e.target.value as 'single' | 'multiple')}
+              >
+                <option value="single">Single product</option>
+                <option value="multiple">Multiple products</option>
+              </select>
+            </div>
+            {canChooseChannel && (
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Channel
+                </label>
+                <select
+                  className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                  value={channel}
+                  onChange={(e) => setChannel(e.target.value as 'B2B' | 'B2C')}
+                >
+                  <option value="B2B">B2B</option>
+                  <option value="B2C">B2C</option>
+                </select>
+              </div>
+            )}
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Quantity Rejected
-            </label>
-            <input
-              type="number"
-              min={0}
-              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Cost of Rejection
-            </label>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-              value={cost}
-              onChange={(e) => setCost(e.target.value === '' ? '' : Number(e.target.value))}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Customer Name
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-              value={deliveryBatch}
-              onChange={(e) => setDeliveryBatch(e.target.value)}
-              required
-              placeholder="Customer or account name"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Delivery Date
-            </label>
-            <input
-              type="date"
-              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-              value={deliveryDate}
-              onChange={(e) => setDeliveryDate(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Photo Proof URL (optional)
-            </label>
-            <input
-              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-              value={photoUrl}
-              onChange={(e) => setPhotoUrl(e.target.value)}
-              placeholder="Link to uploaded image"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Reason for Rejection
-          </label>
-          <textarea
-            className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 min-h-[80px]"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            required
-          />
-        </div>
+
+          {productType === 'single' ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Product Name
+                  </label>
+                  <input
+                    className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                    value={productName}
+                    onChange={(e) => setProductName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Quantity Rejected
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Reason for Rejection
+                </label>
+                <textarea
+                  className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 min-h-[80px]"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  required
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="border border-gray-200 rounded-md">
+                <div className="bg-gray-50 px-3 py-2 flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-700">Rejected products</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLineItems((prev) => [
+                        ...prev,
+                        { productName: '', quantity: '', reason: '' },
+                      ])
+                    }
+                    className="rounded-md bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700 hover:bg-indigo-100"
+                  >
+                    + Add product
+                  </button>
+                </div>
+                <div className="divide-y divide-gray-200">
+                  {lineItems.map((item, idx) => (
+                    <div key={idx} className="px-3 py-2 grid grid-cols-1 md:grid-cols-4 gap-3 items-start">
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                          Product
+                        </label>
+                        <input
+                          className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900"
+                          value={item.productName}
+                          onChange={(e) =>
+                            setLineItems((prev) =>
+                              prev.map((li, i) =>
+                                i === idx ? { ...li, productName: e.target.value } : li,
+                              ),
+                            )
+                          }
+                          placeholder="e.g. Strawberry Box"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                          Quantity
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            setLineItems((prev) =>
+                              prev.map((li, i) =>
+                                i === idx
+                                  ? {
+                                      ...li,
+                                      quantity: e.target.value === '' ? '' : Number(e.target.value),
+                                    }
+                                  : li,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                          Reason
+                        </label>
+                        <textarea
+                          className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 min-h-[40px]"
+                          value={item.reason}
+                          onChange={(e) =>
+                            setLineItems((prev) =>
+                              prev.map((li, i) =>
+                                i === idx ? { ...li, reason: e.target.value } : li,
+                              ),
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="md:col-span-4 flex justify-end">
+                        {lineItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLineItems((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                            className="text-[11px] text-red-600 hover:text-red-700"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-xs text-gray-700">
+                <span className="font-semibold">
+                  Total rejected products: {lineItems.filter((i) => i.productName).length}
+                </span>
+                <span className="text-[11px] text-gray-500">
+                  One ticket = one customer + delivery; multiple rejected products can be added here.
+                </span>
+              </div>
+            </>
+          )}
+
         {error && (
           <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
             {error}
