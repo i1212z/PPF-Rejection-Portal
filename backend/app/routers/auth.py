@@ -44,6 +44,7 @@ async def seed_users(db: AsyncSession = Depends(get_db)):
     from passlib.context import CryptContext
     from ..models import User, UserRole
     from ..database import engine, Base
+    from sqlalchemy import select
 
     # ensure tables exist
     async with engine.begin() as conn:
@@ -59,7 +60,14 @@ async def seed_users(db: AsyncSession = Depends(get_db)):
         ("Tally Dept", "tally@ppf.local", "tally123", UserRole.TALLY),
     ]
 
+    created = 0
+    skipped = 0
     for name, email, password, role in users:
+        result = await db.execute(select(User).where(User.email == email))
+        existing = result.scalars().first()
+        if existing:
+            skipped += 1
+            continue
         user = User(
             name=name,
             email=email,
@@ -67,7 +75,8 @@ async def seed_users(db: AsyncSession = Depends(get_db)):
             role=role
         )
         db.add(user)
+        created += 1
 
     await db.commit()
 
-    return {"status": "users created"}
+    return {"status": "ok", "created": created, "skipped": skipped}
