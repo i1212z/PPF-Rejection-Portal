@@ -5,7 +5,7 @@ const LOCAL_API_BASE_URL = 'http://localhost:8000';
 
 // Prefer explicit env var. Otherwise default to localhost only when running locally,
 // and to the Render backend when deployed.
-const API_BASE_URL = (() => {
+export const API_BASE_URL = (() => {
   const fromEnv = import.meta.env.VITE_API_BASE_URL;
   if (fromEnv) return fromEnv;
   const host = window.location.hostname;
