@@ -26,8 +26,18 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
-    # Fallback to local sqlite for easy localhost development
+    # Normalize Postgres URLs for SQLAlchemy asyncio.
+    # Render/Supabase often provide "postgres://" or "postgresql://".
+    # We need "postgresql+asyncpg://..." so SQLAlchemy doesn't try psycopg2.
+    if settings.database_url:
+        if settings.database_url.startswith("postgres://"):
+            settings.database_url = "postgresql+asyncpg://" + settings.database_url[len("postgres://") :]
+        elif settings.database_url.startswith("postgresql://") and "+asyncpg" not in settings.database_url:
+            settings.database_url = "postgresql+asyncpg://" + settings.database_url[len("postgresql://") :]
+
+    # Fallback to local SQLite for easy localhost development.
+    # Production should always set DATABASE_URL explicitly.
     if not settings.database_url:
-        settings.database_url = "postgresql+asyncpg://ppf_rejection_db_user:yaaPJ10LWPeOYHhPYRghsIEYVgyKGZhI@dpg-d6plfan5gffc73dme5qg-a/ppf_rejection_db"
+        settings.database_url = "sqlite+aiosqlite:///rejections_dev.db"
     return settings
 
