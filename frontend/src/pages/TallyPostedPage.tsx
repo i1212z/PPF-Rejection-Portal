@@ -300,7 +300,7 @@ export default function TallyPostedPage() {
                                           type="button"
                                           disabled={unpostingId === item.id}
                                           onClick={() => void unpostFromTally(item.id)}
-                                          className="rounded-md border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-60 px-2.5 py-1 text-[11px] text-gray-700"
+                                          className="w-full rounded-full border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-60 px-3 py-1.5 text-[11px] font-semibold text-gray-700"
                                         >
                                           {unpostingId === item.id ? 'Unposting…' : 'Unpost'}
                                         </button>

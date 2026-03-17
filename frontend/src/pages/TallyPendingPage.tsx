@@ -312,7 +312,7 @@ export default function TallyPendingPage() {
                                           type="button"
                                           disabled={postingId === item.id}
                                           onClick={() => void postToTally(item.id)}
-                                          className="rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 px-2.5 py-1 text-[11px] text-white"
+                                          className="w-full rounded-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 px-3 py-1.5 text-[11px] font-semibold text-white"
                                         >
                                           {postingId === item.id ? 'Posting…' : 'Post'}
                                         </button>

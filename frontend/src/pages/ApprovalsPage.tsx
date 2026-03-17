@@ -168,18 +168,18 @@ export default function ApprovalsPage() {
               {groups.map((g) => (
                 <div
                   key={g.key}
-                  className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
+                  className="rounded-2xl border border-gray-100 bg-white px-3 py-3 shadow-sm"
                 >
                   <div className="text-sm font-medium text-gray-900">{getDisplayId(g)}</div>
                   <div className="mt-0.5 text-[11px] text-gray-500">
                     {g.delivery_batch} • {g.channel} •{' '}
                     {new Date(g.delivery_date).toLocaleDateString()}
                   </div>
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-3 space-y-2">
                     {g.items.map((item) => (
                       <div
                         key={item.id}
-                        className="rounded border border-gray-100 bg-gray-50 px-2 py-1.5"
+                        className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2"
                       >
                         <div className="text-[11px] font-medium text-gray-700">
                           {item.product_name}
@@ -190,18 +190,18 @@ export default function ApprovalsPage() {
                         <div className="text-[11px] text-gray-500 truncate" title={item.reason}>
                           {item.reason}
                         </div>
-                        <div className="mt-1.5 flex gap-2">
+                        <div className="mt-2 flex gap-2">
                           <button
                             disabled={actionLoadingId === item.id}
                             onClick={() => void handleItemDecision(item.id, 'approved')}
-                            className="rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 px-2 py-0.5 text-[11px] text-white"
+                            className="flex-1 rounded-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 px-3 py-1.5 text-[11px] font-semibold text-white"
                           >
                             Approve
                           </button>
                           <button
                             disabled={actionLoadingId === item.id}
                             onClick={() => void handleItemDecision(item.id, 'rejected')}
-                            className="rounded-md bg-red-600 hover:bg-red-500 disabled:opacity-60 px-2 py-0.5 text-[11px] text-white"
+                            className="flex-1 rounded-full bg-red-600 hover:bg-red-500 disabled:opacity-60 px-3 py-1.5 text-[11px] font-semibold text-white"
                           >
                             Reject
                           </button>
