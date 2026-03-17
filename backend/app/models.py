@@ -58,7 +58,9 @@ class RejectionTicket(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     product_name = Column(String(255), nullable=False)
     quantity = Column(Integer, nullable=False)
-    cost = Column(Numeric(12, 2), nullable=False)
+    uom = Column(String(16), nullable=False, default="EA")
+    # Cost is deprecated in UI but kept for DB compatibility.
+    cost = Column(Numeric(12, 2), nullable=False, default=0)
     reason = Column(Text, nullable=False)
     delivery_batch = Column(String(255), nullable=False)
     delivery_date = Column(Date, nullable=False)

@@ -41,7 +41,8 @@ async def create_ticket(
     ticket = RejectionTicket(
         product_name=payload.product_name,
         quantity=payload.quantity,
-        cost=payload.cost,
+        uom=(payload.uom or "EA"),
+        cost=(payload.cost or 0),
         reason=payload.reason,
         delivery_batch=payload.delivery_batch,
         delivery_date=payload.delivery_date,
@@ -114,7 +115,8 @@ async def list_tickets(
                 id=t.id,
                 product_name=t.product_name,
                 quantity=t.quantity,
-                cost=t.cost,
+                uom=getattr(t, "uom", "EA"),
+                cost=float(getattr(t, "cost", 0) or 0),
                 reason=t.reason,
                 delivery_batch=t.delivery_batch,
                 delivery_date=t.delivery_date,
@@ -160,7 +162,8 @@ async def get_ticket(
         id=ticket.id,
         product_name=ticket.product_name,
         quantity=ticket.quantity,
-        cost=ticket.cost,
+        uom=getattr(ticket, "uom", "EA"),
+        cost=float(getattr(ticket, "cost", 0) or 0),
         reason=ticket.reason,
         delivery_batch=ticket.delivery_batch,
         delivery_date=ticket.delivery_date,
@@ -189,7 +192,8 @@ async def update_ticket(
 
     ticket.product_name = payload.product_name
     ticket.quantity = payload.quantity
-    ticket.cost = payload.cost
+    ticket.uom = payload.uom or getattr(ticket, "uom", "EA")
+    ticket.cost = payload.cost or getattr(ticket, "cost", 0) or 0
     ticket.reason = payload.reason
     ticket.delivery_batch = payload.delivery_batch
     ticket.delivery_date = payload.delivery_date
@@ -210,7 +214,8 @@ async def update_ticket(
         id=ticket.id,
         product_name=ticket.product_name,
         quantity=ticket.quantity,
-        cost=float(ticket.cost),
+        uom=getattr(ticket, "uom", "EA"),
+        cost=float(getattr(ticket, "cost", 0) or 0),
         reason=ticket.reason,
         delivery_batch=ticket.delivery_batch,
         delivery_date=ticket.delivery_date,

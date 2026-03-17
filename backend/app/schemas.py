@@ -41,7 +41,8 @@ class TokenData(BaseModel):
 class TicketBase(BaseModel):
     product_name: str
     quantity: int
-    cost: float
+    uom: str = "EA"
+    cost: float = 0
     reason: str
     delivery_batch: str
     delivery_date: date

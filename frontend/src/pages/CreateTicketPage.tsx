@@ -338,12 +338,13 @@ export default function CreateTicketPage() {
   const [productType, setProductType] = useState<'single' | 'multiple'>('single');
   const [productName, setProductName] = useState('');
   const [quantity, setQuantity] = useState<number | ''>('');
+  const [uom, setUom] = useState<'EA' | 'KG' | 'G' | 'GM' | 'L' | 'ML' | 'BOX'>('EA');
   const [reason, setReason] = useState('');
   const [deliveryBatch, setDeliveryBatch] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [lineItems, setLineItems] = useState<
-    { productName: string; quantity: number | ''; reason: string }[]
-  >([{ productName: '', quantity: '', reason: '' }]);
+    { productName: string; quantity: number | ''; uom: 'EA' | 'KG' | 'G' | 'GM' | 'L' | 'ML' | 'BOX'; reason: string }[]
+  >([{ productName: '', quantity: '', uom: 'EA', reason: '' }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -368,6 +369,7 @@ export default function CreateTicketPage() {
         await apiClient.post('/tickets', {
           product_name: productName,
           quantity,
+          uom,
           reason,
           delivery_batch: deliveryBatch,
           delivery_date: deliveryDate,
@@ -393,6 +395,7 @@ export default function CreateTicketPage() {
             apiClient.post('/tickets', {
               product_name: item.productName,
               quantity: Number(item.quantity),
+              uom: item.uom,
               reason: item.reason,
               delivery_batch: deliveryBatch,
               delivery_date: deliveryDate,
@@ -512,6 +515,24 @@ export default function CreateTicketPage() {
                     required
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Unit
+                  </label>
+                  <select
+                    className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                    value={uom}
+                    onChange={(e) => setUom(e.target.value as typeof uom)}
+                  >
+                    <option value="EA">EA</option>
+                    <option value="KG">KG</option>
+                    <option value="G">G</option>
+                    <option value="GM">GM</option>
+                    <option value="L">L</option>
+                    <option value="ML">ML</option>
+                    <option value="BOX">BOX</option>
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -535,7 +556,7 @@ export default function CreateTicketPage() {
                     onClick={() =>
                       setLineItems((prev) => [
                         ...prev,
-                        { productName: '', quantity: '', reason: '' },
+                        { productName: '', quantity: '', uom: 'EA', reason: '' },
                       ])
                     }
                     className="rounded-md bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700 hover:bg-indigo-100"
@@ -545,7 +566,7 @@ export default function CreateTicketPage() {
                 </div>
                 <div className="divide-y divide-gray-200">
                   {lineItems.map((item, idx) => (
-                    <div key={idx} className="px-3 py-2 grid grid-cols-1 md:grid-cols-4 gap-3 items-start">
+                    <div key={idx} className="px-3 py-2 grid grid-cols-1 md:grid-cols-5 gap-3 items-start">
                       <div>
                         <label className="block text-[11px] font-medium text-gray-700 mb-1">
                           Product
@@ -589,6 +610,30 @@ export default function CreateTicketPage() {
                       </div>
                       <div>
                         <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                          Unit
+                        </label>
+                        <select
+                          className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900"
+                          value={item.uom}
+                          onChange={(e) =>
+                            setLineItems((prev) =>
+                              prev.map((li, i) =>
+                                i === idx ? { ...li, uom: e.target.value as typeof item.uom } : li,
+                              ),
+                            )
+                          }
+                        >
+                          <option value="EA">EA</option>
+                          <option value="KG">KG</option>
+                          <option value="G">G</option>
+                          <option value="GM">GM</option>
+                          <option value="L">L</option>
+                          <option value="ML">ML</option>
+                          <option value="BOX">BOX</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">
                           Reason
                         </label>
                         <textarea
@@ -603,7 +648,7 @@ export default function CreateTicketPage() {
                           }
                         />
                       </div>
-                      <div className="md:col-span-4 flex justify-end">
+                      <div className="md:col-span-5 flex justify-end">
                         {lineItems.length > 1 && (
                           <button
                             type="button"
