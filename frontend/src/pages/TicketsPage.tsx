@@ -565,61 +565,83 @@ export default function TicketsPage() {
                 {/* Mobile cards */}
                 <div className="space-y-3 md:hidden">
                   {groupTickets(ticketsB2B).map((g) => {
-                    const statuses = Array.from(
-                      new Set(g.items.map((i) => i.status)),
-                    );
-                    const singleStatus =
-                      statuses.length === 1 ? statuses[0] : null;
+                    const statuses = Array.from(new Set(g.items.map((i) => i.status)));
+                    const singleStatus = statuses.length === 1 ? statuses[0] : null;
+                    const firstId = g.items[0]?.id;
+                    const base = firstId ? ticketsB2B.find((t) => t.id === firstId) : null;
                     return (
-                    <div
-                      key={g.id}
-                      className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-medium text-gray-900">
-                          {g.delivery_batch}
+                      <div
+                        key={g.id}
+                        className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-medium text-gray-900">
+                            {g.delivery_batch}
+                          </div>
+                          {singleStatus ? (
+                            <StatusBadge status={singleStatus} />
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
+                              Multiple
+                            </span>
+                          )}
                         </div>
-                        {singleStatus ? (
-                          <StatusBadge status={singleStatus} />
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700">
-                            Multiple
-                          </span>
+                        <div className="mt-1 text-[11px] text-gray-500">
+                          {new Date(g.delivery_date).toLocaleDateString()}
+                        </div>
+                        <div className="mt-2 space-y-1 text-[11px] text-gray-600">
+                          {g.items.map((item) => (
+                            <div key={item.id} className="flex justify-between items-start gap-2">
+                              <div>
+                                <div>{item.product_name}</div>
+                                <div className="text-[10px] text-gray-500">
+                                  {item.reason.length > 40
+                                    ? `${item.reason.slice(0, 40)}…`
+                                    : item.reason}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div>
+                                  Qty:{' '}
+                                  <span className="font-medium">
+                                    {item.quantity}
+                                  </span>
+                                </div>
+                                <div className="mt-0.5">
+                                  <StatusBadge status={item.status} />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-1 text-[11px] text-gray-400">
+                          {new Date(g.created_at).toLocaleString()}
+                        </div>
+                        {isManagerView && base && (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingTicket(base)}
+                              className="flex-1 rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                if (!firstId) return;
+                                void handleDelete(e, firstId);
+                              }}
+                              disabled={deleteLoadingId === firstId}
+                              className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+                            >
+                              {deleteLoadingId === firstId ? 'Deleting…' : 'Delete'}
+                            </button>
+                          </div>
                         )}
                       </div>
-                      <div className="mt-1 text-[11px] text-gray-500">
-                        {new Date(g.delivery_date).toLocaleDateString()}
-                      </div>
-                      <div className="mt-2 space-y-1 text-[11px] text-gray-600">
-                        {g.items.map((item) => (
-                          <div key={item.id} className="flex justify-between items-start gap-2">
-                            <div>
-                              <div>{item.product_name}</div>
-                              <div className="text-[10px] text-gray-500">
-                                {item.reason.length > 40
-                                  ? `${item.reason.slice(0, 40)}…`
-                                  : item.reason}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div>
-                                Qty:{' '}
-                                <span className="font-medium">
-                                  {item.quantity}
-                                </span>
-                              </div>
-                              <div className="mt-0.5">
-                                <StatusBadge status={item.status} />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-1 text-[11px] text-gray-400">
-                        {new Date(g.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                  );})}
+                    );
+                  })}
                 </div>
 
                 {/* Desktop table - grouped for B2B, clickable expandable rows */}
@@ -845,10 +867,12 @@ export default function TicketsPage() {
                   {groupTickets(ticketsB2C).map((g) => {
                     const statuses = Array.from(new Set(g.items.map((i) => i.status)));
                     const singleStatus = statuses.length === 1 ? statuses[0] : null;
+                    const firstId = g.items[0]?.id;
+                    const base = firstId ? ticketsB2C.find((t) => t.id === firstId) : null;
                     return (
                       <div
                         key={g.id}
-                        className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
+                        className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="text-sm font-medium text-gray-900">
@@ -890,6 +914,28 @@ export default function TicketsPage() {
                         <div className="mt-1 text-[11px] text-gray-400">
                           {new Date(g.created_at).toLocaleString()}
                         </div>
+                        {isManagerView && base && (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingTicket(base)}
+                              className="flex-1 rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                if (!firstId) return;
+                                void handleDelete(e, firstId);
+                              }}
+                              disabled={deleteLoadingId === firstId}
+                              className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+                            >
+                              {deleteLoadingId === firstId ? 'Deleting…' : 'Delete'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
