@@ -66,10 +66,9 @@ export default function TicketsPage() {
 
   const canMutateTicket = (t: Ticket | null | undefined) => {
     if (!t || !user) return false;
-    // B2B/B2C: only before approval decision. Manager/Admin: anytime.
+    // Manager/Admin: anytime. B2B/B2C: only pending (backend filters to their own tickets).
     if (isManagerView) return true;
-    // Some older records/pages may not include created_by reliably; backend enforces too.
-    return t.status === 'pending' && (!t.created_by || t.created_by === user.id);
+    return t.status === 'pending';
   };
 
   const groupTickets = (list: Ticket[]): TicketGroup[] => {
@@ -501,8 +500,56 @@ export default function TicketsPage() {
                             <td className="px-4 py-2 text-[11px] text-gray-500">
                               {new Date(g.created_at).toLocaleString()}
                             </td>
-                            <td className="px-4 py-2 text-[11px] text-gray-500">
-                              {g.items.length} line(s)
+                            <td className="px-4 py-2 text-[11px] text-gray-500" onClick={(e) => e.stopPropagation()}>
+                              {(() => {
+                                const firstItem = g.items[0];
+                                const base = firstItem
+                                  ? (tickets.find((t) => t.id === firstItem.id) ?? ({
+                                      id: firstItem.id,
+                                      product_name: firstItem.product_name,
+                                      quantity: firstItem.quantity,
+                                      uom: firstItem.uom ?? null,
+                                      reason: firstItem.reason,
+                                      delivery_batch: g.delivery_batch,
+                                      delivery_date: g.delivery_date,
+                                      channel: g.channel,
+                                      status: firstItem.status,
+                                      created_at: g.created_at,
+                                      created_by: firstItem.created_by ?? '',
+                                      approval_remarks: firstItem.approval_remarks,
+                                      rejection_remarks: firstItem.rejection_remarks,
+                                    } as Ticket))
+                                  : null;
+                                const canMutate = canMutateTicket(base);
+                                if (canMutate && base) {
+                                  return (
+                                    <div className="flex gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingTicket(base);
+                                        }}
+                                        className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          const fid = g.items[0]?.id;
+                                          if (fid) void handleDelete(e, fid);
+                                        }}
+                                        disabled={deleteLoadingId === g.items[0]?.id}
+                                        className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                                      >
+                                        {deleteLoadingId === g.items[0]?.id ? '…' : 'Delete'}
+                                      </button>
+                                    </div>
+                                  );
+                                }
+                                return <span>{g.items.length} line(s)</span>;
+                              })()}
                             </td>
                           </tr>
                           {isExpanded && (

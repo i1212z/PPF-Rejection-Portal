@@ -75,6 +75,11 @@ async def list_tickets(
     if channel_filter:
         query = query.where(RejectionTicket.channel == channel_filter)
         count_query = count_query.where(RejectionTicket.channel == channel_filter)
+        # B2B/B2C users only see their own tickets
+        rv = _role_value(current_user)
+        if rv in ("b2b", "b2c"):
+            query = query.where(RejectionTicket.created_by == current_user.id)
+            count_query = count_query.where(RejectionTicket.created_by == current_user.id)
     elif channel:
         query = query.where(RejectionTicket.channel == channel)
         count_query = count_query.where(RejectionTicket.channel == channel)
