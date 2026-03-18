@@ -203,6 +203,7 @@ function TicketRow({
 export default function DashboardPage() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [tallyPostedIds, setTallyPostedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -210,14 +211,21 @@ export default function DashboardPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
-          params: { limit: 500 },
-        });
+        const [res, tallyRes] = await Promise.all([
+          apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
+            params: { limit: 500 },
+          }),
+          (user?.role === 'manager' || user?.role === 'admin')
+            ? apiClient.get<{ ticket_ids: string[] }>('/tally/posted')
+            : Promise.resolve({ data: { ticket_ids: [] as string[] } }),
+        ]);
         setTickets(res.data.items);
+        setTallyPostedIds(new Set(tallyRes.data.ticket_ids || []));
       } catch (err: unknown) {
         // If unauthorized, just show empty state instead of spamming errors.
         // Other errors also degrade gracefully to an empty dashboard.
         setTickets([]);
+        setTallyPostedIds(new Set());
         // eslint-disable-next-line no-console
         console.warn('Dashboard tickets load failed', err);
       } finally {
@@ -225,18 +233,18 @@ export default function DashboardPage() {
       }
     };
     void load();
-  }, []);
+  }, [user?.role]);
 
   const channelFilter = user?.role === 'b2b' ? 'B2B' : user?.role === 'b2c' ? 'B2C' : null;
 
-  const { totalTickets, totalB2B, totalB2C, pendingCount, chartData, pieData, recentGroups, globalDisplayByKey, globalItemLineByItemId, approvedVsRejectedData, rejectedByUnit } =
+  const { totalTickets, totalB2B, totalB2C, pendingCount, chartData, pieData, recentGroups, globalDisplayByKey, globalItemLineByItemId, approvedVsRejectedData, rejectedByUnit, tallyPostedCount, tallyPendingCount } =
     useMemo(() => {
       const total = tickets.length;
       let pending = 0;
-      let rejectedQtyB2B = 0;
-      let rejectedQtyB2C = 0;
-      let approvedQtyB2B = 0;
-      let approvedQtyB2C = 0;
+      let confirmedQtyB2B = 0;
+      let confirmedQtyB2C = 0;
+      let dismissedQtyB2B = 0;
+      let dismissedQtyB2C = 0;
 
       const rejectedByUnit: Record<'B2B' | 'B2C', Record<string, number>> = {
         B2B: {},
@@ -245,52 +253,52 @@ export default function DashboardPage() {
 
       tickets.forEach((t) => {
         if (t.channel === 'B2B') {
-          if (t.status === 'rejected') {
-            rejectedQtyB2B += Number(t.quantity || 0);
+          if (t.status === 'approved') {
+            confirmedQtyB2B += Number(t.quantity || 0);
             const u = (t.uom || 'EA').toUpperCase();
             rejectedByUnit.B2B[u] = (rejectedByUnit.B2B[u] ?? 0) + Number(t.quantity || 0);
-          } else if (t.status === 'approved') {
-            approvedQtyB2B += Number(t.quantity || 0);
+          } else if (t.status === 'rejected') {
+            dismissedQtyB2B += Number(t.quantity || 0);
           }
         } else if (t.channel === 'B2C') {
-          if (t.status === 'rejected') {
-            rejectedQtyB2C += Number(t.quantity || 0);
+          if (t.status === 'approved') {
+            confirmedQtyB2C += Number(t.quantity || 0);
             const u = (t.uom || 'EA').toUpperCase();
             rejectedByUnit.B2C[u] = (rejectedByUnit.B2C[u] ?? 0) + Number(t.quantity || 0);
-          } else if (t.status === 'approved') {
-            approvedQtyB2C += Number(t.quantity || 0);
+          } else if (t.status === 'rejected') {
+            dismissedQtyB2C += Number(t.quantity || 0);
           }
         }
         if (t.status === 'pending') pending += 1;
       });
 
       const chart = [
-        { channel: 'B2B', value: rejectedQtyB2B, quantity: rejectedQtyB2B, unit: 'qty' },
-        { channel: 'B2C', value: rejectedQtyB2C, quantity: rejectedQtyB2C, unit: 'qty' },
+        { channel: 'B2B', value: confirmedQtyB2B },
+        { channel: 'B2C', value: confirmedQtyB2C },
       ];
 
       const pie = [
-        { channel: 'B2B', value: rejectedQtyB2B },
-        { channel: 'B2C', value: rejectedQtyB2C },
+        { channel: 'B2B', value: confirmedQtyB2B },
+        { channel: 'B2C', value: confirmedQtyB2C },
       ];
 
       const approvedVsRejected: ApprovedRejectedPoint[] = [];
       if (channelFilter === 'B2B') {
         approvedVsRejected.push(
-          { name: 'Approved', value: approvedQtyB2B, count: approvedQtyB2B },
-          { name: 'Rejected', value: rejectedQtyB2B, count: rejectedQtyB2B },
+          { name: 'Confirmed', value: confirmedQtyB2B },
+          { name: 'Dismissed', value: dismissedQtyB2B },
         );
       } else if (channelFilter === 'B2C') {
         approvedVsRejected.push(
-          { name: 'Approved', value: approvedQtyB2C, count: approvedQtyB2C },
-          { name: 'Rejected', value: rejectedQtyB2C, count: rejectedQtyB2C },
+          { name: 'Confirmed', value: confirmedQtyB2C },
+          { name: 'Dismissed', value: dismissedQtyB2C },
         );
       } else {
         approvedVsRejected.push(
-          { name: 'B2B Approved', value: approvedQtyB2B, count: approvedQtyB2B },
-          { name: 'B2B Rejected', value: rejectedQtyB2B, count: rejectedQtyB2B },
-          { name: 'B2C Approved', value: approvedQtyB2C, count: approvedQtyB2C },
-          { name: 'B2C Rejected', value: rejectedQtyB2C, count: rejectedQtyB2C },
+          { name: 'B2B Confirmed', value: confirmedQtyB2B },
+          { name: 'B2B Dismissed', value: dismissedQtyB2B },
+          { name: 'B2C Confirmed', value: confirmedQtyB2C },
+          { name: 'B2C Dismissed', value: dismissedQtyB2C },
         );
       }
 
@@ -317,10 +325,15 @@ export default function DashboardPage() {
       const filterByChannel = <T extends { channel: string }>(arr: T[]): T[] =>
         channelFilter ? arr.filter((x) => x.channel === channelFilter) : arr;
 
+      // Tally: posted = in tally_pending; pending = decided but not posted
+      const decidedCount = tickets.filter((t) => t.status === 'approved' || t.status === 'rejected').length;
+      const postedCount = tallyPostedIds.size;
+      const pendingToPostCount = Math.max(0, decidedCount - postedCount);
+
       return {
         totalTickets: total,
-        totalB2B: rejectedQtyB2B,
-        totalB2C: rejectedQtyB2C,
+        totalB2B: confirmedQtyB2B,
+        totalB2C: confirmedQtyB2C,
         pendingCount: pending,
         chartData: filterByChannel(chart),
         pieData: filterByChannel(pie),
@@ -329,8 +342,10 @@ export default function DashboardPage() {
         globalItemLineByItemId,
         approvedVsRejectedData: approvedVsRejected,
         rejectedByUnit,
+        tallyPostedCount: postedCount,
+        tallyPendingCount: pendingToPostCount,
       };
-    }, [tickets, channelFilter]);
+    }, [tickets, channelFilter, tallyPostedIds]);
 
   return (
     <div className="space-y-6">
@@ -365,24 +380,24 @@ export default function DashboardPage() {
           </p>
         </Card>
         <Card
-          title="B2B rejected quantity"
+          title="B2B confirmed rejected qty"
           subtitle="Across all B2B customers"
           className="border-t-4 border-t-sky-400"
         >
           <div className="text-2xl font-semibold text-gray-900">
             {loading ? '…' : totalB2B}
           </div>
-          <p className="mt-1 text-[11px] text-gray-500">Sum of quantities for B2B tickets</p>
+          <p className="mt-1 text-[11px] text-gray-500">Sum of approved quantities (confirmed rejections)</p>
         </Card>
         <Card
-          title="B2C rejected quantity"
+          title="B2C confirmed rejected qty"
           subtitle="Across all B2C orders"
           className="border-t-4 border-t-rose-400"
         >
           <div className="text-2xl font-semibold text-gray-900">
             {loading ? '…' : totalB2C}
           </div>
-          <p className="mt-1 text-[11px] text-gray-500">Sum of quantities for B2C tickets</p>
+          <p className="mt-1 text-[11px] text-gray-500">Sum of approved quantities (confirmed rejections)</p>
         </Card>
         <Card
           title="Pending approvals"
@@ -398,6 +413,33 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {(user?.role === 'manager' || user?.role === 'admin') && (
+        <Card
+          title="Tally sync status"
+          subtitle="Posted vs pending to post (decided tickets only)"
+          className="border-l-4 border-l-indigo-300"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-4 py-3">
+              <div className="text-xs font-medium text-emerald-700 uppercase tracking-wide">
+                Posted
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-gray-900">
+                {loading ? '…' : tallyPostedCount}
+              </div>
+            </div>
+            <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3">
+              <div className="text-xs font-medium text-amber-700 uppercase tracking-wide">
+                Pending
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-gray-900">
+                {loading ? '…' : tallyPendingCount}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Current delivery window by channel – summary (overall ticket value) */}
       <Card
         title="Current delivery window by channel"
@@ -409,7 +451,7 @@ export default function DashboardPage() {
             <div className="rounded-lg bg-sky-50 border border-sky-100 px-4 py-3">
               <div className="text-xs font-medium text-sky-700 uppercase tracking-wide">B2B</div>
               <div className="mt-1 flex gap-4 text-sm">
-                <span><strong>Quantity:</strong> {chartData?.find((c) => c.channel === 'B2B')?.quantity ?? 0}</span>
+                <span><strong>Quantity:</strong> {chartData?.find((c) => c.channel === 'B2B')?.value ?? 0}</span>
               </div>
               <div className="mt-1 text-[11px] text-sky-700">
                 <strong>By unit:</strong>{' '}
@@ -424,7 +466,7 @@ export default function DashboardPage() {
             <div className="rounded-lg bg-orange-50 border border-orange-100 px-4 py-3">
               <div className="text-xs font-medium text-orange-700 uppercase tracking-wide">B2C</div>
               <div className="mt-1 flex gap-4 text-sm">
-                <span><strong>Quantity:</strong> {chartData?.find((c) => c.channel === 'B2C')?.quantity ?? 0}</span>
+                <span><strong>Quantity:</strong> {chartData?.find((c) => c.channel === 'B2C')?.value ?? 0}</span>
               </div>
               <div className="mt-1 text-[11px] text-orange-700">
                 <strong>By unit:</strong>{' '}
@@ -441,8 +483,8 @@ export default function DashboardPage() {
       {/* Overall ticket value chart */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Card
-        title="Overall rejected quantity"
-        subtitle="Current delivery window by channel"
+        title="Confirmed rejected quantity"
+        subtitle="This week — confirmed (approved) quantity by channel"
           rightSlot={
             <span className="rounded-full border border-gray-200 px-3 py-1 text-[11px] text-gray-600 bg-gray-50">
               This week
@@ -477,11 +519,11 @@ export default function DashboardPage() {
 
       {/* Approved vs Rejected chart — all accounts */}
       <Card
-        title="Approved vs Rejected"
-        subtitle="Ticket value and quantity by decision (all accounts)"
+        title="Confirmed vs Dismissed"
+        subtitle="Confirmed (approved) vs dismissed (rejected) quantities"
         className="border-l-4 border-l-emerald-300"
       >
-        {approvedVsRejectedData.length > 0 && approvedVsRejectedData.some((d) => d.value > 0 || d.count > 0) ? (
+        {approvedVsRejectedData.length > 0 && approvedVsRejectedData.some((d) => d.value > 0) ? (
           <ApprovedVsRejectedChart data={approvedVsRejectedData} />
         ) : (
           <div className="text-sm text-gray-500 py-4">No approved or rejected tickets yet.</div>

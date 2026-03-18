@@ -2,7 +2,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,7 +11,6 @@ import {
 export interface ApprovedRejectedPoint {
   name: string;
   value: number;
-  count: number;
 }
 
 interface ApprovedVsRejectedChartProps {
@@ -27,33 +25,16 @@ export function ApprovedVsRejectedChart({ data }: ApprovedVsRejectedChartProps) 
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
           <YAxis
-            yAxisId="left"
             tickLine={false}
             axisLine={false}
             tick={{ fontSize: 10 }}
             tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : String(v))}
           />
-          <YAxis
-            yAxisId="right"
-            orientation="right"
-            tickLine={false}
-            axisLine={false}
-            tick={{ fontSize: 10 }}
-          />
           <Tooltip />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
           <Bar
-            yAxisId="left"
             dataKey="value"
-            name="Ticket value"
-            fill="#4f46e5"
-            radius={[6, 6, 0, 0]}
-          />
-          <Bar
-            yAxisId="right"
-            dataKey="count"
             name="Quantity"
-            fill="#0f766e"
+            fill="#4f46e5"
             radius={[6, 6, 0, 0]}
           />
         </BarChart>

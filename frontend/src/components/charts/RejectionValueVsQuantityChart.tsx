@@ -2,7 +2,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -10,7 +9,7 @@ import {
 } from 'recharts';
 
 interface RejectionValueVsQuantityChartProps {
-  data: { channel: string; value: number; quantity: number; unit?: string }[];
+  data: { channel: string; value: number }[];
 }
 
 export function RejectionValueVsQuantityChart({
@@ -25,39 +24,12 @@ export function RejectionValueVsQuantityChart({
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="channel" tickLine={false} axisLine={false} />
-          <YAxis
-            yAxisId="left"
-            tickLine={false}
-            axisLine={false}
-            tick={{ fontSize: 10 }}
-          />
-          <YAxis
-            yAxisId="right"
-            orientation="right"
-            tickLine={false}
-            axisLine={false}
-            tick={{ fontSize: 10 }}
-          />
-          <Tooltip
-            formatter={(value, name, entry: any) => {
-              const num = typeof value === 'number' ? value : Number(value ?? 0);
-              const unit = entry?.payload?.unit || '';
-              return [`${num}${unit ? ` ${unit}` : ''}`, name];
-            }}
-          />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+          <Tooltip />
           <Bar
-            yAxisId="left"
             dataKey="value"
-            name="Quantity"
+            name="Rejected quantity"
             fill="#4f46e5"
-            radius={[6, 6, 0, 0]}
-          />
-          <Bar
-            yAxisId="right"
-            dataKey="quantity"
-            name="Quantity"
-            fill="#0f766e"
             radius={[6, 6, 0, 0]}
           />
         </BarChart>
