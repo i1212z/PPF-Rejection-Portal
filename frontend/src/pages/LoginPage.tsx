@@ -30,14 +30,14 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white/95 border border-white/40 rounded-2xl px-6 py-8 shadow-2xl shadow-violet-900/40">
         <div className="flex items-center gap-3 mb-4">
           <div className="h-9 w-9 rounded-xl bg-primary-100 flex items-center justify-center text-xs font-semibold text-primary-600 border border-primary-200">
-            PPF
+            CLS
           </div>
           <div>
             <h1 className="text-lg font-semibold text-slate-900 mb-0.5">
-              PPF Rejection Portal
+              Complaint Log System
             </h1>
             <p className="text-xs text-slate-500">
-              Daily B2B / B2C rejection tracking.
+              Daily B2B / B2C complaint and rejection tracking.
             </p>
           </div>
         </div>

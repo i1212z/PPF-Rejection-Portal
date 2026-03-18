@@ -14,6 +14,7 @@ interface Ticket {
   id: string;
   product_name: string;
   quantity: number;
+  uom?: string | null;
   reason: string;
   channel: 'B2B' | 'B2C';
   status: TicketStatus;
@@ -228,29 +229,34 @@ export default function DashboardPage() {
 
   const channelFilter = user?.role === 'b2b' ? 'B2B' : user?.role === 'b2c' ? 'B2C' : null;
 
-  const { totalTickets, totalB2B, totalB2C, pendingCount, chartData, pieData, recentGroups, globalDisplayByKey, globalItemLineByItemId, approvedVsRejectedData } =
+  const { totalTickets, totalB2B, totalB2C, pendingCount, chartData, pieData, recentGroups, globalDisplayByKey, globalItemLineByItemId, approvedVsRejectedData, rejectedByUnit } =
     useMemo(() => {
       const total = tickets.length;
       let pending = 0;
-      let qtyB2B = 0;
-      let qtyB2C = 0;
       let rejectedQtyB2B = 0;
       let rejectedQtyB2C = 0;
       let approvedQtyB2B = 0;
       let approvedQtyB2C = 0;
 
+      const rejectedByUnit: Record<'B2B' | 'B2C', Record<string, number>> = {
+        B2B: {},
+        B2C: {},
+      };
+
       tickets.forEach((t) => {
         if (t.channel === 'B2B') {
-          qtyB2B += Number(t.quantity || 0);
           if (t.status === 'rejected') {
             rejectedQtyB2B += Number(t.quantity || 0);
+            const u = (t.uom || 'EA').toUpperCase();
+            rejectedByUnit.B2B[u] = (rejectedByUnit.B2B[u] ?? 0) + Number(t.quantity || 0);
           } else if (t.status === 'approved') {
             approvedQtyB2B += Number(t.quantity || 0);
           }
         } else if (t.channel === 'B2C') {
-          qtyB2C += Number(t.quantity || 0);
           if (t.status === 'rejected') {
             rejectedQtyB2C += Number(t.quantity || 0);
+            const u = (t.uom || 'EA').toUpperCase();
+            rejectedByUnit.B2C[u] = (rejectedByUnit.B2C[u] ?? 0) + Number(t.quantity || 0);
           } else if (t.status === 'approved') {
             approvedQtyB2C += Number(t.quantity || 0);
           }
@@ -259,13 +265,13 @@ export default function DashboardPage() {
       });
 
       const chart = [
-        { channel: 'B2B', value: qtyB2B, quantity: qtyB2B },
-        { channel: 'B2C', value: qtyB2C, quantity: qtyB2C },
+        { channel: 'B2B', value: rejectedQtyB2B, quantity: rejectedQtyB2B, unit: 'qty' },
+        { channel: 'B2C', value: rejectedQtyB2C, quantity: rejectedQtyB2C, unit: 'qty' },
       ];
 
       const pie = [
-        { channel: 'B2B', value: qtyB2B },
-        { channel: 'B2C', value: qtyB2C },
+        { channel: 'B2B', value: rejectedQtyB2B },
+        { channel: 'B2C', value: rejectedQtyB2C },
       ];
 
       const approvedVsRejected: ApprovedRejectedPoint[] = [];
@@ -313,8 +319,8 @@ export default function DashboardPage() {
 
       return {
         totalTickets: total,
-        totalB2B: qtyB2B,
-        totalB2C: qtyB2C,
+        totalB2B: rejectedQtyB2B,
+        totalB2C: rejectedQtyB2C,
         pendingCount: pending,
         chartData: filterByChannel(chart),
         pieData: filterByChannel(pie),
@@ -322,6 +328,7 @@ export default function DashboardPage() {
         globalDisplayByKey,
         globalItemLineByItemId,
         approvedVsRejectedData: approvedVsRejected,
+        rejectedByUnit,
       };
     }, [tickets, channelFilter]);
 
@@ -394,7 +401,7 @@ export default function DashboardPage() {
       {/* Current delivery window by channel – summary (overall ticket value) */}
       <Card
         title="Current delivery window by channel"
-        subtitle="This week — quantity per channel"
+        subtitle="This week — rejected quantity per channel"
         className="border-l-4 border-l-indigo-400"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -404,6 +411,13 @@ export default function DashboardPage() {
               <div className="mt-1 flex gap-4 text-sm">
                 <span><strong>Quantity:</strong> {chartData?.find((c) => c.channel === 'B2B')?.quantity ?? 0}</span>
               </div>
+              <div className="mt-1 text-[11px] text-sky-700">
+                <strong>By unit:</strong>{' '}
+                {Object.entries((rejectedByUnit as any)?.B2B ?? {})
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([u, v]) => `${v} ${u}`)
+                  .join(' • ') || '–'}
+              </div>
             </div>
           )}
           {(!channelFilter || channelFilter === 'B2C') && (
@@ -411,6 +425,13 @@ export default function DashboardPage() {
               <div className="text-xs font-medium text-orange-700 uppercase tracking-wide">B2C</div>
               <div className="mt-1 flex gap-4 text-sm">
                 <span><strong>Quantity:</strong> {chartData?.find((c) => c.channel === 'B2C')?.quantity ?? 0}</span>
+              </div>
+              <div className="mt-1 text-[11px] text-orange-700">
+                <strong>By unit:</strong>{' '}
+                {Object.entries((rejectedByUnit as any)?.B2C ?? {})
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([u, v]) => `${v} ${u}`)
+                  .join(' • ') || '–'}
               </div>
             </div>
           )}

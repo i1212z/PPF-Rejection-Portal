@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 
 interface RejectionValueVsQuantityChartProps {
-  data: { channel: string; value: number; quantity: number }[];
+  data: { channel: string; value: number; quantity: number; unit?: string }[];
 }
 
 export function RejectionValueVsQuantityChart({
@@ -38,7 +38,13 @@ export function RejectionValueVsQuantityChart({
             axisLine={false}
             tick={{ fontSize: 10 }}
           />
-          <Tooltip />
+          <Tooltip
+            formatter={(value, name, entry: any) => {
+              const num = typeof value === 'number' ? value : Number(value ?? 0);
+              const unit = entry?.payload?.unit || '';
+              return [`${num}${unit ? ` ${unit}` : ''}`, name];
+            }}
+          />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Bar
             yAxisId="left"

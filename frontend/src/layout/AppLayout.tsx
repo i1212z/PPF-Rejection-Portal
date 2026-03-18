@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { apiClient } from '../api/client';
 
 const navItemBase =
   'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors';
@@ -29,6 +31,12 @@ function SidebarLink({ to, icon, label }: SidebarLinkProps) {
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const [isPwModalOpen, setIsPwModalOpen] = useState(false);
+  const [pwOld, setPwOld] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSuccess, setPwSuccess] = useState<string | null>(null);
 
   const pageTitle = (() => {
     if (location.pathname.startsWith('/tally/pending')) return 'Pending (Tally)';
@@ -42,6 +50,35 @@ export default function AppLayout() {
   })();
 
   const isTally = user?.role === 'tally';
+  const canChangePassword = user?.role === 'manager' || user?.role === 'admin';
+
+  const submitPasswordChange = async () => {
+    setPwError(null);
+    setPwSuccess(null);
+    setPwLoading(true);
+    try {
+      await apiClient.post('/auth/change-password', {
+        old_password: pwOld,
+        new_password: pwNew,
+      });
+      setPwSuccess('Password updated.');
+      setPwOld('');
+      setPwNew('');
+      setIsPwModalOpen(false);
+    } catch (err: unknown) {
+      const msg =
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        (err as any).response?.data?.detail &&
+        typeof (err as any).response.data.detail === 'string'
+          ? (err as any).response.data.detail
+          : 'Could not change password.';
+      setPwError(msg);
+    } finally {
+      setPwLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 flex">
@@ -135,6 +172,19 @@ export default function AppLayout() {
               <Bell className="w-4 h-4" />
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500" />
             </button>
+            {canChangePassword && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPwError(null);
+                  setPwSuccess(null);
+                  setIsPwModalOpen(true);
+                }}
+                className="hidden sm:inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100"
+              >
+                Change password
+              </button>
+            )}
             {/* Compact logout for mobile (always visible, but mainly helps on small screens) */}
             <button
               onClick={logout}
@@ -175,6 +225,19 @@ export default function AppLayout() {
                 >
                   Posted
                 </NavLink>
+                {canChangePassword && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPwError(null);
+                      setPwSuccess(null);
+                      setIsPwModalOpen(true);
+                    }}
+                    className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 whitespace-nowrap text-gray-700"
+                  >
+                    Change password
+                  </button>
+                )}
               </>
             ) : (
               <>
@@ -214,6 +277,19 @@ export default function AppLayout() {
             >
               Tickets
             </NavLink>
+            {canChangePassword && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPwError(null);
+                  setPwSuccess(null);
+                  setIsPwModalOpen(true);
+                }}
+                className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 whitespace-nowrap text-gray-700"
+              >
+                Change password
+              </button>
+            )}
             {(user?.role === 'manager' || user?.role === 'admin') && (
               <>
                 <NavLink
@@ -266,6 +342,72 @@ export default function AppLayout() {
             <Outlet />
           </div>
         </section>
+
+        {isPwModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white shadow-lg">
+              <div className="border-b border-gray-100 px-4 py-3">
+                <div className="text-sm font-semibold text-gray-900">Change password</div>
+                <div className="mt-0.5 text-[11px] text-gray-500">
+                  For manager/admin accounts.
+                </div>
+              </div>
+              <div className="px-4 py-3 space-y-3">
+                {pwError && (
+                  <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+                    {pwError}
+                  </div>
+                )}
+                {pwSuccess && (
+                  <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+                    {pwSuccess}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Current password
+                  </label>
+                  <input
+                    type="password"
+                    value={pwOld}
+                    onChange={(e) => setPwOld(e.target.value)}
+                    className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    New password
+                  </label>
+                  <input
+                    type="password"
+                    value={pwNew}
+                    onChange={(e) => setPwNew(e.target.value)}
+                    className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                  />
+                  <div className="mt-1 text-[11px] text-gray-500">Minimum 6 characters.</div>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setIsPwModalOpen(false)}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={pwLoading || !pwOld || !pwNew}
+                  onClick={() => void submitPasswordChange()}
+                  className="rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  {pwLoading ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

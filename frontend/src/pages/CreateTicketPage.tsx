@@ -551,18 +551,6 @@ export default function CreateTicketPage() {
               <div className="border border-gray-200 rounded-md">
                 <div className="bg-gray-50 px-3 py-2 flex items-center justify-between">
                   <span className="text-xs font-medium text-gray-700">Rejected products</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLineItems((prev) => [
-                        ...prev,
-                        { productName: '', quantity: '', uom: 'EA', reason: '' },
-                      ])
-                    }
-                    className="rounded-md bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700 hover:bg-indigo-100"
-                  >
-                    + Add product
-                  </button>
                 </div>
                 <div className="divide-y divide-gray-200">
                   {lineItems.map((item, idx) => (
@@ -664,14 +652,28 @@ export default function CreateTicketPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-              <div className="flex items-center justify-between text-xs text-gray-700">
-                <span className="font-semibold">
-                  Total rejected products: {lineItems.filter((i) => i.productName).length}
-                </span>
-                <span className="text-[11px] text-gray-500">
-                  One ticket = one customer + delivery; multiple rejected products can be added here.
-                </span>
+                <div className="px-3 py-2 flex items-center justify-between border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLineItems((prev) => [
+                        ...prev,
+                        { productName: '', quantity: '', uom: 'EA', reason: '' },
+                      ])
+                    }
+                    className="rounded-md bg-indigo-50 px-3 py-1.5 text-[11px] text-indigo-700 hover:bg-indigo-100"
+                  >
+                    + Add product
+                  </button>
+                  <div className="flex flex-col items-end text-xs text-gray-700">
+                    <span className="font-semibold">
+                      Total lines: {lineItems.filter((i) => i.productName).length}
+                    </span>
+                    <span className="text-[11px] text-gray-500">
+                      One ticket = one customer + delivery; add multiple rejected products below.
+                    </span>
+                  </div>
+                </div>
               </div>
             </>
           )}
