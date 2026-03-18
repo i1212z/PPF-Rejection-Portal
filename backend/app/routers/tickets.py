@@ -183,12 +183,21 @@ async def update_ticket(
     ticket_id: UUID,
     payload: TicketCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.MANAGER)),
+    current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(select(RejectionTicket).where(RejectionTicket.id == ticket_id))
     ticket = result.scalars().first()
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
+
+    rv = _role_value(current_user)
+    is_admin_manager = rv in ("admin", "manager")
+    is_owner = ticket.created_by == current_user.id
+    if not is_admin_manager:
+        if not is_owner:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+        if ticket.status != TicketStatus.PENDING:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending tickets can be edited")
 
     ticket.product_name = payload.product_name
     ticket.quantity = payload.quantity
@@ -234,12 +243,21 @@ async def update_ticket(
 async def delete_ticket(
     ticket_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.MANAGER)),
+    current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(select(RejectionTicket).where(RejectionTicket.id == ticket_id))
     ticket = result.scalars().first()
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
+
+    rv = _role_value(current_user)
+    is_admin_manager = rv in ("admin", "manager")
+    is_owner = ticket.created_by == current_user.id
+    if not is_admin_manager:
+        if not is_owner:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+        if ticket.status != TicketStatus.PENDING:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending tickets can be deleted")
 
     # Delete approval first (FK from approvals.ticket_id -> rejection_tickets.id)
     await db.execute(sql_delete(Approval).where(Approval.ticket_id == ticket_id))

@@ -10,12 +10,14 @@ interface Ticket {
   id: string;
   product_name: string;
   quantity: number;
+  uom?: string | null;
   reason: string;
   delivery_batch: string;
   delivery_date: string;
   channel: 'B2B' | 'B2C';
   status: TicketStatus;
   created_at: string;
+  created_by: string;
   rejection_remarks?: string | null;
   approval_remarks?: string | null;
 }
@@ -59,6 +61,12 @@ export default function TicketsPage() {
 
   const isManagerView =
     user?.role === 'manager' || user?.role === 'admin';
+
+  const canMutateTicket = (t: Ticket | null | undefined) => {
+    if (!t || !user) return false;
+    if (isManagerView) return true;
+    return t.created_by === user.id && t.status === 'pending';
+  };
 
   const groupTickets = (list: Ticket[]): TicketGroup[] => {
     const groups: Record<string, TicketGroup> = {};
@@ -323,28 +331,55 @@ export default function TicketsPage() {
                     <div className="mt-1 text-[11px] text-gray-500">
                       {g.channel} • {new Date(g.delivery_date).toLocaleDateString()}
                     </div>
-                    <div className="mt-2 space-y-1 text-[11px] text-gray-600">
-                      {g.items.map((item) => (
-                        <div key={item.id} className="flex justify-between items-start gap-2">
-                          <div>
-                            <div>{item.product_name}</div>
-                            <div className="text-[10px] text-gray-500">
-                              {item.reason.length > 40 ? `${item.reason.slice(0, 40)}…` : item.reason}
+                    <div className="mt-2 space-y-2 text-[11px] text-gray-600">
+                      {g.items.map((item) => {
+                        const base = tickets.find((t) => t.id === item.id);
+                        const canMutate = canMutateTicket(base);
+                        return (
+                          <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                            <div className="flex justify-between items-start gap-2">
+                              <div>
+                                <div className="font-medium text-gray-800">{item.product_name}</div>
+                                <div className="text-[10px] text-gray-500">
+                                  {item.reason.length > 40 ? `${item.reason.slice(0, 40)}…` : item.reason}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div>
+                                  Qty:{' '}
+                                  <span className="font-medium">
+                                    {item.quantity}
+                                  </span>
+                                </div>
+                                <div className="mt-0.5">
+                                  <StatusBadge status={item.status} />
+                                </div>
+                              </div>
                             </div>
+                            {canMutate && base && (
+                              <div className="mt-2 flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingTicket(base)}
+                                  className="flex-1 rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    void handleDelete(e, item.id);
+                                  }}
+                                  disabled={deleteLoadingId === item.id}
+                                  className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+                                >
+                                  {deleteLoadingId === item.id ? 'Deleting…' : 'Delete'}
+                                </button>
+                              </div>
+                            )}
                           </div>
-                          <div className="text-right">
-                            <div>
-                              Qty:{' '}
-                              <span className="font-medium">
-                                {item.quantity}
-                              </span>
-                            </div>
-                            <div className="mt-0.5">
-                              <StatusBadge status={item.status} />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div className="mt-1 text-[11px] text-gray-400">
                       {new Date(g.created_at).toLocaleString()}
@@ -365,6 +400,7 @@ export default function TicketsPage() {
                       <th className="px-4 py-2 text-left">Status</th>
                       <th className="px-4 py-2 text-left">Admin remark</th>
                       <th className="px-4 py-2 text-left">Created</th>
+                      <th className="px-4 py-2 text-left">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -443,10 +479,13 @@ export default function TicketsPage() {
                             <td className="px-4 py-2 text-[11px] text-gray-500">
                               {new Date(g.created_at).toLocaleString()}
                             </td>
+                            <td className="px-4 py-2 text-[11px] text-gray-500">
+                              {g.items.length} line(s)
+                            </td>
                           </tr>
                           {isExpanded && (
                             <tr className="bg-gray-50 border-l-4 border-l-indigo-300">
-                              <td colSpan={7} className="px-4 py-3 text-xs">
+                              <td colSpan={8} className="px-4 py-3 text-xs">
                                 <div className="space-y-2">
                                   <div className="font-medium text-gray-700">
                                     Products on this ticket (Ticket ID: {displayId})
@@ -471,11 +510,7 @@ export default function TicketsPage() {
                                           <th className="px-3 py-1 text-left">
                                             Admin remark
                                           </th>
-                                          {isManagerView && (
-                                            <th className="px-3 py-1 text-left">
-                                              Action
-                                            </th>
-                                          )}
+                                          <th className="px-3 py-1 text-left">Action</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-gray-100">
@@ -522,36 +557,37 @@ export default function TicketsPage() {
                                                   item.rejection_remarks ??
                                                   '–'}
                                             </td>
-                                            {isManagerView && (
-                                              <td
-                                                className="px-3 py-1"
-                                                onClick={(e) => e.stopPropagation()}
-                                              >
-                                                <div className="flex gap-1">
-                                                  <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      const base = tickets.find((t) => t.id === item.id);
-                                                      if (base) setEditingTicket(base);
-                                                    }}
-                                                    className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
-                                                  >
-                                                    Edit
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                      void handleDelete(e, item.id);
-                                                    }}
-                                                    disabled={deleteLoadingId === item.id}
-                                                    className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
-                                                  >
-                                                    {deleteLoadingId === item.id ? '…' : 'Delete'}
-                                                  </button>
-                                                </div>
-                                              </td>
-                                            )}
+                                            <td className="px-3 py-1" onClick={(e) => e.stopPropagation()}>
+                                              {(() => {
+                                                const base = tickets.find((t) => t.id === item.id);
+                                                const canMutate = canMutateTicket(base);
+                                                if (!canMutate || !base) return <span className="text-gray-400">–</span>;
+                                                return (
+                                                  <div className="flex gap-1">
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingTicket(base);
+                                                      }}
+                                                      className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
+                                                    >
+                                                      Edit
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        void handleDelete(e, item.id);
+                                                      }}
+                                                      disabled={deleteLoadingId === item.id}
+                                                      className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                                                    >
+                                                      {deleteLoadingId === item.id ? '…' : 'Delete'}
+                                                    </button>
+                                                  </div>
+                                                );
+                                              })()}
+                                            </td>
                                           </tr>
                                         ))}
                                       </tbody>
@@ -602,6 +638,8 @@ export default function TicketsPage() {
                   {groupTickets(ticketsB2B).map((g) => {
                     const statuses = Array.from(new Set(g.items.map((i) => i.status)));
                     const singleStatus = statuses.length === 1 ? statuses[0] : null;
+                    const firstId = g.items[0]?.id;
+                    const base = firstId ? ticketsB2B.find((t) => t.id === firstId) : null;
                     return (
                       <div
                         key={g.id}
@@ -622,65 +660,56 @@ export default function TicketsPage() {
                         <div className="mt-1 text-[11px] text-gray-500">
                           {new Date(g.delivery_date).toLocaleDateString()}
                         </div>
-                        <div className="mt-2 space-y-2 text-[11px] text-gray-600">
-                          {g.items.map((item) => {
-                            const baseItem = ticketsB2B.find((t) => t.id === item.id);
-                            return (
-                              <div key={item.id} className="rounded-md border border-gray-100 bg-gray-50 px-2 py-2">
-                                <div className="flex justify-between items-start gap-2">
-                                  <div>
-                                    <div className="font-medium text-gray-800">{item.product_name}</div>
-                                    <div className="text-[10px] text-gray-500">
-                                      {item.reason.length > 40
-                                        ? `${item.reason.slice(0, 40)}…`
-                                        : item.reason}
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div>
-                                      Qty:{' '}
-                                      <span className="font-medium">
-                                        {item.quantity}
-                                      </span>
-                                    </div>
-                                    <div className="mt-0.5">
-                                      <StatusBadge status={item.status} />
-                                    </div>
-                                  </div>
+                        <div className="mt-2 space-y-1 text-[11px] text-gray-600">
+                          {g.items.map((item) => (
+                            <div key={item.id} className="flex justify-between items-start gap-2">
+                              <div>
+                                <div>{item.product_name}</div>
+                                <div className="text-[10px] text-gray-500">
+                                  {item.reason.length > 40
+                                    ? `${item.reason.slice(0, 40)}…`
+                                    : item.reason}
                                 </div>
-                                {isManagerView && baseItem && (
-                                  <div className="mt-2 flex gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingTicket(baseItem);
-                                      }}
-                                      className="flex-1 rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        void handleDelete(e, item.id);
-                                      }}
-                                      disabled={deleteLoadingId === item.id}
-                                      className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
-                                    >
-                                      {deleteLoadingId === item.id ? 'Deleting…' : 'Delete'}
-                                    </button>
-                                  </div>
-                                )}
                               </div>
-                            );
-                          })}
+                              <div className="text-right">
+                                <div>
+                                  Qty:{' '}
+                                  <span className="font-medium">
+                                    {item.quantity}
+                                  </span>
+                                </div>
+                                <div className="mt-0.5">
+                                  <StatusBadge status={item.status} />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                         <div className="mt-1 text-[11px] text-gray-400">
                           {new Date(g.created_at).toLocaleString()}
                         </div>
-                        {/* Each subticket has actions above */}
+                        {isManagerView && base && (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingTicket(base)}
+                              className="flex-1 rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                if (!firstId) return;
+                                void handleDelete(e, firstId);
+                              }}
+                              disabled={deleteLoadingId === firstId}
+                              className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+                            >
+                              {deleteLoadingId === firstId ? 'Deleting…' : 'Delete'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -937,6 +966,8 @@ export default function TicketsPage() {
                   {groupTickets(ticketsB2C).map((g) => {
                     const statuses = Array.from(new Set(g.items.map((i) => i.status)));
                     const singleStatus = statuses.length === 1 ? statuses[0] : null;
+                    const firstId = g.items[0]?.id;
+                    const base = firstId ? ticketsB2C.find((t) => t.id === firstId) : null;
                     return (
                       <div
                         key={g.id}
@@ -957,62 +988,53 @@ export default function TicketsPage() {
                         <div className="mt-1 text-[11px] text-gray-500">
                           {new Date(g.delivery_date).toLocaleDateString()}
                         </div>
-                        <div className="mt-2 space-y-2 text-[11px] text-gray-600">
-                          {g.items.map((item) => {
-                            const baseItem = ticketsB2C.find((t) => t.id === item.id);
-                            return (
-                              <div key={item.id} className="rounded-md border border-gray-100 bg-gray-50 px-2 py-2">
-                                <div className="flex justify-between items-start gap-2">
-                                  <div>
-                                    <div className="font-medium text-gray-800">{item.product_name}</div>
-                                    <div className="text-[10px] text-gray-500">
-                                      {item.reason.length > 40
-                                        ? `${item.reason.slice(0, 40)}…`
-                                        : item.reason}
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div>
-                                      Qty: <span className="font-medium">{item.quantity}</span>
-                                    </div>
-                                    <div className="mt-0.5">
-                                      <StatusBadge status={item.status} />
-                                    </div>
-                                  </div>
+                        <div className="mt-2 space-y-1 text-[11px] text-gray-600">
+                          {g.items.map((item) => (
+                            <div key={item.id} className="flex justify-between items-start gap-2">
+                              <div>
+                                <div>{item.product_name}</div>
+                                <div className="text-[10px] text-gray-500">
+                                  {item.reason.length > 40
+                                    ? `${item.reason.slice(0, 40)}…`
+                                    : item.reason}
                                 </div>
-                                {isManagerView && baseItem && (
-                                  <div className="mt-2 flex gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingTicket(baseItem);
-                                      }}
-                                      className="flex-1 rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        void handleDelete(e, item.id);
-                                      }}
-                                      disabled={deleteLoadingId === item.id}
-                                      className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
-                                    >
-                                      {deleteLoadingId === item.id ? 'Deleting…' : 'Delete'}
-                                    </button>
-                                  </div>
-                                )}
                               </div>
-                            );
-                          })}
+                              <div className="text-right">
+                                <div>
+                                  Qty: <span className="font-medium">{item.quantity}</span>
+                                </div>
+                                <div className="mt-0.5">
+                                  <StatusBadge status={item.status} />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                         <div className="mt-1 text-[11px] text-gray-400">
                           {new Date(g.created_at).toLocaleString()}
                         </div>
-                        {/* Each subticket has actions above */}
+                        {isManagerView && base && (
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingTicket(base)}
+                              className="flex-1 rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                if (!firstId) return;
+                                void handleDelete(e, firstId);
+                              }}
+                              disabled={deleteLoadingId === firstId}
+                              className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+                            >
+                              {deleteLoadingId === firstId ? 'Deleting…' : 'Delete'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1155,7 +1177,6 @@ export default function TicketsPage() {
                                             <th className="px-3 py-1 text-left">Status</th>
                                             <th className="px-3 py-1 text-left">Creator reason</th>
                                             <th className="px-3 py-1 text-left">Admin remark</th>
-                                            {isManagerView && <th className="px-3 py-1 text-left">Action</th>}
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
@@ -1196,33 +1217,6 @@ export default function TicketsPage() {
                                                     item.rejection_remarks ??
                                                     '–'}
                                               </td>
-                                              {isManagerView && (
-                                                <td className="px-3 py-1" onClick={(e) => e.stopPropagation()}>
-                                                  <div className="flex gap-1">
-                                                    <button
-                                                      type="button"
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        const base = ticketsB2C.find((t) => t.id === item.id);
-                                                        if (base) setEditingTicket(base);
-                                                      }}
-                                                      className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
-                                                    >
-                                                      Edit
-                                                    </button>
-                                                    <button
-                                                      type="button"
-                                                      onClick={(e) => {
-                                                        void handleDelete(e, item.id);
-                                                      }}
-                                                      disabled={deleteLoadingId === item.id}
-                                                      className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
-                                                    >
-                                                      {deleteLoadingId === item.id ? '…' : 'Delete'}
-                                                    </button>
-                                                  </div>
-                                                </td>
-                                              )}
                                             </tr>
                                           ))}
                                         </tbody>
