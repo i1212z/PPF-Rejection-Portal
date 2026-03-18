@@ -388,6 +388,13 @@ export default function DashboardPage() {
             {loading ? '…' : totalB2B}
           </div>
           <p className="mt-1 text-[11px] text-gray-500">Sum of approved quantities (confirmed rejections)</p>
+          <p className="mt-1 text-[11px] text-sky-700">
+            <span className="font-semibold">By unit:</span>{' '}
+            {Object.entries(rejectedByUnit?.B2B ?? {})
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([u, v]) => `${v} ${u}`)
+              .join(' • ') || '–'}
+          </p>
         </Card>
         <Card
           title="B2C confirmed rejected qty"
@@ -398,6 +405,13 @@ export default function DashboardPage() {
             {loading ? '…' : totalB2C}
           </div>
           <p className="mt-1 text-[11px] text-gray-500">Sum of approved quantities (confirmed rejections)</p>
+          <p className="mt-1 text-[11px] text-rose-700">
+            <span className="font-semibold">By unit:</span>{' '}
+            {Object.entries(rejectedByUnit?.B2C ?? {})
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([u, v]) => `${v} ${u}`)
+              .join(' • ') || '–'}
+          </p>
         </Card>
         <Card
           title="Pending approvals"
