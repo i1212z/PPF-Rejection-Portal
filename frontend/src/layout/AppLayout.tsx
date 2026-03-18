@@ -86,11 +86,11 @@ export default function AppLayout() {
       <aside className="hidden lg:flex lg:w-60 lg:flex-col bg-gray-900 text-gray-100">
         <div className="px-4 py-4 border-b border-gray-800 flex items-center gap-3">
           <div className="h-9 w-9 rounded-xl bg-indigo-600 flex items-center justify-center text-xs font-semibold">
-            PPF
+            CLS
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold">Rejection Control</span>
-            <span className="text-[11px] text-gray-400">Daily loss governance</span>
+            <span className="text-sm font-semibold">Complaint Log System</span>
+            <span className="text-[11px] text-gray-400">Daily complaint tracking</span>
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 text-sm">

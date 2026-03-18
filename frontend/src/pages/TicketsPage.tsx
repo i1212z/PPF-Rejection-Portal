@@ -471,6 +471,11 @@ export default function TicketsPage() {
                                           <th className="px-3 py-1 text-left">
                                             Admin remark
                                           </th>
+                                          {isManagerView && (
+                                            <th className="px-3 py-1 text-left">
+                                              Action
+                                            </th>
+                                          )}
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-gray-100">
@@ -517,6 +522,36 @@ export default function TicketsPage() {
                                                   item.rejection_remarks ??
                                                   '–'}
                                             </td>
+                                            {isManagerView && (
+                                              <td
+                                                className="px-3 py-1"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <div className="flex gap-1">
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      const base = tickets.find((t) => t.id === item.id);
+                                                      if (base) setEditingTicket(base);
+                                                    }}
+                                                    className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
+                                                  >
+                                                    Edit
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      void handleDelete(e, item.id);
+                                                    }}
+                                                    disabled={deleteLoadingId === item.id}
+                                                    className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                                                  >
+                                                    {deleteLoadingId === item.id ? '…' : 'Delete'}
+                                                  </button>
+                                                </div>
+                                              </td>
+                                            )}
                                           </tr>
                                         ))}
                                       </tbody>
@@ -781,6 +816,7 @@ export default function TicketsPage() {
                                           <th className="px-3 py-1 text-left">Status</th>
                                           <th className="px-3 py-1 text-left">Creator reason</th>
                                           <th className="px-3 py-1 text-left">Admin remark</th>
+                                          {isManagerView && <th className="px-3 py-1 text-left">Action</th>}
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-gray-100">
@@ -821,6 +857,33 @@ export default function TicketsPage() {
                                                   item.rejection_remarks ??
                                                   '–'}
                                             </td>
+                                            {isManagerView && (
+                                              <td className="px-3 py-1" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex gap-1">
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      const base = ticketsB2B.find((t) => t.id === item.id);
+                                                      if (base) setEditingTicket(base);
+                                                    }}
+                                                    className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
+                                                  >
+                                                    Edit
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      void handleDelete(e, item.id);
+                                                    }}
+                                                    disabled={deleteLoadingId === item.id}
+                                                    className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                                                  >
+                                                    {deleteLoadingId === item.id ? '…' : 'Delete'}
+                                                  </button>
+                                                </div>
+                                              </td>
+                                            )}
                                           </tr>
                                         ))}
                                       </tbody>
