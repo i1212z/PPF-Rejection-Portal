@@ -32,8 +32,10 @@ interface TicketGroup {
     id: string;
     product_name: string;
     quantity: number;
+    uom?: string | null;
     reason: string;
     status: TicketStatus;
+    created_by?: string;
     approval_remarks?: string | null;
     rejection_remarks?: string | null;
   }[];
@@ -66,7 +68,8 @@ export default function TicketsPage() {
     if (!t || !user) return false;
     // B2B/B2C: only before approval decision. Manager/Admin: anytime.
     if (isManagerView) return true;
-    return t.status === 'pending' && t.created_by === user.id;
+    // Some older records/pages may not include created_by reliably; backend enforces too.
+    return t.status === 'pending' && (!t.created_by || t.created_by === user.id);
   };
 
   const groupTickets = (list: Ticket[]): TicketGroup[] => {
@@ -87,8 +90,10 @@ export default function TicketsPage() {
         id: t.id,
         product_name: t.product_name,
         quantity: t.quantity,
+        uom: t.uom,
         reason: t.reason,
         status: t.status,
+        created_by: t.created_by,
         approval_remarks: t.approval_remarks,
         rejection_remarks: t.rejection_remarks,
       });
@@ -334,7 +339,23 @@ export default function TicketsPage() {
                     </div>
                     <div className="mt-2 space-y-2 text-[11px] text-gray-600">
                       {g.items.map((item) => {
-                        const base = tickets.find((t) => t.id === item.id);
+                        const base =
+                          tickets.find((t) => t.id === item.id) ??
+                          ({
+                            id: item.id,
+                            product_name: item.product_name,
+                            quantity: item.quantity,
+                            uom: (item as any).uom ?? null,
+                            reason: item.reason,
+                            delivery_batch: g.delivery_batch,
+                            delivery_date: g.delivery_date,
+                            channel: g.channel,
+                            status: item.status,
+                            created_at: g.created_at,
+                            created_by: (item as any).created_by ?? '',
+                            approval_remarks: item.approval_remarks,
+                            rejection_remarks: item.rejection_remarks,
+                          } as Ticket);
                         const canMutate = canMutateTicket(base);
                         return (
                           <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
@@ -560,8 +581,24 @@ export default function TicketsPage() {
                                             </td>
                                             <td className="px-3 py-1" onClick={(e) => e.stopPropagation()}>
                                               {(() => {
-                                                const base = tickets.find((t) => t.id === item.id);
-                                                const canMutate = canMutateTicket(base);
+                        const base =
+                          tickets.find((t) => t.id === item.id) ??
+                          ({
+                            id: item.id,
+                            product_name: item.product_name,
+                            quantity: item.quantity,
+                            uom: (item as any).uom ?? null,
+                            reason: item.reason,
+                            delivery_batch: g.delivery_batch,
+                            delivery_date: g.delivery_date,
+                            channel: g.channel,
+                            status: item.status,
+                            created_at: g.created_at,
+                            created_by: (item as any).created_by ?? '',
+                            approval_remarks: item.approval_remarks,
+                            rejection_remarks: item.rejection_remarks,
+                          } as Ticket);
+                        const canMutate = canMutateTicket(base);
                                                 if (!canMutate || !base) return <span className="text-gray-400">–</span>;
                                                 return (
                                                   <div className="flex gap-1">
