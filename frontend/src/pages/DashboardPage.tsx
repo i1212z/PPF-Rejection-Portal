@@ -206,6 +206,8 @@ export default function DashboardPage() {
   const [tallyPostedIds, setTallyPostedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showB2BConfirmedBreakdown, setShowB2BConfirmedBreakdown] = useState(false);
+  const [showB2CConfirmedBreakdown, setShowB2CConfirmedBreakdown] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -237,7 +239,7 @@ export default function DashboardPage() {
 
   const channelFilter = user?.role === 'b2b' ? 'B2B' : user?.role === 'b2c' ? 'B2C' : null;
 
-  const { totalTickets, totalB2B, totalB2C, pendingCount, chartData, pieData, recentGroups, globalDisplayByKey, globalItemLineByItemId, approvedVsRejectedData, rejectedByUnit, tallyPostedCount, tallyPendingCount } =
+  const { totalTickets, pendingCount, chartData, pieData, recentGroups, globalDisplayByKey, globalItemLineByItemId, approvedVsRejectedData, rejectedByUnit, tallyPostedCount, tallyPendingCount } =
     useMemo(() => {
       const total = tickets.length;
       let pending = 0;
@@ -332,8 +334,6 @@ export default function DashboardPage() {
 
       return {
         totalTickets: total,
-        totalB2B: confirmedQtyB2B,
-        totalB2C: confirmedQtyB2C,
         pendingCount: pending,
         chartData: filterByChannel(chart),
         pieData: filterByChannel(pie),
@@ -384,34 +384,70 @@ export default function DashboardPage() {
           subtitle="Across all B2B customers"
           className="border-t-4 border-t-sky-400"
         >
-          <div className="text-2xl font-semibold text-gray-900">
-            {loading ? '…' : totalB2B}
-          </div>
-          <p className="mt-1 text-[11px] text-gray-500">Sum of approved quantities (confirmed rejections)</p>
-          <p className="mt-1 text-[11px] text-sky-700">
-            <span className="font-semibold">By unit:</span>{' '}
-            {Object.entries(rejectedByUnit?.B2B ?? {})
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([u, v]) => `${v} ${u}`)
-              .join(' • ') || '–'}
-          </p>
+          <button
+            type="button"
+            onClick={() => setShowB2BConfirmedBreakdown((v) => !v)}
+            className="w-full text-left"
+          >
+            <div className="text-2xl font-semibold text-gray-900">
+              {loading ? '…' : showB2BConfirmedBreakdown ? 'By unit' : 'Tap to view'}
+            </div>
+            <p className="mt-1 text-[11px] text-gray-500">
+              Approved = confirmed rejections. Totals are shown per unit (no KG+GM mixing).
+            </p>
+            {showB2BConfirmedBreakdown && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {Object.entries(rejectedByUnit?.B2B ?? {})
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([u, v]) => (
+                    <span
+                      key={u}
+                      className="inline-flex items-center rounded-full bg-sky-50 border border-sky-100 px-3 py-1 text-[11px] font-semibold text-sky-800"
+                    >
+                      {v} {u}
+                    </span>
+                  ))}
+                {Object.keys(rejectedByUnit?.B2B ?? {}).length === 0 && (
+                  <span className="text-[11px] text-gray-500">No confirmed rejections yet.</span>
+                )}
+              </div>
+            )}
+          </button>
         </Card>
         <Card
           title="B2C confirmed rejected qty"
           subtitle="Across all B2C orders"
           className="border-t-4 border-t-rose-400"
         >
-          <div className="text-2xl font-semibold text-gray-900">
-            {loading ? '…' : totalB2C}
-          </div>
-          <p className="mt-1 text-[11px] text-gray-500">Sum of approved quantities (confirmed rejections)</p>
-          <p className="mt-1 text-[11px] text-rose-700">
-            <span className="font-semibold">By unit:</span>{' '}
-            {Object.entries(rejectedByUnit?.B2C ?? {})
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([u, v]) => `${v} ${u}`)
-              .join(' • ') || '–'}
-          </p>
+          <button
+            type="button"
+            onClick={() => setShowB2CConfirmedBreakdown((v) => !v)}
+            className="w-full text-left"
+          >
+            <div className="text-2xl font-semibold text-gray-900">
+              {loading ? '…' : showB2CConfirmedBreakdown ? 'By unit' : 'Tap to view'}
+            </div>
+            <p className="mt-1 text-[11px] text-gray-500">
+              Approved = confirmed rejections. Totals are shown per unit (no KG+GM mixing).
+            </p>
+            {showB2CConfirmedBreakdown && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {Object.entries(rejectedByUnit?.B2C ?? {})
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([u, v]) => (
+                    <span
+                      key={u}
+                      className="inline-flex items-center rounded-full bg-rose-50 border border-rose-100 px-3 py-1 text-[11px] font-semibold text-rose-800"
+                    >
+                      {v} {u}
+                    </span>
+                  ))}
+                {Object.keys(rejectedByUnit?.B2C ?? {}).length === 0 && (
+                  <span className="text-[11px] text-gray-500">No confirmed rejections yet.</span>
+                )}
+              </div>
+            )}
+          </button>
         </Card>
         <Card
           title="Pending approvals"
