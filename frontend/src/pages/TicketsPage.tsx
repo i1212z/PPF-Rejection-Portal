@@ -64,10 +64,9 @@ export default function TicketsPage() {
 
   const canMutateTicket = (t: Ticket | null | undefined) => {
     if (!t || !user) return false;
-    // Edit/Delete allowed only while ticket is pending (before approval decision).
-    if (t.status !== 'pending') return false;
+    // B2B/B2C: only before approval decision. Manager/Admin: anytime.
     if (isManagerView) return true;
-    return t.created_by === user.id;
+    return t.status === 'pending' && t.created_by === user.id;
   };
 
   const groupTickets = (list: Ticket[]): TicketGroup[] => {
