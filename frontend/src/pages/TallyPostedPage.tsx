@@ -243,7 +243,7 @@ export default function TallyPostedPage() {
   }, [postedTickets]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full">
       <div>
         <h2 className="text-lg font-semibold text-gray-900">Posted (Tally)</h2>
         <p className="text-sm text-gray-500">
@@ -256,7 +256,7 @@ export default function TallyPostedPage() {
         ) : groups.length === 0 ? (
           <p className="text-sm text-gray-500 py-4">No posted records yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
             <table className="min-w-full text-xs">
               <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                 <tr>
@@ -402,7 +402,7 @@ export default function TallyPostedPage() {
         ) : cnPostedRows.length === 0 ? (
           <p className="text-sm text-gray-500 py-4">No credit notes posted to Tally yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
             <table className="min-w-full text-xs">
               <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                 <tr>

@@ -149,7 +149,7 @@ function TicketRow({
               <div className="font-medium text-gray-700">
                 Products on this ticket (Ticket ID: {displayId})
               </div>
-              <div className="border border-gray-200 rounded-md bg-white">
+              <div className="border border-gray-200 rounded-md bg-white overflow-x-auto max-w-full min-w-0">
                 <table className="min-w-full text-[11px]">
                   <thead className="bg-gray-50 text-gray-500 uppercase">
                     <tr>
@@ -348,25 +348,25 @@ export default function DashboardPage() {
     }, [tickets, channelFilter, tallyPostedIds]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-gray-900 tracking-tight">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0">
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">
             Dashboard
           </h2>
           <p className="text-sm text-gray-500">
             Rejection overview for {user?.role} across B2B and B2C.
           </p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700">
+        <div className="inline-flex w-full md:w-auto justify-center md:justify-start items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-2 md:py-1.5 text-xs text-emerald-700 shrink-0">
           <span className="h-2 w-2 rounded-full bg-emerald-500" />
           Live rejection tracking
         </div>
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 min-w-0">
         <Card
           title="Total tickets"
           subtitle="All B2B & B2C rejection tickets"
@@ -531,19 +531,19 @@ export default function DashboardPage() {
       </Card>
 
       {/* Overall ticket value chart */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 xl:gap-6 min-w-0">
         <Card
         title="Confirmed rejected quantity"
         subtitle="This week — confirmed (approved) quantity by channel"
           rightSlot={
-            <span className="rounded-full border border-gray-200 px-3 py-1 text-[11px] text-gray-600 bg-gray-50">
+            <span className="rounded-full border border-gray-200 px-3 py-1 text-[11px] text-gray-600 bg-gray-50 inline-block w-full sm:w-auto text-center">
               This week
             </span>
           }
-          className="xl:col-span-2 min-h-[280px]"
+          className="xl:col-span-2 min-h-[280px] min-w-0"
         >
           {chartData && chartData.length > 0 && chartData.some((c) => (c?.value ?? 0) > 0) ? (
-            <div className="w-full" style={{ minHeight: 240, height: 240 }}>
+            <div className="w-full min-w-0 max-w-full" style={{ minHeight: 240, height: 240 }}>
               <RejectionValueVsQuantityChart data={chartData} />
             </div>
           ) : (
@@ -555,9 +555,9 @@ export default function DashboardPage() {
         <Card
           title="Channel distribution"
           subtitle="Share of total ticket value"
-          className="min-h-[280px]"
+          className="min-h-[280px] min-w-0"
         >
-          <div className="w-full" style={{ minHeight: 240, height: 240 }}>
+          <div className="w-full min-w-0 max-w-full" style={{ minHeight: 240, height: 240 }}>
             {pieData.length > 0 ? (
               <ChannelDistributionPie data={pieData} />
             ) : (
@@ -590,8 +590,8 @@ export default function DashboardPage() {
         ) : recentGroups.length === 0 ? (
           <div className="text-sm text-gray-500">No tickets yet.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
+            <table className="min-w-full text-xs sm:text-sm">
               <thead className="bg-gray-50 text-xs font-medium text-gray-500 uppercase">
                 <tr>
                   <th className="px-4 py-2 text-left">Ticket ID</th>

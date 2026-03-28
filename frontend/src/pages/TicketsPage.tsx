@@ -301,20 +301,20 @@ export default function TicketsPage() {
   }, [statusFilter]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="space-y-4 min-w-0 max-w-full">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900">Tickets register</h2>
           <p className="text-sm text-gray-500">
             Channel-filtered view of all rejection tickets you have access to.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs">
-          <label className="text-gray-500">Status</label>
+        <div className="flex flex-col gap-1 w-full md:w-auto md:flex-row md:items-center text-xs shrink-0">
+          <label className="text-gray-500 md:shrink-0">Status</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as TicketStatus | 'all')}
-            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800"
+            className="w-full md:w-auto md:min-w-[9rem] rounded-md border border-gray-200 bg-white px-2 py-2 md:py-1 text-xs text-gray-800"
           >
             <option value="all">All</option>
             <option value="pending">Pending</option>
@@ -443,7 +443,7 @@ export default function TicketsPage() {
               </div>
 
               {/* Desktop table - grouped with expandable product details */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden md:block w-full min-w-0 overflow-x-auto overscroll-x-contain">
                 <table className="min-w-full text-xs">
                   <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                     <tr>
@@ -844,7 +844,7 @@ export default function TicketsPage() {
                 </div>
 
                 {/* Desktop table - grouped for B2B, clickable expandable rows */}
-                <div className="hidden md:block overflow-x-auto">
+                <div className="hidden md:block w-full min-w-0 overflow-x-auto overscroll-x-contain">
                   <table className="min-w-full text-xs">
                     <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                       <tr>
@@ -1203,7 +1203,7 @@ export default function TicketsPage() {
                 </div>
 
                 {/* Desktop table - grouped for B2C, clickable expandable rows */}
-                <div className="hidden md:block overflow-x-auto">
+                <div className="hidden md:block w-full min-w-0 overflow-x-auto overscroll-x-contain">
                   <table className="min-w-full text-xs">
                     <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                       <tr>
@@ -1485,11 +1485,11 @@ export default function TicketsPage() {
                 <label className="block text-xs font-medium text-gray-700 mb-1">Creator reason</label>
                 <textarea name="reason" defaultValue={editingTicket.reason} className="w-full rounded border border-gray-200 px-3 py-2 text-sm min-h-[60px]" required />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setEditingTicket(null)} className="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2">
+                <button type="button" onClick={() => setEditingTicket(null)} className="w-full sm:w-auto rounded border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
                   Cancel
                 </button>
-                <button type="submit" className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500">
+                <button type="submit" className="w-full sm:w-auto rounded bg-indigo-600 px-3 py-2 text-xs text-white hover:bg-indigo-500">
                   Save
                 </button>
               </div>

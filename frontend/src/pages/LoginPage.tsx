@@ -26,9 +26,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-[#321b8f] via-[#6b23d9] to-[#a036ff]">
-      <div className="w-full max-w-md bg-white/95 border border-white/40 rounded-2xl px-6 py-8 shadow-2xl shadow-violet-900/40">
-        <div className="flex items-center gap-3 mb-4">
+    <div className="min-h-screen min-w-0 flex items-center justify-center px-4 py-6 bg-gradient-to-br from-[#321b8f] via-[#6b23d9] to-[#a036ff]">
+      <div className="w-full max-w-md min-w-0 bg-white/95 border border-white/40 rounded-2xl px-4 py-6 sm:px-6 sm:py-8 shadow-2xl shadow-violet-900/40">
+        <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center">
           <div className="h-9 w-9 rounded-xl bg-primary-100 flex items-center justify-center text-xs font-semibold text-primary-600 border border-primary-200">
             CLS
           </div>
@@ -79,7 +79,7 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
-        <div className="mt-4 text-[11px] text-slate-500">
+        <div className="mt-4 text-[11px] text-slate-500 break-words">
           Use <span className="font-mono">b2b@ppf.local</span>,{' '}
           <span className="font-mono">b2c@ppf.local</span>,{' '}
           <span className="font-mono">manager@ppf.local</span>,{' '}

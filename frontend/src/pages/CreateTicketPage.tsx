@@ -101,15 +101,15 @@ export default function CreateTicketPage() {
   };
 
   return (
-    <div className="max-w-3xl">
-      <div className="flex items-center justify-between mb-4">
-        <div>
+    <div className="w-full max-w-3xl min-w-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4 min-w-0">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900">Create rejection ticket</h2>
           <p className="text-sm text-gray-500">
             Capture quantity and reason for today&apos;s rejections.
           </p>
         </div>
-        <div className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] text-gray-600">
+        <div className="rounded-full border border-gray-200 bg-gray-50 px-3 py-2 sm:py-1 text-[11px] text-gray-600 w-full sm:w-auto text-center sm:text-left shrink-0">
           Delivery frequency: every 2 days
         </div>
       </div>
@@ -340,7 +340,7 @@ export default function CreateTicketPage() {
                     </div>
                   ))}
                 </div>
-                <div className="px-3 py-2 flex items-center justify-between border-t border-gray-200">
+                <div className="px-3 py-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-gray-200">
                   <button
                     type="button"
                     onClick={() =>
@@ -349,11 +349,11 @@ export default function CreateTicketPage() {
                         { productName: '', quantity: '', uom: 'EA', reason: '' },
                       ])
                     }
-                    className="rounded-md bg-indigo-50 px-3 py-1.5 text-[11px] text-indigo-700 hover:bg-indigo-100"
+                    className="w-full sm:w-auto rounded-md bg-indigo-50 px-3 py-2 sm:py-1.5 text-[11px] text-indigo-700 hover:bg-indigo-100"
                   >
                     + Add product
                   </button>
-                  <div className="flex flex-col items-end text-xs text-gray-700">
+                  <div className="flex flex-col items-stretch sm:items-end text-xs text-gray-700 w-full sm:w-auto text-left sm:text-right">
                     <span className="font-semibold">
                       Total lines: {lineItems.filter((i) => i.productName).length}
                     </span>
@@ -371,18 +371,18 @@ export default function CreateTicketPage() {
             {error}
           </div>
         )}
-        <div className="flex justify-end gap-2 pt-2">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2">
           <button
             type="button"
             onClick={() => navigate('/tickets')}
-            className="rounded-md border border-gray-300 px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            className="w-full sm:w-auto rounded-md border border-gray-300 px-4 py-2.5 sm:py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 text-xs font-medium text-white"
+            className="w-full sm:w-auto rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2.5 sm:py-2 text-xs font-medium text-white"
           >
             {submitting ? 'Submitting…' : 'Raise Ticket'}
           </button>

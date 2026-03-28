@@ -32,7 +32,7 @@ export default function AdminPanelPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0 max-w-full">
       <div>
         <h2 className="text-lg font-semibold text-gray-900 mb-1">Admin Panel</h2>
         <p className="text-sm text-gray-500">
@@ -54,7 +54,7 @@ export default function AdminPanelPage() {
             type="button"
             onClick={() => void handleResetDb()}
             disabled={resetting}
-            className="rounded-md bg-amber-600 hover:bg-amber-500 disabled:opacity-50 px-4 py-2 text-sm font-medium text-white"
+            className="w-full md:w-auto rounded-md bg-amber-600 hover:bg-amber-500 disabled:opacity-50 px-4 py-2.5 md:py-2 text-sm font-medium text-white"
           >
             {resetting ? 'Resetting…' : 'Reset database'}
           </button>
@@ -66,25 +66,25 @@ export default function AdminPanelPage() {
         className="text-sm"
       >
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <div className="text-sm text-gray-900">High-value alert threshold</div>
               <div className="text-xs text-gray-500">
                 Amount above which managers are notified immediately.
               </div>
             </div>
-            <div className="rounded-md border border-gray-200 px-3 py-1 text-xs text-gray-700 bg-gray-50">
+            <div className="rounded-md border border-gray-200 px-3 py-2 sm:py-1 text-xs text-gray-700 bg-gray-50 w-full sm:w-auto text-center sm:text-left shrink-0">
               Coming soon
             </div>
           </div>
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <div className="text-sm text-gray-900">Notifications</div>
               <div className="text-xs text-gray-500">
                 Email / WhatsApp channels for manager alerts.
               </div>
             </div>
-            <div className="rounded-md border border-gray-200 px-3 py-1 text-xs text-gray-700 bg-gray-50">
+            <div className="rounded-md border border-gray-200 px-3 py-2 sm:py-1 text-xs text-gray-700 bg-gray-50 w-full sm:w-auto text-center sm:text-left shrink-0">
               Coming soon
             </div>
           </div>

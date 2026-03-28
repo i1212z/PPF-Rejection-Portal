@@ -86,15 +86,15 @@ export default function CreditNoteApprovalsPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="space-y-4 min-w-0 max-w-full">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900">Credit note approvals</h2>
           <p className="text-sm text-gray-500">
             Approve or reject pending B2B credit notes (separate from rejection tickets).
           </p>
         </div>
-        <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] text-amber-700">
+        <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-2 md:py-1 text-[11px] text-amber-700 w-full md:w-auto text-center md:text-left shrink-0">
           {pending.length || 'No'} pending
         </div>
       </div>
@@ -144,7 +144,7 @@ export default function CreditNoteApprovalsPage() {
               })}
             </div>
 
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden md:block w-full min-w-0 overflow-x-auto overscroll-x-contain">
               <table className="min-w-full text-xs">
                 <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                   <tr>

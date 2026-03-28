@@ -102,9 +102,9 @@ export default function DuePaidCreditNotesPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
+    <div className="space-y-4 min-w-0 max-w-full">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900">Paid credit notes</h2>
           <p className="text-sm text-gray-500">
             Settled items (aging frozen at paid time). Move back to open if needed.
@@ -113,7 +113,7 @@ export default function DuePaidCreditNotesPage() {
         <button
           type="button"
           onClick={() => navigate('/due/credit-notes')}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
+          className="w-full sm:w-auto rounded-md border border-slate-300 bg-white px-3 py-2.5 sm:py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50 shrink-0"
         >
           Back to open
         </button>
@@ -129,7 +129,7 @@ export default function DuePaidCreditNotesPage() {
         ) : rows.length === 0 ? (
           <p className="text-gray-500 py-4">No paid credit notes yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
             <table className="min-w-full text-xs border-collapse">
               <thead>
                 <tr className="bg-emerald-900 text-white text-[10px] uppercase tracking-wide">

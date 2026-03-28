@@ -184,18 +184,18 @@ export default function CreditNotesPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div className="space-y-4 min-w-0 max-w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Credit notes register</h2>
           <p className="text-sm text-gray-500">B2B credit notes (separate from rejection tickets).</p>
         </div>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-col gap-1 w-full sm:w-auto sm:flex-row sm:items-center text-xs shrink-0">
           <label className="text-gray-500">Status</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as CNStatus | 'all')}
-            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800"
+            className="w-full sm:w-auto sm:min-w-[9rem] rounded-md border border-gray-200 bg-white px-2 py-2 sm:py-1 text-xs text-gray-800"
           >
             <option value="all">All</option>
             <option value="pending">Pending</option>
@@ -274,7 +274,7 @@ export default function CreditNotesPage() {
               })}
             </div>
 
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden md:block w-full min-w-0 overflow-x-auto overscroll-x-contain">
               <table className="min-w-full text-xs">
                 <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                   <tr>
@@ -412,15 +412,15 @@ export default function CreditNotesPage() {
                   required
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2">
                 <button
                   type="button"
                   onClick={() => setEditing(null)}
-                  className="rounded border border-gray-300 px-3 py-1.5 text-xs"
+                  className="w-full sm:w-auto rounded border border-gray-300 px-3 py-2 text-xs"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white">
+                <button type="submit" className="w-full sm:w-auto rounded bg-indigo-600 px-3 py-2 text-xs text-white">
                   Save
                 </button>
               </div>

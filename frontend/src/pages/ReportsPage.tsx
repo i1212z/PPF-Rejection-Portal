@@ -504,26 +504,26 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="space-y-6 min-w-0 max-w-full">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between min-w-0">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900">Reports</h2>
           <p className="text-sm text-gray-500">
             Rejection tickets (B2B/B2C), credit notes (approved & rejected), charts, and CSV/Excel export.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto shrink-0">
           <button
             onClick={exportCsv}
             disabled={loading || !hasReportData}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="w-full sm:w-auto rounded-md border border-gray-300 px-3 py-2.5 sm:py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             Export CSV
           </button>
           <button
             onClick={exportExcel}
             disabled={loading || !hasReportData}
-            className="rounded-md bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+            className="w-full sm:w-auto rounded-md bg-indigo-600 hover:bg-indigo-500 px-3 py-2.5 sm:py-1.5 text-xs text-white disabled:opacity-50"
           >
             Export Excel
           </button>
@@ -536,23 +536,23 @@ export default function ReportsPage() {
           subtitle="Filters tickets and credit notes by delivery date (same as API). Managers and admins only."
           className="text-sm"
         >
-          <div className="flex flex-wrap items-end gap-4">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 sm:gap-4">
+            <div className="w-full sm:w-auto sm:min-w-[10rem]">
               <label className="block text-xs font-medium text-gray-700 mb-1">From</label>
               <input
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="rounded border border-gray-200 px-3 py-2 text-sm"
+                className="w-full rounded border border-gray-200 px-3 py-2 text-sm min-w-0"
               />
             </div>
-            <div>
+            <div className="w-full sm:w-auto sm:min-w-[10rem]">
               <label className="block text-xs font-medium text-gray-700 mb-1">To</label>
               <input
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className="rounded border border-gray-200 px-3 py-2 text-sm"
+                className="w-full rounded border border-gray-200 px-3 py-2 text-sm min-w-0"
               />
             </div>
             <button
@@ -561,7 +561,7 @@ export default function ReportsPage() {
                 setFromDate(defaultFromDateStr());
                 setToDate(defaultToDateStr());
               }}
-              className="rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+              className="w-full sm:w-auto rounded-md border border-gray-300 px-3 py-2.5 sm:py-2 text-xs text-gray-700 hover:bg-gray-50"
             >
               Last 30 days
             </button>
@@ -587,7 +587,7 @@ export default function ReportsPage() {
                   {groups.length === 0 ? (
                     <p className="text-xs text-gray-500 py-2">No records.</p>
                   ) : (
-                    <div className="overflow-x-auto">
+                    <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
                       <table className="min-w-full text-xs">
                         <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                           <tr>
@@ -743,7 +743,7 @@ export default function ReportsPage() {
                 {sec.notes.length === 0 ? (
                   <p className="text-xs text-gray-500 py-2">No records.</p>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
                     <table className="min-w-full text-xs">
                       <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                         <tr>
@@ -798,9 +798,9 @@ export default function ReportsPage() {
           <Card
             title="Daily quantity (tickets)"
             subtitle={dailyChartSubtitle}
-            className="min-h-[280px]"
+            className="min-h-[280px] min-w-0"
           >
-            <div className="w-full" style={{ minHeight: 256, height: 256 }}>
+            <div className="w-full min-w-0 max-w-full" style={{ minHeight: 256, height: 256 }}>
               {dailyQtyData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={dailyQtyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -817,16 +817,16 @@ export default function ReportsPage() {
             </div>
           </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 min-w-0">
             <Card
               title="B2B vs B2C comparison"
               subtitle={channelChartSubtitle}
-              className="min-h-[280px]"
+              className="min-h-[280px] min-w-0"
             >
-              <div className="w-full" style={{ minHeight: 256, height: 256 }}>
+              <div className="w-full min-w-0 max-w-full" style={{ minHeight: 256, height: 256 }}>
                 {channelComparisonData.some((d) => d.value > 0) ? (
                   <>
-                    <div className="w-full" style={{ minHeight: 128, height: 128 }}>
+                    <div className="w-full min-w-0" style={{ minHeight: 128, height: 128 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={channelComparisonData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -837,7 +837,7 @@ export default function ReportsPage() {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="w-full mt-2" style={{ minHeight: 128, height: 128 }}>
+                    <div className="w-full min-w-0 max-w-full mt-2" style={{ minHeight: 128, height: 128 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -869,9 +869,9 @@ export default function ReportsPage() {
             <Card
               title="Approved vs Rejected quantity"
               subtitle={approvalChartSubtitle}
-              className="min-h-[280px]"
+              className="min-h-[280px] min-w-0"
             >
-              <div className="w-full" style={{ minHeight: 256, height: 256 }}>
+              <div className="w-full min-w-0 max-w-full" style={{ minHeight: 256, height: 256 }}>
                 {approvalRejectionData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={approvalRejectionData} layout="vertical" margin={{ top: 8, right: 8, left: 80, bottom: 0 }}>

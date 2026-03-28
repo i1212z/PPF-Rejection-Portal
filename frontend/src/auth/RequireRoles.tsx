@@ -8,7 +8,9 @@ export function RequireRoles({ roles, children }: { roles: Role[]; children: Rea
   const { user, isInitialized } = useAuth();
   if (!isInitialized) {
     return (
-      <div className="min-h-[40vh] flex items-center justify-center text-sm text-gray-500">Loading…</div>
+      <div className="min-h-[40vh] min-w-0 px-4 flex items-center justify-center text-sm text-gray-500 text-center">
+        Loading…
+      </div>
     );
   }
   if (!user || !roles.includes(user.role)) {

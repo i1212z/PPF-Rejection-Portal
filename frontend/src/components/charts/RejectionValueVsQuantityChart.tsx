@@ -17,7 +17,7 @@ export function RejectionValueVsQuantityChart({
 }: RejectionValueVsQuantityChartProps) {
   return (
     <div
-      className="w-full"
+      className="w-full min-w-0 max-w-full"
       style={{ minHeight: 200, height: 240, minWidth: 0 }}
     >
       <ResponsiveContainer width="100%" height="100%">

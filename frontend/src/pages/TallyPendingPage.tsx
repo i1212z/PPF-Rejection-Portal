@@ -235,7 +235,7 @@ export default function TallyPendingPage() {
   }, [pendingTickets]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full">
       <div>
         <h2 className="text-lg font-semibold text-gray-900">Pending (Tally)</h2>
         <p className="text-sm text-gray-500">
@@ -249,7 +249,7 @@ export default function TallyPendingPage() {
         ) : groups.length === 0 ? (
           <p className="text-sm text-gray-500 py-4">No pending records. All have been posted.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
             <table className="min-w-full text-xs">
               <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                 <tr>
@@ -410,7 +410,7 @@ export default function TallyPendingPage() {
         ) : cnPendingRows.length === 0 ? (
           <p className="text-sm text-gray-500 py-4">No approved credit notes waiting to post.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
             <table className="min-w-full text-xs">
               <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
                 <tr>
