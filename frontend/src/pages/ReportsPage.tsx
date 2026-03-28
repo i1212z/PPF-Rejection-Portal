@@ -8,6 +8,36 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 
 type TicketStatus = 'pending' | 'approved' | 'rejected';
 
+type CreditNoteStatus = 'pending' | 'approved' | 'rejected';
+
+interface ReportCreditNote {
+  id: string;
+  delivery_date: string;
+  customer_name: string;
+  amount: number;
+  status: CreditNoteStatus;
+  created_at: string;
+  created_by: string;
+  approval_remarks?: string | null;
+  rejection_remarks?: string | null;
+}
+
+const CN_DISPLAY_PREFIX = 'CN-B2B';
+
+function buildCreditNoteDisplayIdMap(notes: ReportCreditNote[]): Map<string, string> {
+  const sorted = [...notes].sort((a, b) => {
+    const tA = new Date(a.created_at).getTime();
+    const tB = new Date(b.created_at).getTime();
+    if (tA !== tB) return tA - tB;
+    return a.id.localeCompare(b.id);
+  });
+  const map = new Map<string, string>();
+  sorted.forEach((n, idx) => {
+    map.set(n.id, `${CN_DISPLAY_PREFIX}-${String(idx + 1).padStart(3, '0')}`);
+  });
+  return map;
+}
+
 interface Ticket {
   id: string;
   product_name: string;
@@ -80,6 +110,7 @@ const CHART_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444'];
 
 export default function ReportsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [creditNotes, setCreditNotes] = useState<ReportCreditNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
@@ -87,12 +118,21 @@ export default function ReportsPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
-          params: { limit: 500 },
-        });
-        setTickets(res.data.items);
+        const [tRes, cnRes] = await Promise.all([
+          apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
+            params: { limit: 500 },
+          }),
+          apiClient
+            .get<{ items: ReportCreditNote[]; total: number }>('/credit-notes', {
+              params: { limit: 500 },
+            })
+            .catch(() => ({ data: { items: [] as ReportCreditNote[], total: 0 } })),
+        ]);
+        setTickets(tRes.data.items);
+        setCreditNotes(cnRes.data.items ?? []);
       } catch {
         setTickets([]);
+        setCreditNotes([]);
       } finally {
         setLoading(false);
       }
@@ -199,6 +239,16 @@ export default function ReportsPage() {
     'Admin remark',
   ];
 
+  const creditNoteExportHeaders = [
+    'Credit note ID',
+    'Customer',
+    'Delivery date',
+    'Amount',
+    'Status',
+    'Remarks',
+    'Created',
+  ];
+
   const statusForExport = (s: string) =>
     s === 'approved' ? 'Approved' : s === 'rejected' ? 'Rejected' : s === 'pending' ? 'Pending' : s;
 
@@ -226,6 +276,26 @@ export default function ReportsPage() {
     ],
     [tickets],
   );
+
+  const creditNoteDisplayIds = useMemo(() => buildCreditNoteDisplayIdMap(creditNotes), [creditNotes]);
+
+  const creditNoteReportSections = useMemo(
+    () => [
+      {
+        key: 'cnApproved',
+        title: 'Credit notes — Approved',
+        notes: creditNotes.filter((n) => n.status === 'approved'),
+      },
+      {
+        key: 'cnRejected',
+        title: 'Credit notes — Rejected',
+        notes: creditNotes.filter((n) => n.status === 'rejected'),
+      },
+    ],
+    [creditNotes],
+  );
+
+  const hasReportData = tickets.length > 0 || creditNotes.length > 0;
 
   /** Global display IDs and per-item line numbers from full groups so B2CT1-1 / B2CT1-2 are fixed everywhere */
   const { globalDisplayIdByGroupKey, globalItemLineByItemId } = useMemo(() => {
@@ -260,6 +330,9 @@ export default function ReportsPage() {
     return lineNum != null ? `${displayId}-${lineNum}` : `${displayId}-?`;
   };
 
+  const formatCreditNoteAmount = (n: number) =>
+    Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   /** CSV/Excel use same global Ticket ID (B2BT1, B2CT1) and Line ID (B2CT1-1, B2CT1-2) as Reports table */
   const exportCsv = () => {
     const sections: string[] = [];
@@ -279,11 +352,29 @@ export default function ReportsPage() {
         });
       });
     });
+    creditNoteReportSections.forEach((sec) => {
+      sections.push(`\n=== ${sec.title} ===`);
+      sections.push(creditNoteExportHeaders.join(','));
+      sec.notes.forEach((n) => {
+        const did = creditNoteDisplayIds.get(n.id) ?? `${CN_DISPLAY_PREFIX}-???`;
+        const remarks = (n.approval_remarks ?? n.rejection_remarks ?? '').replace(/"/g, '""');
+        const row = [
+          did,
+          n.customer_name.replace(/"/g, '""'),
+          n.delivery_date.slice(0, 10),
+          formatCreditNoteAmount(n.amount),
+          n.status,
+          remarks,
+          n.created_at,
+        ];
+        sections.push(row.map((c) => `"${String(c)}"`).join(','));
+      });
+    });
     const csv = sections.join('\n').replace(/^\n/, '');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `rejection-tickets-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `reports-tickets-credit-notes-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
   };
@@ -304,7 +395,25 @@ export default function ReportsPage() {
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       XLSX.utils.book_append_sheet(wb, ws, sec.title.replace(/\s/g, '_').slice(0, 31));
     });
-    XLSX.writeFile(wb, `rejection-tickets-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    creditNoteReportSections.forEach((sec) => {
+      const rows: (string | number)[][] = sec.notes.map((n) => {
+        const did = creditNoteDisplayIds.get(n.id) ?? `${CN_DISPLAY_PREFIX}-???`;
+        return [
+          did,
+          n.customer_name,
+          n.delivery_date.slice(0, 10),
+          formatCreditNoteAmount(n.amount),
+          n.status,
+          n.approval_remarks ?? n.rejection_remarks ?? '',
+          n.created_at,
+        ];
+      });
+      const wsData = [creditNoteExportHeaders, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      const name = sec.title.replace(/\s/g, '_').replace(/—/g, '-').slice(0, 31);
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    });
+    XLSX.writeFile(wb, `reports-tickets-credit-notes-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
@@ -313,20 +422,20 @@ export default function ReportsPage() {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Reports</h2>
           <p className="text-sm text-gray-500">
-            Export CSV/Excel and view rejection analytics for B2B and B2C.
+            Rejection tickets (B2B/B2C), credit notes (approved & rejected), charts, and CSV/Excel export.
           </p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={exportCsv}
-            disabled={loading || tickets.length === 0}
+            disabled={loading || !hasReportData}
             className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             Export CSV
           </button>
           <button
             onClick={exportExcel}
-            disabled={loading || tickets.length === 0}
+            disabled={loading || !hasReportData}
             className="rounded-md bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 text-xs text-white disabled:opacity-50"
           >
             Export Excel
@@ -496,6 +605,67 @@ export default function ReportsPage() {
                 </Card>
               );
             })}
+
+          {creditNotes.length > 0 &&
+            creditNoteReportSections.map((sec) => (
+              <Card
+                key={sec.key}
+                title={sec.title}
+                subtitle="B2B credit notes — IDs match the credit notes register (CN-B2B-###)."
+                className="text-sm"
+              >
+                {sec.notes.length === 0 ? (
+                  <p className="text-xs text-gray-500 py-2">No records.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
+                        <tr>
+                          <th className="px-4 py-2 text-left">Credit note ID</th>
+                          <th className="px-4 py-2 text-left">Customer</th>
+                          <th className="px-4 py-2 text-left">Delivery date</th>
+                          <th className="px-4 py-2 text-right">Amount</th>
+                          <th className="px-4 py-2 text-left">Status</th>
+                          <th className="px-4 py-2 text-left">Remarks</th>
+                          <th className="px-4 py-2 text-left">Created</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {sec.notes
+                          .slice()
+                          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                          .map((n) => {
+                            const did = creditNoteDisplayIds.get(n.id) ?? `${CN_DISPLAY_PREFIX}-???`;
+                            const remark = n.approval_remarks ?? n.rejection_remarks ?? '';
+                            return (
+                              <tr key={n.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-2 font-mono font-medium text-[11px] text-gray-800">{did}</td>
+                                <td className="px-4 py-2 text-gray-900">{n.customer_name}</td>
+                                <td className="px-4 py-2">{formatDeliveryDate(n.delivery_date)}</td>
+                                <td className="px-4 py-2 text-right tabular-nums font-medium">
+                                  {formatCreditNoteAmount(n.amount)}
+                                </td>
+                                <td className="px-4 py-2">
+                                  <StatusBadge status={n.status} />
+                                </td>
+                                <td
+                                  className="px-4 py-2 text-[11px] text-gray-700 max-w-[200px]"
+                                  title={remark || undefined}
+                                >
+                                  {remark.length > 80 ? `${remark.slice(0, 80)}…` : remark || '–'}
+                                </td>
+                                <td className="px-4 py-2 text-[11px] text-gray-500 whitespace-nowrap">
+                                  {formatDateTime(n.created_at)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
+            ))}
 
           <Card
           title="Daily rejected quantity"

@@ -3,6 +3,7 @@ import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { CUSTOMER_SUGGESTIONS } from '../data/rejectionTicketSuggestions';
 
 type CNStatus = 'pending' | 'approved' | 'rejected';
 
@@ -349,6 +350,8 @@ export default function CreditNotesPage() {
                   defaultValue={editing.customer_name}
                   className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
                   required
+                  list="customer-suggestions-cn-register"
+                  autoComplete="off"
                 />
               </div>
               <div>
@@ -379,6 +382,12 @@ export default function CreditNotesPage() {
           </div>
         </div>
       )}
+
+      <datalist id="customer-suggestions-cn-register">
+        {CUSTOMER_SUGGESTIONS.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
     </div>
   );
 }

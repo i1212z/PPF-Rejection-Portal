@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
+import { CUSTOMER_SUGGESTIONS } from '../data/rejectionTicketSuggestions';
 
 export default function CreateCreditNotePage() {
   const { user } = useAuth();
@@ -89,6 +90,8 @@ export default function CreateCreditNotePage() {
               onChange={(e) => setCustomerName(e.target.value)}
               className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
               placeholder="Customer / party name"
+              list="customer-suggestions"
+              autoComplete="off"
             />
           </div>
           <div>
@@ -122,6 +125,12 @@ export default function CreateCreditNotePage() {
           </div>
         </form>
       </Card>
+
+      <datalist id="customer-suggestions">
+        {CUSTOMER_SUGGESTIONS.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
     </div>
   );
 }
