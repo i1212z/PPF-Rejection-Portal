@@ -112,20 +112,32 @@ export default function ApprovalsPage() {
     return num != null ? `${g.channel}-${String(num).padStart(3, '0')}` : `${g.channel}-???`;
   };
 
+  const extractApiDetail = (err: unknown): string => {
+    if (!err || typeof err !== 'object' || !('response' in err)) return 'Could not submit decision.';
+    const res = (err as { response?: { data?: { detail?: unknown } } }).response;
+    if (!res?.data?.detail) return 'Could not submit decision.';
+    const d = res.data.detail;
+    if (typeof d === 'string') return d;
+    if (Array.isArray(d)) return d.map((x) => (typeof x === 'object' && x && 'msg' in x ? String((x as { msg: string }).msg) : String(x))).join(', ');
+    return 'Could not submit decision.';
+  };
+
   const handleItemDecision = async (ticketId: string, decision: Decision) => {
     const remarks =
       decision === 'approved'
         ? 'Approved'
         : window.prompt('Remarks for rejection?') || 'Rejected';
     setActionLoadingId(ticketId);
+    setError(null);
     try {
       await apiClient.post(`/approvals/${ticketId}/decision`, {
         decision,
         remarks,
       });
       await loadPending();
-    } catch (err) {
-      setError('Could not submit decision.');
+    } catch (err: unknown) {
+      setError(extractApiDetail(err));
+      await loadPending();
     } finally {
       setActionLoadingId(null);
     }

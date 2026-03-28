@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.deps import get_current_user, get_current_user_for_ticket_create, require_roles, get_channel_filter_for_user
 from ..database import get_db
-from ..models import RejectionTicket, User, UserRole, Channel, TicketStatus, Approval, Decision
+from ..models import RejectionTicket, User, UserRole, Channel, TicketStatus, Approval, Decision, TallyPending
 from ..schemas import TicketCreate, TicketRead, PaginatedTickets
 
 
@@ -180,6 +180,47 @@ async def get_ticket(
         creator=None,
         rejection_remarks=approval_remarks if ticket.status == TicketStatus.REJECTED else None,
         approval_remarks=approval_remarks,
+    )
+
+
+@router.post("/{ticket_id}/revert-to-pending", response_model=TicketRead)
+async def revert_ticket_to_pending(
+    ticket_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.MANAGER, UserRole.ADMIN)),
+):
+    """Undo approval/rejection: set ticket back to pending, remove approval row and Tally mark."""
+    result = await db.execute(select(RejectionTicket).where(RejectionTicket.id == ticket_id))
+    ticket = result.scalars().first()
+    if not ticket:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
+
+    if ticket.status == TicketStatus.PENDING:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ticket is already pending")
+
+    await db.execute(sql_delete(Approval).where(Approval.ticket_id == ticket_id))
+    await db.execute(sql_delete(TallyPending).where(TallyPending.ticket_id == ticket_id))
+    ticket.status = TicketStatus.PENDING
+    await db.commit()
+    await db.refresh(ticket)
+
+    return TicketRead(
+        id=ticket.id,
+        product_name=ticket.product_name,
+        quantity=ticket.quantity,
+        uom=getattr(ticket, "uom", "EA"),
+        cost=float(getattr(ticket, "cost", 0) or 0),
+        reason=ticket.reason,
+        delivery_batch=ticket.delivery_batch,
+        delivery_date=ticket.delivery_date,
+        photo_proof_url=ticket.photo_proof_url,
+        channel=ticket.channel,
+        status=ticket.status,
+        created_by=ticket.created_by,
+        created_at=ticket.created_at,
+        creator=None,
+        rejection_remarks=None,
+        approval_remarks=None,
     )
 
 

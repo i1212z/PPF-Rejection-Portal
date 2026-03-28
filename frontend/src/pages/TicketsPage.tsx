@@ -59,6 +59,7 @@ export default function TicketsPage() {
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>('all');
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
+  const [revertLoadingId, setRevertLoadingId] = useState<string | null>(null);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const isManagerView =
@@ -70,6 +71,9 @@ export default function TicketsPage() {
     if (isManagerView) return true;
     return t.status === 'pending';
   };
+
+  const canUndoDecision = (status: TicketStatus) =>
+    isManagerView && (status === 'approved' || status === 'rejected');
 
   const groupTickets = (list: Ticket[]): TicketGroup[] => {
     const groups: Record<string, TicketGroup> = {};
@@ -164,6 +168,35 @@ export default function TicketsPage() {
       setError(msg);
     } finally {
       setDeleteLoadingId(null);
+    }
+  };
+
+  const handleRevertToPending = async (e: React.MouseEvent, ticketId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (
+      !window.confirm(
+        'Undo this decision? The line returns to Pending, is removed from Tally if it was posted, and you can approve or reject again.',
+      )
+    ) {
+      return;
+    }
+    setRevertLoadingId(ticketId);
+    setError(null);
+    setErrorB2B(null);
+    setErrorB2C(null);
+    try {
+      await apiClient.post(`/tickets/${ticketId}/revert-to-pending`);
+      if (isManagerView) await loadTicketsByChannel();
+      else await loadTickets();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err && err.response && typeof err.response === 'object' && 'data' in err.response && typeof (err.response as { data?: { detail?: string } }).data?.detail === 'string'
+          ? (err.response as { data: { detail: string } }).data.detail
+          : 'Could not undo decision.';
+      setError(msg);
+    } finally {
+      setRevertLoadingId(null);
     }
   };
 
@@ -774,11 +807,11 @@ export default function TicketsPage() {
                           {new Date(g.created_at).toLocaleString()}
                         </div>
                         {isManagerView && base && (
-                          <div className="mt-2 flex gap-2">
+                          <div className="mt-2 flex flex-wrap gap-2">
                             <button
                               type="button"
                               onClick={() => setEditingTicket(base)}
-                              className="flex-1 rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
+                              className="flex-1 min-w-[5rem] rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
                             >
                               Edit
                             </button>
@@ -789,10 +822,20 @@ export default function TicketsPage() {
                                 void handleDelete(e, firstId);
                               }}
                               disabled={deleteLoadingId === firstId}
-                              className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+                              className="flex-1 min-w-[5rem] rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
                             >
                               {deleteLoadingId === firstId ? 'Deleting…' : 'Delete'}
                             </button>
+                            {canUndoDecision(base.status) && firstId && (
+                              <button
+                                type="button"
+                                onClick={(e) => void handleRevertToPending(e, firstId)}
+                                disabled={revertLoadingId === firstId}
+                                className="flex-1 min-w-[5rem] rounded-full bg-amber-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-amber-400 disabled:opacity-60"
+                              >
+                                {revertLoadingId === firstId ? 'Undo…' : 'Undo'}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -886,7 +929,7 @@ export default function TicketsPage() {
                             </td>
                             {isManagerView && (
                               <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex gap-1">
+                                <div className="flex flex-wrap gap-1">
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -916,6 +959,20 @@ export default function TicketsPage() {
                                       ? '…'
                                       : 'Delete'}
                                   </button>
+                                  {(() => {
+                                    const fid = g.items[0]?.id;
+                                    const b = fid ? ticketsB2B.find((t) => t.id === fid) : null;
+                                    return b && canUndoDecision(b.status) && fid ? (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => void handleRevertToPending(e, fid)}
+                                        disabled={revertLoadingId === fid}
+                                        className="rounded px-2 py-1 text-[11px] bg-amber-100 text-amber-900 hover:bg-amber-200 disabled:opacity-50"
+                                      >
+                                        {revertLoadingId === fid ? '…' : 'Undo'}
+                                      </button>
+                                    ) : null;
+                                  })()}
                                 </div>
                               </td>
                             )}
@@ -980,7 +1037,7 @@ export default function TicketsPage() {
                                             </td>
                                             {isManagerView && (
                                               <td className="px-3 py-1" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex gap-1">
+                                                <div className="flex flex-wrap gap-1">
                                                   <button
                                                     type="button"
                                                     onClick={(e) => {
@@ -1002,6 +1059,16 @@ export default function TicketsPage() {
                                                   >
                                                     {deleteLoadingId === item.id ? '…' : 'Delete'}
                                                   </button>
+                                                  {canUndoDecision(item.status) && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => void handleRevertToPending(e, item.id)}
+                                                      disabled={revertLoadingId === item.id}
+                                                      className="rounded px-2 py-1 text-[11px] bg-amber-100 text-amber-900 hover:bg-amber-200 disabled:opacity-50"
+                                                    >
+                                                      {revertLoadingId === item.id ? '…' : 'Undo'}
+                                                    </button>
+                                                  )}
                                                 </div>
                                               </td>
                                             )}
@@ -1099,11 +1166,11 @@ export default function TicketsPage() {
                           {new Date(g.created_at).toLocaleString()}
                         </div>
                         {isManagerView && base && (
-                          <div className="mt-2 flex gap-2">
+                          <div className="mt-2 flex flex-wrap gap-2">
                             <button
                               type="button"
                               onClick={() => setEditingTicket(base)}
-                              className="flex-1 rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
+                              className="flex-1 min-w-[5rem] rounded-full bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500"
                             >
                               Edit
                             </button>
@@ -1114,10 +1181,20 @@ export default function TicketsPage() {
                                 void handleDelete(e, firstId);
                               }}
                               disabled={deleteLoadingId === firstId}
-                              className="flex-1 rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+                              className="flex-1 min-w-[5rem] rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60"
                             >
                               {deleteLoadingId === firstId ? 'Deleting…' : 'Delete'}
                             </button>
+                            {canUndoDecision(base.status) && firstId && (
+                              <button
+                                type="button"
+                                onClick={(e) => void handleRevertToPending(e, firstId)}
+                                disabled={revertLoadingId === firstId}
+                                className="flex-1 min-w-[5rem] rounded-full bg-amber-500 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-amber-400 disabled:opacity-60"
+                              >
+                                {revertLoadingId === firstId ? 'Undo…' : 'Undo'}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1211,7 +1288,7 @@ export default function TicketsPage() {
                               </td>
                               {isManagerView && (
                                 <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                                  <div className="flex gap-1">
+                                  <div className="flex flex-wrap gap-1">
                                     <button
                                       type="button"
                                       onClick={(e) => {
@@ -1241,6 +1318,20 @@ export default function TicketsPage() {
                                         ? '…'
                                         : 'Delete'}
                                     </button>
+                                    {(() => {
+                                      const fid = g.items[0]?.id;
+                                      const b = fid ? ticketsB2C.find((t) => t.id === fid) : null;
+                                      return b && canUndoDecision(b.status) && fid ? (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => void handleRevertToPending(e, fid)}
+                                          disabled={revertLoadingId === fid}
+                                          className="rounded px-2 py-1 text-[11px] bg-amber-100 text-amber-900 hover:bg-amber-200 disabled:opacity-50"
+                                        >
+                                          {revertLoadingId === fid ? '…' : 'Undo'}
+                                        </button>
+                                      ) : null;
+                                    })()}
                                   </div>
                                 </td>
                               )}
@@ -1262,6 +1353,7 @@ export default function TicketsPage() {
                                             <th className="px-3 py-1 text-left">Status</th>
                                             <th className="px-3 py-1 text-left">Creator reason</th>
                                             <th className="px-3 py-1 text-left">Admin remark</th>
+                                            {isManagerView && <th className="px-3 py-1 text-left">Action</th>}
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
@@ -1302,6 +1394,43 @@ export default function TicketsPage() {
                                                     item.rejection_remarks ??
                                                     '–'}
                                               </td>
+                                              {isManagerView && (
+                                                <td className="px-3 py-1" onClick={(e) => e.stopPropagation()}>
+                                                  <div className="flex flex-wrap gap-1">
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const rowBase = ticketsB2C.find((t) => t.id === item.id);
+                                                        if (rowBase) setEditingTicket(rowBase);
+                                                      }}
+                                                      className="rounded px-2 py-1 text-[11px] bg-sky-100 text-sky-700 hover:bg-sky-200"
+                                                    >
+                                                      Edit
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        void handleDelete(e, item.id);
+                                                      }}
+                                                      disabled={deleteLoadingId === item.id}
+                                                      className="rounded px-2 py-1 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                                                    >
+                                                      {deleteLoadingId === item.id ? '…' : 'Delete'}
+                                                    </button>
+                                                    {canUndoDecision(item.status) && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={(e) => void handleRevertToPending(e, item.id)}
+                                                        disabled={revertLoadingId === item.id}
+                                                        className="rounded px-2 py-1 text-[11px] bg-amber-100 text-amber-900 hover:bg-amber-200 disabled:opacity-50"
+                                                      >
+                                                        {revertLoadingId === item.id ? '…' : 'Undo'}
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                </td>
+                                              )}
                                             </tr>
                                           ))}
                                         </tbody>
