@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut, FileText } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { apiClient } from '../api/client';
 
@@ -39,10 +39,15 @@ export default function AppLayout() {
   const [pwSuccess, setPwSuccess] = useState<string | null>(null);
 
   const pageTitle = (() => {
+    if (location.pathname.startsWith('/tally/credit-notes/pending')) return 'CN Pending (Tally)';
+    if (location.pathname.startsWith('/tally/credit-notes/posted')) return 'CN Posted (Tally)';
     if (location.pathname.startsWith('/tally/pending')) return 'Pending (Tally)';
     if (location.pathname.startsWith('/tally/posted')) return 'Posted (Tally)';
     if (location.pathname.startsWith('/tickets/new')) return 'Create Ticket';
     if (location.pathname.startsWith('/tickets')) return 'Tickets';
+    if (location.pathname.startsWith('/credit-notes/new')) return 'New credit note';
+    if (location.pathname.startsWith('/credit-notes')) return 'Credit notes';
+    if (location.pathname.startsWith('/credit-note-approvals')) return 'Credit note approvals';
     if (location.pathname.startsWith('/approvals')) return 'Approvals';
     if (location.pathname.startsWith('/reports')) return 'Reports';
     if (location.pathname.startsWith('/admin')) return 'Admin Panel';
@@ -51,6 +56,7 @@ export default function AppLayout() {
 
   const isTally = user?.role === 'tally';
   const canChangePassword = user?.role === 'manager' || user?.role === 'admin';
+  const canCreditNotes = user?.role === 'b2b' || user?.role === 'manager' || user?.role === 'admin';
 
   const submitPasswordChange = async () => {
     setPwError(null);
@@ -97,10 +103,23 @@ export default function AppLayout() {
           {isTally ? (
             <>
               <div className="px-2 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
-                Tally
+                Tickets (Tally)
               </div>
               <SidebarLink to="/tally/pending" icon={<CheckCircle className="w-4 h-4" />} label="Pending" />
               <SidebarLink to="/tally/posted" icon={<XCircle className="w-4 h-4" />} label="Posted" />
+              <div className="px-2 pt-4 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
+                Credit notes
+              </div>
+              <SidebarLink
+                to="/tally/credit-notes/pending"
+                icon={<FileText className="w-4 h-4" />}
+                label="CN pending"
+              />
+              <SidebarLink
+                to="/tally/credit-notes/posted"
+                icon={<FileText className="w-4 h-4" />}
+                label="CN posted"
+              />
             </>
           ) : (
             <>
@@ -110,12 +129,23 @@ export default function AppLayout() {
               <SidebarLink to="/" icon={<LayoutDashboard className="w-4 h-4" />} label="Dashboard" />
               <SidebarLink to="/tickets/new" icon={<PlusCircle className="w-4 h-4" />} label="Create Ticket" />
               <SidebarLink to="/tickets" icon={<Ticket className="w-4 h-4" />} label="Tickets" />
+              {canCreditNotes && (
+                <>
+                  <SidebarLink to="/credit-notes/new" icon={<FileText className="w-4 h-4" />} label="New credit note" />
+                  <SidebarLink to="/credit-notes" icon={<FileText className="w-4 h-4" />} label="Credit notes" />
+                </>
+              )}
               {(user?.role === 'manager' || user?.role === 'admin') && (
             <>
               <div className="px-2 pt-4 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
                 Control
               </div>
               <SidebarLink to="/approvals" icon={<CheckCircle2 className="w-4 h-4" />} label="Approvals" />
+              <SidebarLink
+                to="/credit-note-approvals"
+                icon={<FileText className="w-4 h-4" />}
+                label="CN approvals"
+              />
               <SidebarLink to="/reports" icon={<BarChart3 className="w-4 h-4" />} label="Reports" />
             </>
           )}
@@ -211,7 +241,7 @@ export default function AppLayout() {
                     }`
                   }
                 >
-                  Pending
+                  Tkt pending
                 </NavLink>
                 <NavLink
                   to="/tally/posted"
@@ -223,7 +253,31 @@ export default function AppLayout() {
                     }`
                   }
                 >
-                  Posted
+                  Tkt posted
+                </NavLink>
+                <NavLink
+                  to="/tally/credit-notes/pending"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  CN pending
+                </NavLink>
+                <NavLink
+                  to="/tally/credit-notes/posted"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  CN posted
                 </NavLink>
                 {canChangePassword && (
                   <button
@@ -277,6 +331,34 @@ export default function AppLayout() {
             >
               Tickets
             </NavLink>
+            {canCreditNotes && (
+              <>
+                <NavLink
+                  to="/credit-notes/new"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1.5 whitespace-nowrap text-[11px] font-semibold ${
+                      isActive
+                        ? 'border-indigo-600 bg-indigo-600 text-white'
+                        : 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                    }`
+                  }
+                >
+                  New CN
+                </NavLink>
+                <NavLink
+                  to="/credit-notes"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  Credit notes
+                </NavLink>
+              </>
+            )}
             {canChangePassword && (
               <button
                 type="button"
@@ -303,6 +385,18 @@ export default function AppLayout() {
                   }
                 >
                   Approvals
+                </NavLink>
+                <NavLink
+                  to="/credit-note-approvals"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  CN appr.
                 </NavLink>
                 <NavLink
                   to="/reports"

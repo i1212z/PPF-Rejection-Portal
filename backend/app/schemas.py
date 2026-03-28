@@ -90,6 +90,48 @@ class PaginatedTickets(BaseModel):
     total: int
 
 
+class CreditNoteCreate(BaseModel):
+    delivery_date: date
+    customer_name: str
+    amount: float
+
+
+class CreditNoteRead(BaseModel):
+    id: UUID
+    delivery_date: date
+    customer_name: str
+    amount: float
+    status: TicketStatus
+    created_by: UUID
+    created_at: datetime
+    rejection_remarks: Optional[str] = None
+    approval_remarks: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedCreditNotes(BaseModel):
+    items: List[CreditNoteRead]
+    total: int
+
+
+class CreditNoteApprovalRead(BaseModel):
+    id: UUID
+    credit_note_id: UUID
+    manager_id: UUID
+    decision: Decision
+    remarks: Optional[str]
+    approved_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CreditNoteTallyIds(BaseModel):
+    credit_note_ids: List[str]
+
+
 class DailyRejectionCostPoint(BaseModel):
     date: date
     total_cost: float

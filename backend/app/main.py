@@ -9,9 +9,18 @@ from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .routers import auth, tickets, approvals, admin, tally
+from .routers import auth, tickets, approvals, admin, tally, credit_notes, credit_note_approvals, credit_note_tally
 from .database import engine, Base, get_db
-from .models import User, UserRole, Approval, RejectionTicket, TallyPending
+from .models import (
+    User,
+    UserRole,
+    Approval,
+    RejectionTicket,
+    TallyPending,
+    CreditNote,
+    CreditNoteApproval,
+    CreditNoteTallyPending,
+)
 from .auth.deps import require_roles
 
 
@@ -108,17 +117,23 @@ async def reset_database(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
-    """Delete all tickets, approvals, and tally marks. Users are kept. Admin only."""
+    """Delete all tickets, credit notes, approvals, and tally marks. Users are kept. Admin only."""
+    await db.execute(delete(CreditNoteTallyPending))
+    await db.execute(delete(CreditNoteApproval))
+    await db.execute(delete(CreditNote))
     await db.execute(delete(TallyPending))
     await db.execute(delete(Approval))
     await db.execute(delete(RejectionTicket))
     await db.commit()
-    return {"status": "ok", "message": "All tickets and approvals have been deleted."}
+    return {"status": "ok", "message": "All tickets, credit notes, and approvals have been deleted."}
 
 
 app.include_router(auth.router)
 app.include_router(tickets.router)
 app.include_router(approvals.router)
 app.include_router(tally.router)
+app.include_router(credit_notes.router)
+app.include_router(credit_note_approvals.router)
+app.include_router(credit_note_tally.router)
 app.include_router(admin.router)
 

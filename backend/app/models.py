@@ -101,3 +101,44 @@ class TallyPending(Base):
     marked_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     posted_at = Column(DateTime(timezone=True), nullable=True)  # null = pending, set = posted
 
+
+class CreditNote(Base):
+    """B2B credit notes (delivery date, customer, amount). Separate workflow from rejection tickets."""
+    __tablename__ = "credit_notes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    delivery_date = Column(Date, nullable=False, index=True)
+    customer_name = Column(String(255), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    status = Column(
+        Enum(TicketStatus, name="ticket_status"),
+        nullable=False,
+        default=TicketStatus.PENDING,
+        index=True,
+    )
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+
+    credit_approval = relationship("CreditNoteApproval", back_populates="credit_note", uselist=False)
+
+
+class CreditNoteApproval(Base):
+    __tablename__ = "credit_note_approvals"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    credit_note_id = Column(UUID(as_uuid=True), ForeignKey("credit_notes.id"), unique=True, nullable=False)
+    manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    decision = Column(Enum(Decision, name="decision"), nullable=False)
+    remarks = Column(Text, nullable=True)
+    approved_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    credit_note = relationship("CreditNote", back_populates="credit_approval")
+
+
+class CreditNoteTallyPending(Base):
+    __tablename__ = "credit_note_tally_pending"
+
+    credit_note_id = Column(UUID(as_uuid=True), ForeignKey("credit_notes.id"), primary_key=True)
+    marked_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    posted_at = Column(DateTime(timezone=True), nullable=True)
+

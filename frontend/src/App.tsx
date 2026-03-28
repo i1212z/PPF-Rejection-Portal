@@ -11,7 +11,13 @@ import ReportsPage from './pages/ReportsPage';
 import AdminPanelPage from './pages/AdminPanelPage';
 import TallyPendingPage from './pages/TallyPendingPage';
 import TallyPostedPage from './pages/TallyPostedPage';
+import CreateCreditNotePage from './pages/CreateCreditNotePage';
+import CreditNotesPage from './pages/CreditNotesPage';
+import CreditNoteApprovalsPage from './pages/CreditNoteApprovalsPage';
+import CreditNoteTallyPendingPage from './pages/CreditNoteTallyPendingPage';
+import CreditNoteTallyPostedPage from './pages/CreditNoteTallyPostedPage';
 import AppLayout from './layout/AppLayout';
+import { RequireRoles } from './auth/RequireRoles';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isInitialized } = useAuth();
@@ -53,10 +59,50 @@ function App() {
             <Route index element={<DefaultPage />} />
             <Route path="tickets" element={<TicketsPage />} />
             <Route path="tickets/new" element={<CreateTicketPage />} />
+            <Route
+              path="credit-notes"
+              element={
+                <RequireRoles roles={['b2b', 'manager', 'admin']}>
+                  <CreditNotesPage />
+                </RequireRoles>
+              }
+            />
+            <Route
+              path="credit-notes/new"
+              element={
+                <RequireRoles roles={['b2b', 'manager', 'admin']}>
+                  <CreateCreditNotePage />
+                </RequireRoles>
+              }
+            />
             <Route path="approvals" element={<ApprovalsPage />} />
+            <Route
+              path="credit-note-approvals"
+              element={
+                <RequireRoles roles={['manager', 'admin']}>
+                  <CreditNoteApprovalsPage />
+                </RequireRoles>
+              }
+            />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="tally/pending" element={<TallyPendingPage />} />
             <Route path="tally/posted" element={<TallyPostedPage />} />
+            <Route
+              path="tally/credit-notes/pending"
+              element={
+                <RequireRoles roles={['tally', 'manager', 'admin']}>
+                  <CreditNoteTallyPendingPage />
+                </RequireRoles>
+              }
+            />
+            <Route
+              path="tally/credit-notes/posted"
+              element={
+                <RequireRoles roles={['tally', 'manager', 'admin']}>
+                  <CreditNoteTallyPostedPage />
+                </RequireRoles>
+              }
+            />
             <Route path="admin" element={<AdminPanelPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
