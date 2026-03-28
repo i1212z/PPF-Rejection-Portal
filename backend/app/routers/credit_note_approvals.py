@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.deps import require_roles
@@ -9,6 +9,7 @@ from ..database import get_db
 from ..models import (
     CreditNote,
     CreditNoteApproval,
+    CreditNoteDueTracking,
     User,
     UserRole,
     TicketStatus,
@@ -78,6 +79,20 @@ async def decide_credit_note(
     )
     cn.status = TicketStatus.APPROVED if want_approve else TicketStatus.REJECTED
     db.add(approval)
+    if want_approve:
+        ex = await db.execute(
+            select(CreditNoteDueTracking).where(CreditNoteDueTracking.credit_note_id == cn.id),
+        )
+        if not ex.scalars().first():
+            mx = await db.execute(select(func.max(CreditNoteDueTracking.sort_order)))
+            nxt = (mx.scalar_one_or_none() or 0) + 10
+            db.add(
+                CreditNoteDueTracking(
+                    credit_note_id=cn.id,
+                    phase_length_days=15,
+                    sort_order=nxt,
+                ),
+            )
     await db.commit()
     await db.refresh(approval)
     return approval

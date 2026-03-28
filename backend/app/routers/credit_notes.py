@@ -16,6 +16,8 @@ from ..models import (
     CreditNote,
     CreditNoteApproval,
     CreditNoteTallyPending,
+    CreditNoteDueTracking,
+    DueCustomCell,
 )
 from ..schemas import CreditNoteCreate, CreditNoteRead, PaginatedCreditNotes, credit_note_to_read
 
@@ -147,6 +149,10 @@ async def revert_credit_note_to_pending(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credit note not found")
     if cn.status == TicketStatus.PENDING:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already pending")
+    await db.execute(sql_delete(DueCustomCell).where(DueCustomCell.credit_note_id == credit_note_id))
+    await db.execute(
+        sql_delete(CreditNoteDueTracking).where(CreditNoteDueTracking.credit_note_id == credit_note_id),
+    )
     await db.execute(sql_delete(CreditNoteApproval).where(CreditNoteApproval.credit_note_id == credit_note_id))
     await db.execute(
         sql_delete(CreditNoteTallyPending).where(CreditNoteTallyPending.credit_note_id == credit_note_id),
@@ -215,6 +221,10 @@ async def delete_credit_note(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
         if cn.status != TicketStatus.PENDING:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending credit notes can be deleted")
+    await db.execute(sql_delete(DueCustomCell).where(DueCustomCell.credit_note_id == credit_note_id))
+    await db.execute(
+        sql_delete(CreditNoteDueTracking).where(CreditNoteDueTracking.credit_note_id == credit_note_id),
+    )
     await db.execute(sql_delete(CreditNoteApproval).where(CreditNoteApproval.credit_note_id == credit_note_id))
     await db.execute(
         sql_delete(CreditNoteTallyPending).where(CreditNoteTallyPending.credit_note_id == credit_note_id),

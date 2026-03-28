@@ -20,6 +20,9 @@ from .models import (
     CreditNote,
     CreditNoteApproval,
     CreditNoteTallyPending,
+    DueCustomCell,
+    DueCustomColumn,
+    CreditNoteDueTracking,
 )
 from .auth.deps import require_roles
 
@@ -177,6 +180,9 @@ async def reset_database(
 ):
     """Delete all tickets, credit notes, approvals, and tally marks. Users are kept. Admin only."""
     await db.execute(delete(CreditNoteTallyPending))
+    await db.execute(delete(DueCustomCell))
+    await db.execute(delete(CreditNoteDueTracking))
+    await db.execute(delete(DueCustomColumn))
     await db.execute(delete(CreditNoteApproval))
     await db.execute(delete(CreditNote))
     await db.execute(delete(TallyPending))

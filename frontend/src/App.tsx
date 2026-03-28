@@ -17,6 +17,7 @@ import CreditNoteApprovalsPage from './pages/CreditNoteApprovalsPage';
 import CreditNoteTallyPendingPage from './pages/CreditNoteTallyPendingPage';
 import CreditNoteTallyPostedPage from './pages/CreditNoteTallyPostedPage';
 import DueCreditNotesPage from './pages/DueCreditNotesPage';
+import DuePaidCreditNotesPage from './pages/DuePaidCreditNotesPage';
 import AppLayout from './layout/AppLayout';
 import { RequireRoles } from './auth/RequireRoles';
 
@@ -96,6 +97,14 @@ function App() {
               element={
                 <RequireRoles roles={['due']}>
                   <DueCreditNotesPage />
+                </RequireRoles>
+              }
+            />
+            <Route
+              path="due/paid-credit-notes"
+              element={
+                <RequireRoles roles={['due']}>
+                  <DuePaidCreditNotesPage />
                 </RequireRoles>
               }
             />

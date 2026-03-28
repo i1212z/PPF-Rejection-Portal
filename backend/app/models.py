@@ -148,3 +148,43 @@ class CreditNoteTallyPending(Base):
     marked_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     posted_at = Column(DateTime(timezone=True), nullable=True)
 
+
+class CreditNoteDueTracking(Base):
+    """Per approved credit note: Due desk timer phases, row order, paid marker."""
+
+    __tablename__ = "credit_note_due_tracking"
+
+    credit_note_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("credit_notes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # Each phase (safe → warning → danger → doubtful) lasts this many days.
+    phase_length_days = Column(Integer, nullable=False, default=15)
+    sort_order = Column(Integer, nullable=False, default=0)
+    paid_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class DueCustomColumn(Base):
+    __tablename__ = "due_custom_columns"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    label = Column(String(255), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+
+class DueCustomCell(Base):
+    __tablename__ = "due_custom_cells"
+
+    credit_note_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("credit_notes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    column_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("due_custom_columns.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    value = Column(Text, nullable=False, default="")
+

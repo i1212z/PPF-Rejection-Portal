@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from typing import Optional, List
+from typing import Optional, List, Dict
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -180,6 +180,44 @@ class DueCreditNoteRow(BaseModel):
     danger: float
     doubtful: float
     total: float
+    phase: str
+    timer_label: str
+    phase_length_days: int
+    paid_at: Optional[datetime] = None
+    custom_cells: Dict[str, str] = Field(default_factory=dict)
+
+
+class DuePhaseLengthBody(BaseModel):
+    phase_length_days: int = Field(ge=1, le=365)
+
+
+class DueReorderNotesBody(BaseModel):
+    ordered_credit_note_ids: List[UUID]
+
+
+class DueCustomColumnCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=255)
+
+
+class DueCustomColumnReorderBody(BaseModel):
+    ordered_column_ids: List[UUID]
+
+
+class DueCellBody(BaseModel):
+    column_id: UUID
+    value: str = ""
+
+
+class DueSwapCellsBody(BaseModel):
+    credit_note_id_a: UUID
+    column_id_a: UUID
+    credit_note_id_b: UUID
+    column_id_b: UUID
+
+
+class DueSwapRowsBody(BaseModel):
+    credit_note_id_a: UUID
+    credit_note_id_b: UUID
 
 
 class PaginatedCreditNotes(BaseModel):

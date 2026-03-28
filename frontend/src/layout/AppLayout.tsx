@@ -48,6 +48,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/credit-notes/new')) return 'New credit note';
     if (location.pathname.startsWith('/credit-notes')) return 'Credit notes';
     if (location.pathname.startsWith('/credit-note-approvals')) return 'Credit note approvals';
+    if (location.pathname.startsWith('/due/paid')) return 'Due — paid credit notes';
     if (location.pathname.startsWith('/due/')) return 'Due — credit notes';
     if (location.pathname.startsWith('/approvals')) return 'Approvals';
     if (location.pathname.startsWith('/reports')) return 'Reports';
@@ -109,7 +110,12 @@ export default function AppLayout() {
               <SidebarLink
                 to="/due/credit-notes"
                 icon={<FileText className="w-4 h-4" />}
-                label="Approved credit notes"
+                label="Open credit notes"
+              />
+              <SidebarLink
+                to="/due/paid-credit-notes"
+                icon={<FileText className="w-4 h-4" />}
+                label="Paid credit notes"
               />
             </>
           ) : isTally ? (
@@ -253,7 +259,19 @@ export default function AppLayout() {
                     }`
                   }
                 >
-                  Due register
+                  Open
+                </NavLink>
+                <NavLink
+                  to="/due/paid-credit-notes"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  Paid
                 </NavLink>
                 {canChangePassword && (
                   <button
