@@ -4,13 +4,23 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
+import { CustomerNameField } from '../components/CustomerNameField';
 import { CUSTOMER_SUGGESTIONS, PRODUCT_SUGGESTIONS } from '../data/rejectionTicketSuggestions';
+import type { CustomerStorageKey } from '../lib/savedCustomerNames';
+import { rememberCustomerNameAfterSubmit } from '../lib/savedCustomerNames';
 
 export default function CreateTicketPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canChooseChannel = user?.role === 'admin' || user?.role === 'manager';
   const [channel, setChannel] = useState<'B2B' | 'B2C'>('B2B');
+  const ticketCustomerStorageKey: CustomerStorageKey = canChooseChannel
+    ? channel === 'B2B'
+      ? 'b2b_ticket'
+      : 'b2c_ticket'
+    : user?.role === 'b2c'
+      ? 'b2c_ticket'
+      : 'b2b_ticket';
   const [productType, setProductType] = useState<'single' | 'multiple'>('single');
   const [productName, setProductName] = useState('');
   const [quantity, setQuantity] = useState<number | ''>('');
@@ -51,6 +61,7 @@ export default function CreateTicketPage() {
           delivery_date: deliveryDate,
           ...(canChooseChannel && { channel }),
         });
+        rememberCustomerNameAfterSubmit(ticketCustomerStorageKey, deliveryBatch, CUSTOMER_SUGGESTIONS);
       } else {
         const validItems = lineItems.filter(
           (item) =>
@@ -79,6 +90,7 @@ export default function CreateTicketPage() {
             }),
           ),
         );
+        rememberCustomerNameAfterSubmit(ticketCustomerStorageKey, deliveryBatch, CUSTOMER_SUGGESTIONS);
       }
       navigate('/tickets');
     } catch (err) {
@@ -124,13 +136,13 @@ export default function CreateTicketPage() {
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 Customer Name
               </label>
-              <input
-                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+              <CustomerNameField
+                storageKey={ticketCustomerStorageKey}
                 value={deliveryBatch}
-                onChange={(e) => setDeliveryBatch(e.target.value)}
+                onChange={setDeliveryBatch}
                 required
                 placeholder="Customer or account name"
-                list="customer-suggestions"
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
               />
             </div>
             <div>
@@ -381,11 +393,6 @@ export default function CreateTicketPage() {
       <datalist id="product-suggestions">
         {PRODUCT_SUGGESTIONS.map((p) => (
           <option key={p} value={p} />
-        ))}
-      </datalist>
-      <datalist id="customer-suggestions">
-        {CUSTOMER_SUGGESTIONS.map((c) => (
-          <option key={c} value={c} />
         ))}
       </datalist>
     </div>

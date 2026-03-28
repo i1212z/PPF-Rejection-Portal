@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
+import { StatusBadge } from '../components/ui/StatusBadge';
 
 type TicketStatus = 'pending' | 'approved' | 'rejected';
 
@@ -74,12 +75,28 @@ function groupKey(g: TicketGroup): string {
   return `${g.delivery_batch}|${g.delivery_date}|${g.channel}|${g.created_at.slice(0, 16)}`;
 }
 
+type CNStatus = 'pending' | 'approved' | 'rejected';
+
+interface CreditNoteForTally {
+  id: string;
+  delivery_date: string;
+  customer_name: string;
+  amount: number;
+  status: CNStatus;
+  created_at: string;
+}
+
+const CN_PREFIX = 'CN-B2B';
+
 export default function TallyPostedPage() {
   const [allTickets, setAllTickets] = useState<Ticket[]>([]);
+  const [allCreditNotes, setAllCreditNotes] = useState<CreditNoteForTally[]>([]);
   const [postedIds, setPostedIds] = useState<Set<string>>(new Set());
+  const [cnPostedIds, setCnPostedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [unpostingId, setUnpostingId] = useState<string | null>(null);
+  const [cnUnpostingId, setCnUnpostingId] = useState<string | null>(null);
 
   const loadTickets = useCallback(async () => {
     try {
@@ -101,10 +118,32 @@ export default function TallyPostedPage() {
     }
   }, []);
 
+  const loadCreditNotes = useCallback(async () => {
+    try {
+      const res = await apiClient.get<{ items: CreditNoteForTally[] }>('/credit-notes', {
+        params: { limit: 500 },
+      });
+      setAllCreditNotes(res.data.items ?? []);
+    } catch {
+      setAllCreditNotes([]);
+    }
+  }, []);
+
+  const loadCnPosted = useCallback(async () => {
+    try {
+      const res = await apiClient.get<{ credit_note_ids: string[] }>('/credit-note-tally/posted');
+      setCnPostedIds(new Set(res.data.credit_note_ids || []));
+    } catch {
+      setCnPostedIds(new Set());
+    }
+  }, []);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([loadTickets(), loadPosted()]).finally(() => setLoading(false));
-  }, [loadTickets, loadPosted]);
+    Promise.all([loadTickets(), loadPosted(), loadCreditNotes(), loadCnPosted()]).finally(() =>
+      setLoading(false),
+    );
+  }, [loadTickets, loadPosted, loadCreditNotes, loadCnPosted]);
 
   const unpostFromTally = async (ticketId: string) => {
     setUnpostingId(ticketId);
@@ -121,6 +160,39 @@ export default function TallyPostedPage() {
       setUnpostingId(null);
     }
   };
+
+  const unpostCreditNoteFromTally = async (creditNoteId: string) => {
+    setCnUnpostingId(creditNoteId);
+    try {
+      await apiClient.delete(`/credit-note-tally/pending/${creditNoteId}`);
+      setCnPostedIds((s) => {
+        const next = new Set(s);
+        next.delete(creditNoteId);
+        return next;
+      });
+    } catch {
+      // keep state on error
+    } finally {
+      setCnUnpostingId(null);
+    }
+  };
+
+  const displayIdByCnId = useMemo(() => {
+    const sorted = [...allCreditNotes].sort((a, b) => {
+      const tA = new Date(a.created_at).getTime();
+      const tB = new Date(b.created_at).getTime();
+      if (tA !== tB) return tA - tB;
+      return a.id.localeCompare(b.id);
+    });
+    const map = new Map<string, string>();
+    sorted.forEach((n, idx) => map.set(n.id, `${CN_PREFIX}-${String(idx + 1).padStart(3, '0')}`));
+    return map;
+  }, [allCreditNotes]);
+
+  const cnPostedRows = useMemo(() => {
+    const approved = allCreditNotes.filter((n) => n.status === 'approved');
+    return approved.filter((n) => cnPostedIds.has(n.id));
+  }, [allCreditNotes, cnPostedIds]);
 
   const tickets = useMemo(
     () => allTickets.filter((t) => t.status === 'approved' || t.status === 'rejected'),
@@ -313,6 +385,67 @@ export default function TallyPostedPage() {
                         </tr>
                       )}
                     </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card
+        title="Credit notes (B2B) — posted Tally"
+        subtitle="Approved credit notes marked as posted. Unpost to send back to pending."
+      >
+        {loading ? (
+          <p className="text-sm text-gray-500 py-4">Loading…</p>
+        ) : cnPostedRows.length === 0 ? (
+          <p className="text-sm text-gray-500 py-4">No credit notes posted to Tally yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-gray-50 text-[11px] font-medium text-gray-500 uppercase">
+                <tr>
+                  <th className="px-4 py-2 text-left">Credit note ID</th>
+                  <th className="px-4 py-2 text-left">Delivery date</th>
+                  <th className="px-4 py-2 text-left">Customer</th>
+                  <th className="px-4 py-2 text-right">Amount</th>
+                  <th className="px-4 py-2 text-left">Status</th>
+                  <th className="px-4 py-2 text-left">Created</th>
+                  <th className="px-4 py-2 text-left">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {cnPostedRows.map((n) => {
+                  const did = displayIdByCnId.get(n.id) ?? `${CN_PREFIX}-???`;
+                  return (
+                    <tr key={n.id}>
+                      <td className="px-4 py-2 font-mono font-medium text-[11px] text-gray-800">{did}</td>
+                      <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString()}</td>
+                      <td className="px-4 py-2">{n.customer_name}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        {Number(n.amount).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </td>
+                      <td className="px-4 py-2">
+                        <StatusBadge status={n.status} />
+                      </td>
+                      <td className="px-4 py-2 text-[11px] text-gray-500">
+                        {new Date(n.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2">
+                        <button
+                          type="button"
+                          disabled={cnUnpostingId === n.id}
+                          onClick={() => void unpostCreditNoteFromTally(n.id)}
+                          className="rounded-full border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-60 px-3 py-1.5 text-[11px] font-semibold text-gray-700"
+                        >
+                          {cnUnpostingId === n.id ? 'Unposting…' : 'Unpost'}
+                        </button>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>

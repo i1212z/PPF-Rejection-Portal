@@ -3,8 +3,19 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
 import * as XLSX from 'xlsx';
 import { apiClient } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
+
+function defaultToDateStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function defaultFromDateStr(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
 
 type TicketStatus = 'pending' | 'approved' | 'rejected';
 
@@ -109,6 +120,10 @@ function groupKey(g: TicketGroup): string {
 const CHART_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#ef4444'];
 
 export default function ReportsPage() {
+  const { user } = useAuth();
+  const canFilterByDate = user?.role === 'manager' || user?.role === 'admin';
+  const [fromDate, setFromDate] = useState(defaultFromDateStr);
+  const [toDate, setToDate] = useState(defaultToDateStr);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [creditNotes, setCreditNotes] = useState<ReportCreditNote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,13 +133,21 @@ export default function ReportsPage() {
     const load = async () => {
       setLoading(true);
       try {
+        const ticketParams: Record<string, string | number> = { limit: 500 };
+        const cnParams: Record<string, string | number> = { limit: 500 };
+        if (canFilterByDate) {
+          if (fromDate) ticketParams.from_date = fromDate;
+          if (toDate) ticketParams.to_date = toDate;
+          if (fromDate) cnParams.from_date = fromDate;
+          if (toDate) cnParams.to_date = toDate;
+        }
         const [tRes, cnRes] = await Promise.all([
           apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
-            params: { limit: 500 },
+            params: ticketParams,
           }),
           apiClient
             .get<{ items: ReportCreditNote[]; total: number }>('/credit-notes', {
-              params: { limit: 500 },
+              params: cnParams,
             })
             .catch(() => ({ data: { items: [] as ReportCreditNote[], total: 0 } })),
         ]);
@@ -138,21 +161,42 @@ export default function ReportsPage() {
       }
     };
     void load();
-  }, []);
+  }, [canFilterByDate, fromDate, toDate]);
 
   const {
     dailyQtyData,
     channelComparisonData,
     approvalRejectionData,
     channelPieData,
+    dailyChartSubtitle,
+    channelChartSubtitle,
+    approvalChartSubtitle,
+    dailyEmptyMessage,
+    channelEmptyMessage,
+    approvalEmptyMessage,
   } = useMemo(() => {
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStr = now.toISOString().slice(0, 10);
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().slice(0, 10);
+
+    const rangeFiltered = Boolean(canFilterByDate && fromDate && toDate);
+    let rangeStartStr: string;
+    let rangeEndStr: string;
+    if (rangeFiltered) {
+      rangeStartStr = fromDate;
+      rangeEndStr = toDate;
+    } else {
+      rangeStartStr = thirtyDaysAgoStr;
+      rangeEndStr = todayStr;
+    }
 
     const dailyMap: Record<string, number> = {};
-    for (let d = new Date(thirtyDaysAgo); d <= now; d.setDate(d.getDate() + 1)) {
+    const startDay = new Date(`${rangeStartStr}T12:00:00`);
+    const endDay = new Date(`${rangeEndStr}T12:00:00`);
+    for (let d = new Date(startDay); d <= endDay; d.setDate(d.getDate() + 1)) {
       const key = d.toISOString().slice(0, 10);
       dailyMap[key] = 0;
     }
@@ -163,21 +207,35 @@ export default function ReportsPage() {
     const rejectedQty = { B2B: 0, B2C: 0 };
 
     tickets.forEach((t) => {
-      const created = new Date(t.created_at);
-      const key = created.toISOString().slice(0, 10);
-      if (key in dailyMap) {
-        dailyMap[key] += Number(t.quantity || 0);
+      const dKey = t.delivery_date.slice(0, 10);
+      if (dKey in dailyMap) {
+        dailyMap[dKey] += Number(t.quantity || 0);
       }
 
-      if (created >= thisMonthStart) {
-        if (t.channel === 'B2B') {
-          b2bQty += Number(t.quantity || 0);
-          if (t.status === 'approved') approvedQty.B2B += Number(t.quantity || 0);
-          if (t.status === 'rejected') rejectedQty.B2B += Number(t.quantity || 0);
-        } else {
-          b2cQty += Number(t.quantity || 0);
-          if (t.status === 'approved') approvedQty.B2C += Number(t.quantity || 0);
-          if (t.status === 'rejected') rejectedQty.B2C += Number(t.quantity || 0);
+      if (rangeFiltered) {
+        if (dKey >= fromDate! && dKey <= toDate!) {
+          if (t.channel === 'B2B') {
+            b2bQty += Number(t.quantity || 0);
+            if (t.status === 'approved') approvedQty.B2B += Number(t.quantity || 0);
+            if (t.status === 'rejected') rejectedQty.B2B += Number(t.quantity || 0);
+          } else {
+            b2cQty += Number(t.quantity || 0);
+            if (t.status === 'approved') approvedQty.B2C += Number(t.quantity || 0);
+            if (t.status === 'rejected') rejectedQty.B2C += Number(t.quantity || 0);
+          }
+        }
+      } else {
+        const delivery = new Date(t.delivery_date);
+        if (delivery >= thisMonthStart) {
+          if (t.channel === 'B2B') {
+            b2bQty += Number(t.quantity || 0);
+            if (t.status === 'approved') approvedQty.B2B += Number(t.quantity || 0);
+            if (t.status === 'rejected') rejectedQty.B2B += Number(t.quantity || 0);
+          } else {
+            b2cQty += Number(t.quantity || 0);
+            if (t.status === 'approved') approvedQty.B2C += Number(t.quantity || 0);
+            if (t.status === 'rejected') rejectedQty.B2C += Number(t.quantity || 0);
+          }
         }
       }
     });
@@ -203,13 +261,38 @@ export default function ReportsPage() {
       { name: 'B2C Rejected', value: rejectedQty.B2C },
     ].filter((d) => d.value > 0);
 
+    const dailyChartSubtitle = rangeFiltered
+      ? `By delivery date from ${fromDate} to ${toDate}`
+      : 'By delivery date over the last 30 days';
+    const channelChartSubtitle = rangeFiltered
+      ? 'Channel split for tickets in the selected delivery date range'
+      : 'Channel-level quantity by delivery date this calendar month';
+    const approvalChartSubtitle = rangeFiltered
+      ? 'By channel for tickets in the selected delivery date range'
+      : 'By channel for this calendar month (delivery date)';
+    const dailyEmptyMessage = rangeFiltered
+      ? 'No ticket data in this range.'
+      : 'No data for the last 30 days.';
+    const channelEmptyMessage = rangeFiltered
+      ? 'No ticket data in this range.'
+      : 'No data for this month.';
+    const approvalEmptyMessage = rangeFiltered
+      ? 'No approved/rejected data in this range.'
+      : 'No approved/rejected data this month.';
+
     return {
       dailyQtyData,
       channelComparisonData,
       approvalRejectionData,
       channelPieData,
+      dailyChartSubtitle,
+      channelChartSubtitle,
+      approvalChartSubtitle,
+      dailyEmptyMessage,
+      channelEmptyMessage,
+      approvalEmptyMessage,
     };
-  }, [tickets]);
+  }, [tickets, canFilterByDate, fromDate, toDate]);
 
   const formatDateTime = (iso: string) => {
     const d = new Date(iso);
@@ -443,6 +526,45 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {canFilterByDate && (
+        <Card
+          title="Date range"
+          subtitle="Filters tickets and credit notes by delivery date (same as API). Managers and admins only."
+          className="text-sm"
+        >
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">From</label>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="rounded border border-gray-200 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">To</label>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="rounded border border-gray-200 px-3 py-2 text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setFromDate(defaultFromDateStr());
+                setToDate(defaultToDateStr());
+              }}
+              className="rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
+            >
+              Last 30 days
+            </button>
+          </div>
+        </Card>
+      )}
+
       {loading ? (
         <div className="text-sm text-gray-500">Loading reports…</div>
       ) : (
@@ -668,8 +790,8 @@ export default function ReportsPage() {
             ))}
 
           <Card
-          title="Daily rejected quantity"
-          subtitle="Trend of total rejected quantity over the last 30 days"
+            title="Daily quantity (tickets)"
+            subtitle={dailyChartSubtitle}
             className="min-h-[280px]"
           >
             <div className="w-full" style={{ minHeight: 256, height: 256 }}>
@@ -684,7 +806,7 @@ export default function ReportsPage() {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-xs text-gray-500">No data for the last 30 days.</div>
+                <div className="h-full flex items-center justify-center text-xs text-gray-500">{dailyEmptyMessage}</div>
               )}
             </div>
           </Card>
@@ -692,7 +814,7 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card
               title="B2B vs B2C comparison"
-              subtitle="Channel-level rejected quantity split for this month"
+              subtitle={channelChartSubtitle}
               className="min-h-[280px]"
             >
               <div className="w-full" style={{ minHeight: 256, height: 256 }}>
@@ -733,14 +855,14 @@ export default function ReportsPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-xs text-gray-500">No data for this month.</div>
+                  <div className="h-full flex items-center justify-center text-xs text-gray-500">{channelEmptyMessage}</div>
                 )}
               </div>
             </Card>
 
             <Card
               title="Approved vs Rejected quantity"
-              subtitle="By channel for this month"
+              subtitle={approvalChartSubtitle}
               className="min-h-[280px]"
             >
               <div className="w-full" style={{ minHeight: 256, height: 256 }}>
@@ -755,7 +877,7 @@ export default function ReportsPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-xs text-gray-500">No approved/rejected data this month.</div>
+                  <div className="h-full flex items-center justify-center text-xs text-gray-500">{approvalEmptyMessage}</div>
                 )}
               </div>
             </Card>

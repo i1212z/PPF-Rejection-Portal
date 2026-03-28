@@ -4,7 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
+import { CustomerNameField } from '../components/CustomerNameField';
 import { CUSTOMER_SUGGESTIONS } from '../data/rejectionTicketSuggestions';
+import { rememberCustomerNameAfterSubmit } from '../lib/savedCustomerNames';
 
 export default function CreateCreditNotePage() {
   const { user } = useAuth();
@@ -34,6 +36,7 @@ export default function CreateCreditNotePage() {
         customer_name: customerName.trim(),
         amount: num,
       });
+      rememberCustomerNameAfterSubmit('credit_note', customerName, CUSTOMER_SUGGESTIONS);
       navigate('/credit-notes');
     } catch (err: unknown) {
       const msg =
@@ -83,15 +86,13 @@ export default function CreateCreditNotePage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Customer name</label>
-            <input
-              type="text"
-              required
+            <CustomerNameField
+              storageKey="credit_note"
               value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
+              onChange={setCustomerName}
+              required
               placeholder="Customer / party name"
-              list="customer-suggestions"
-              autoComplete="off"
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
             />
           </div>
           <div>
@@ -125,12 +126,6 @@ export default function CreateCreditNotePage() {
           </div>
         </form>
       </Card>
-
-      <datalist id="customer-suggestions">
-        {CUSTOMER_SUGGESTIONS.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
     </div>
   );
 }

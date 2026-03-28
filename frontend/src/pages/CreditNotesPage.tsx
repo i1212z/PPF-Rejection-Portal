@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { CustomerNameField } from '../components/CustomerNameField';
 import { Card } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { CUSTOMER_SUGGESTIONS } from '../data/rejectionTicketSuggestions';
+import { rememberCustomerNameAfterSubmit } from '../lib/savedCustomerNames';
 
 type CNStatus = 'pending' | 'approved' | 'rejected';
 
@@ -30,6 +32,7 @@ export default function CreditNotesPage() {
   const [editing, setEditing] = useState<CreditNote | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [revertId, setRevertId] = useState<string | null>(null);
+  const [editCustomerName, setEditCustomerName] = useState('');
 
   const isManager = user?.role === 'manager' || user?.role === 'admin';
   const canAccess = user?.role === 'b2b' || isManager;
@@ -61,6 +64,11 @@ export default function CreditNotesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (editing) setEditCustomerName(editing.customer_name);
+    else setEditCustomerName('');
+  }, [editing]);
 
   const displayIdByNoteId = useMemo(() => {
     const sorted = [...items].sort((a, b) => {
@@ -127,12 +135,13 @@ export default function CreditNotesPage() {
     const get = (name: string) => form.querySelector(`[name="${name}"]`) as HTMLInputElement | null;
     const payload = {
       delivery_date: get('delivery_date')?.value ?? '',
-      customer_name: get('customer_name')?.value ?? '',
+      customer_name: editCustomerName.trim(),
       amount: Number(get('amount')?.value ?? 0),
     };
     setError(null);
     try {
       await apiClient.patch(`/credit-notes/${editing.id}`, payload);
+      rememberCustomerNameAfterSubmit('credit_note', payload.customer_name, CUSTOMER_SUGGESTIONS);
       setEditing(null);
       await load();
     } catch (err: unknown) {
@@ -345,13 +354,12 @@ export default function CreditNotesPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Customer name</label>
-                <input
-                  name="customer_name"
-                  defaultValue={editing.customer_name}
-                  className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+                <CustomerNameField
+                  storageKey="credit_note"
+                  value={editCustomerName}
+                  onChange={setEditCustomerName}
                   required
-                  list="customer-suggestions-cn-register"
-                  autoComplete="off"
+                  className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
                 />
               </div>
               <div>
@@ -382,12 +390,6 @@ export default function CreditNotesPage() {
           </div>
         </div>
       )}
-
-      <datalist id="customer-suggestions-cn-register">
-        {CUSTOMER_SUGGESTIONS.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
     </div>
   );
 }

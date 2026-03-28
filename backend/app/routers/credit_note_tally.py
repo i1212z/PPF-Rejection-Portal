@@ -38,7 +38,7 @@ async def list_pending_credit_note_tally_alias(
 async def post_credit_note_to_tally(
     body: CreditNoteTallyIds,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.TALLY, UserRole.ADMIN)),
+    current_user: User = Depends(require_roles(UserRole.TALLY, UserRole.ADMIN, UserRole.MANAGER)),
 ):
     now = datetime.utcnow()
     for cid_str in body.credit_note_ids or []:
@@ -62,7 +62,7 @@ async def post_credit_note_to_tally(
 async def unpost_credit_note_from_tally(
     credit_note_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.TALLY, UserRole.ADMIN)),
+    current_user: User = Depends(require_roles(UserRole.TALLY, UserRole.ADMIN, UserRole.MANAGER)),
 ):
     result = await db.execute(
         select(CreditNoteTallyPending).where(CreditNoteTallyPending.credit_note_id == credit_note_id),

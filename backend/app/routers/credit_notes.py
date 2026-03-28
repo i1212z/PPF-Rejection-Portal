@@ -29,11 +29,20 @@ def _role_value(user: User) -> str:
     return str(r).lower() if r else ""
 
 
-def _require_credit_note_access(user: User) -> None:
+def _require_credit_note_read(user: User) -> None:
+    """B2B / manager / admin / tally (read-only for Tally screens)."""
+    if _role_value(user) not in ("b2b", "manager", "admin", "tally"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Credit notes are only available for B2B, manager/admin, and Tally (view).",
+        )
+
+
+def _require_credit_note_write(user: User) -> None:
     if _role_value(user) not in ("b2b", "manager", "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Credit notes are only available for B2B and manager/admin accounts.",
+            detail="Only B2B and manager/admin accounts can create or edit credit notes.",
         )
 
 
@@ -57,7 +66,7 @@ async def create_credit_note(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_credit_note_access(current_user)
+    _require_credit_note_write(current_user)
     cn = CreditNote(
         delivery_date=payload.delivery_date,
         customer_name=payload.customer_name.strip(),
@@ -76,10 +85,12 @@ async def list_credit_notes(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     status_filter: Optional[TicketStatus] = Query(None, alias="status"),
+    from_date: Optional[date] = Query(None),
+    to_date: Optional[date] = Query(None),
     skip: int = 0,
     limit: int = 100,
 ):
-    _require_credit_note_access(current_user)
+    _require_credit_note_read(current_user)
     query = select(CreditNote)
     count_query = select(func.count(CreditNote.id))
     rv = _role_value(current_user)
@@ -89,6 +100,12 @@ async def list_credit_notes(
     if status_filter:
         query = query.where(CreditNote.status == status_filter)
         count_query = count_query.where(CreditNote.status == status_filter)
+    if from_date:
+        query = query.where(CreditNote.delivery_date >= from_date)
+        count_query = count_query.where(CreditNote.delivery_date >= from_date)
+    if to_date:
+        query = query.where(CreditNote.delivery_date <= to_date)
+        count_query = count_query.where(CreditNote.delivery_date <= to_date)
     total = (await db.execute(count_query)).scalar_one()
     query = query.order_by(CreditNote.created_at.desc()).offset(skip).limit(limit)
     rows = (await db.execute(query)).scalars().unique().all()
@@ -110,7 +127,7 @@ async def get_credit_note(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_credit_note_access(current_user)
+    _require_credit_note_read(current_user)
     result = await db.execute(select(CreditNote).where(CreditNote.id == credit_note_id))
     cn = result.scalars().first()
     if not cn:
@@ -156,7 +173,7 @@ async def update_credit_note(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_credit_note_access(current_user)
+    _require_credit_note_write(current_user)
     result = await db.execute(select(CreditNote).where(CreditNote.id == credit_note_id))
     cn = result.scalars().first()
     if not cn:
@@ -189,7 +206,7 @@ async def delete_credit_note(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _require_credit_note_access(current_user)
+    _require_credit_note_write(current_user)
     result = await db.execute(select(CreditNote).where(CreditNote.id == credit_note_id))
     cn = result.scalars().first()
     if not cn:
