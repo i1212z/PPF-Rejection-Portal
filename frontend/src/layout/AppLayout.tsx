@@ -48,6 +48,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/credit-notes/new')) return 'New credit note';
     if (location.pathname.startsWith('/credit-notes')) return 'Credit notes';
     if (location.pathname.startsWith('/credit-note-approvals')) return 'Credit note approvals';
+    if (location.pathname.startsWith('/due/')) return 'Due — credit notes';
     if (location.pathname.startsWith('/approvals')) return 'Approvals';
     if (location.pathname.startsWith('/reports')) return 'Reports';
     if (location.pathname.startsWith('/admin')) return 'Admin Panel';
@@ -55,7 +56,9 @@ export default function AppLayout() {
   })();
 
   const isTally = user?.role === 'tally';
-  const canChangePassword = user?.role === 'manager' || user?.role === 'admin';
+  const isDue = user?.role === 'due';
+  const canChangePassword =
+    user?.role === 'manager' || user?.role === 'admin' || user?.role === 'due';
   const canCreditNotes = user?.role === 'b2b' || user?.role === 'manager' || user?.role === 'admin';
 
   const submitPasswordChange = async () => {
@@ -100,7 +103,16 @@ export default function AppLayout() {
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 text-sm">
-          {isTally ? (
+          {isDue ? (
+            <>
+              <div className="px-2 text-[11px] uppercase tracking-wide text-gray-500 mb-1">Due desk</div>
+              <SidebarLink
+                to="/due/credit-notes"
+                icon={<FileText className="w-4 h-4" />}
+                label="Approved credit notes"
+              />
+            </>
+          ) : isTally ? (
             <>
               <div className="px-2 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
                 Tickets (Tally)
@@ -149,7 +161,7 @@ export default function AppLayout() {
               <SidebarLink to="/reports" icon={<BarChart3 className="w-4 h-4" />} label="Reports" />
             </>
           )}
-          {user?.role === 'admin' && !isTally && (
+          {user?.role === 'admin' && !isTally && !isDue && (
             <>
               <div className="px-2 pt-4 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
                 Admin
@@ -229,7 +241,35 @@ export default function AppLayout() {
         {/* Mobile primary nav for quick access (desktop uses sidebar) */}
         <nav className="border-b border-gray-200 bg-white px-4 py-2 lg:hidden">
           <div className="flex gap-2 overflow-x-auto text-xs">
-            {isTally ? (
+            {isDue ? (
+              <>
+                <NavLink
+                  to="/due/credit-notes"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  Due register
+                </NavLink>
+                {canChangePassword && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPwError(null);
+                      setPwSuccess(null);
+                      setIsPwModalOpen(true);
+                    }}
+                    className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 whitespace-nowrap text-gray-700"
+                  >
+                    Change password
+                  </button>
+                )}
+              </>
+            ) : isTally ? (
               <>
                 <NavLink
                   to="/tally/pending"

@@ -17,7 +17,7 @@ from ..models import (
     CreditNoteApproval,
     CreditNoteTallyPending,
 )
-from ..schemas import CreditNoteCreate, CreditNoteRead, PaginatedCreditNotes
+from ..schemas import CreditNoteCreate, CreditNoteRead, PaginatedCreditNotes, credit_note_to_read
 
 router = APIRouter(prefix="/credit-notes", tags=["credit-notes"])
 
@@ -46,20 +46,6 @@ def _require_credit_note_write(user: User) -> None:
         )
 
 
-def _to_read(cn: CreditNote, rem: Optional[str]) -> CreditNoteRead:
-    return CreditNoteRead(
-        id=cn.id,
-        delivery_date=cn.delivery_date,
-        customer_name=cn.customer_name,
-        amount=float(cn.amount),
-        status=cn.status,
-        created_by=cn.created_by,
-        created_at=cn.created_at,
-        rejection_remarks=rem if cn.status == TicketStatus.REJECTED else None,
-        approval_remarks=rem,
-    )
-
-
 @router.post("", response_model=CreditNoteRead, status_code=status.HTTP_201_CREATED)
 async def create_credit_note(
     payload: CreditNoteCreate,
@@ -69,15 +55,20 @@ async def create_credit_note(
     _require_credit_note_write(current_user)
     cn = CreditNote(
         delivery_date=payload.delivery_date,
-        customer_name=payload.customer_name.strip(),
+        customer_name=payload.customer_name,
+        market_area=payload.market_area,
         amount=Decimal(str(payload.amount)),
+        amount_safe=Decimal(str(payload.amount_safe)),
+        amount_warning=Decimal(str(payload.amount_warning)),
+        amount_danger=Decimal(str(payload.amount_danger)),
+        amount_doubtful=Decimal(str(payload.amount_doubtful)),
         status=TicketStatus.PENDING,
         created_by=current_user.id,
     )
     db.add(cn)
     await db.commit()
     await db.refresh(cn)
-    return _to_read(cn, None)
+    return credit_note_to_read(cn, None)
 
 
 @router.get("", response_model=PaginatedCreditNotes)
@@ -117,7 +108,7 @@ async def list_credit_notes(
         )
         for cid, rem in (await db.execute(rq)).all():
             remarks_map[str(cid)] = rem
-    items = [_to_read(r, remarks_map.get(str(r.id))) for r in rows]
+    items = [credit_note_to_read(r, remarks_map.get(str(r.id))) for r in rows]
     return PaginatedCreditNotes(items=items, total=total)
 
 
@@ -141,7 +132,7 @@ async def get_credit_note(
         )
     ).first()
     rem = rem_row[0] if rem_row else None
-    return _to_read(cn, rem)
+    return credit_note_to_read(cn, rem)
 
 
 @router.post("/{credit_note_id}/revert-to-pending", response_model=CreditNoteRead)
@@ -163,7 +154,7 @@ async def revert_credit_note_to_pending(
     cn.status = TicketStatus.PENDING
     await db.commit()
     await db.refresh(cn)
-    return _to_read(cn, None)
+    return credit_note_to_read(cn, None)
 
 
 @router.patch("/{credit_note_id}", response_model=CreditNoteRead)
@@ -187,8 +178,13 @@ async def update_credit_note(
         if cn.status != TicketStatus.PENDING:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending credit notes can be edited")
     cn.delivery_date = payload.delivery_date
-    cn.customer_name = payload.customer_name.strip()
+    cn.customer_name = payload.customer_name
+    cn.market_area = payload.market_area
     cn.amount = Decimal(str(payload.amount))
+    cn.amount_safe = Decimal(str(payload.amount_safe))
+    cn.amount_warning = Decimal(str(payload.amount_warning))
+    cn.amount_danger = Decimal(str(payload.amount_danger))
+    cn.amount_doubtful = Decimal(str(payload.amount_doubtful))
     await db.commit()
     await db.refresh(cn)
     rem_row = (
@@ -197,7 +193,7 @@ async def update_credit_note(
         )
     ).first()
     rem = rem_row[0] if rem_row else None
-    return _to_read(cn, rem)
+    return credit_note_to_read(cn, rem)
 
 
 @router.delete("/{credit_note_id}", status_code=status.HTTP_204_NO_CONTENT)

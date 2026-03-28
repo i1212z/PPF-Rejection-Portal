@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../api/client';
 
-type UserRole = 'b2b' | 'b2c' | 'manager' | 'admin' | 'tally';
+type UserRole = 'b2b' | 'b2c' | 'manager' | 'admin' | 'tally' | 'due';
 
 interface User {
   id: string;

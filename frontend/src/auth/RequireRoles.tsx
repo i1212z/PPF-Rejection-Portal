@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
-type Role = 'b2b' | 'b2c' | 'manager' | 'admin' | 'tally';
+type Role = 'b2b' | 'b2c' | 'manager' | 'admin' | 'tally' | 'due';
 
 export function RequireRoles({ roles, children }: { roles: Role[]; children: ReactNode }) {
   const { user, isInitialized } = useAuth();

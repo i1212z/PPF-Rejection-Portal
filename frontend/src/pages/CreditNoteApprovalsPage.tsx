@@ -9,7 +9,12 @@ interface CreditNoteRow {
   id: string;
   delivery_date: string;
   customer_name: string;
+  market_area: string;
   amount: number;
+  amount_safe: number;
+  amount_warning: number;
+  amount_danger: number;
+  amount_doubtful: number;
   created_at: string;
 }
 
@@ -114,7 +119,7 @@ export default function CreditNoteApprovalsPage() {
                     <div className="text-sm font-mono font-medium">{did}</div>
                     <div className="text-[11px] text-gray-500 mt-0.5">{n.customer_name}</div>
                     <div className="text-[11px] text-gray-600">
-                      Delivery: {new Date(n.delivery_date).toLocaleDateString()} • Amount:{' '}
+                      {n.market_area} • Delivery: {new Date(n.delivery_date).toLocaleDateString()} • Total:{' '}
                       {Number(n.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div className="mt-2">
@@ -149,8 +154,9 @@ export default function CreditNoteApprovalsPage() {
                   <tr>
                     <th className="px-4 py-2 text-left">Credit note ID</th>
                     <th className="px-4 py-2 text-left">Customer</th>
+                    <th className="px-4 py-2 text-left">Market area</th>
                     <th className="px-4 py-2 text-left">Delivery date</th>
-                    <th className="px-4 py-2 text-right">Amount</th>
+                    <th className="px-4 py-2 text-right">Total</th>
                     <th className="px-4 py-2 text-left">Status</th>
                     <th className="px-4 py-2 text-left">Created</th>
                     <th className="px-4 py-2 text-left">Action</th>
@@ -163,6 +169,7 @@ export default function CreditNoteApprovalsPage() {
                       <tr key={n.id} className="hover:bg-gray-50">
                         <td className="px-4 py-2 font-mono text-[11px]">{did}</td>
                         <td className="px-4 py-2">{n.customer_name}</td>
+                        <td className="px-4 py-2 text-gray-700">{n.market_area}</td>
                         <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString()}</td>
                         <td className="px-4 py-2 text-right font-medium">
                           {Number(n.amount).toLocaleString(undefined, {

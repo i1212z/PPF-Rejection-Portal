@@ -82,8 +82,9 @@ export default function LoginPage() {
         <div className="mt-4 text-[11px] text-slate-500">
           Use <span className="font-mono">b2b@ppf.local</span>,{' '}
           <span className="font-mono">b2c@ppf.local</span>,{' '}
-          <span className="font-mono">manager@ppf.local</span>, or{' '}
-          <span className="font-mono">admin@ppf.local</span> in dev mode.
+          <span className="font-mono">manager@ppf.local</span>,{' '}
+          <span className="font-mono">admin@ppf.local</span>, or{' '}
+          <span className="font-mono">due@ppf.local</span> in dev mode.
         </div>
       </div>
     </div>

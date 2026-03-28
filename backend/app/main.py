@@ -9,7 +9,7 @@ from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .routers import auth, tickets, approvals, admin, tally, credit_notes, credit_note_approvals, credit_note_tally
+from .routers import auth, tickets, approvals, admin, tally, credit_notes, credit_note_approvals, credit_note_tally, due
 from .database import engine, Base, get_db
 from .models import (
     User,
@@ -84,6 +84,7 @@ async def on_startup():
         # whole transaction; isolating avoids breaking startup when a no-op migration fails.
         for stmt in (
             "ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'TALLY'",
+            "ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'due'",
             "ALTER TABLE rejection_tickets ADD COLUMN IF NOT EXISTS uom VARCHAR(16) NOT NULL DEFAULT 'EA'",
             "ALTER TABLE tally_pending ADD COLUMN IF NOT EXISTS posted_at TIMESTAMP WITH TIME ZONE",
         ):
@@ -96,6 +97,32 @@ async def on_startup():
 
         async with conn.begin():
             await conn.run_sync(Base.metadata.create_all)
+
+        dialect = conn.engine.dialect.name
+        cn_alters: list[str] = []
+        if dialect == "sqlite":
+            cn_alters = [
+                "ALTER TABLE credit_notes ADD COLUMN market_area VARCHAR(128) DEFAULT 'Calicut'",
+                "ALTER TABLE credit_notes ADD COLUMN amount_safe REAL DEFAULT 0",
+                "ALTER TABLE credit_notes ADD COLUMN amount_warning REAL DEFAULT 0",
+                "ALTER TABLE credit_notes ADD COLUMN amount_danger REAL DEFAULT 0",
+                "ALTER TABLE credit_notes ADD COLUMN amount_doubtful REAL DEFAULT 0",
+            ]
+        elif dialect == "postgresql":
+            cn_alters = [
+                "ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS market_area VARCHAR(128) DEFAULT 'Calicut'",
+                "ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS amount_safe NUMERIC(12,2) DEFAULT 0 NOT NULL",
+                "ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS amount_warning NUMERIC(12,2) DEFAULT 0 NOT NULL",
+                "ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS amount_danger NUMERIC(12,2) DEFAULT 0 NOT NULL",
+                "ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS amount_doubtful NUMERIC(12,2) DEFAULT 0 NOT NULL",
+            ]
+        for stmt in cn_alters:
+            try:
+                async with conn.begin():
+                    await conn.execute(text(stmt))
+            except Exception:
+                pass
+
     print("PPF Backend started. POST /tickets (create) is allowed for any authenticated user.")
 
 
@@ -135,5 +162,6 @@ app.include_router(tally.router)
 app.include_router(credit_notes.router)
 app.include_router(credit_note_approvals.router)
 app.include_router(credit_note_tally.router)
+app.include_router(due.router)
 app.include_router(admin.router)
 

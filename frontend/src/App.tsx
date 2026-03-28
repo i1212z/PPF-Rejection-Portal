@@ -16,6 +16,7 @@ import CreditNotesPage from './pages/CreditNotesPage';
 import CreditNoteApprovalsPage from './pages/CreditNoteApprovalsPage';
 import CreditNoteTallyPendingPage from './pages/CreditNoteTallyPendingPage';
 import CreditNoteTallyPostedPage from './pages/CreditNoteTallyPostedPage';
+import DueCreditNotesPage from './pages/DueCreditNotesPage';
 import AppLayout from './layout/AppLayout';
 import { RequireRoles } from './auth/RequireRoles';
 
@@ -38,6 +39,9 @@ function DefaultPage() {
   const { user } = useAuth();
   if (user?.role === 'tally') {
     return <Navigate to="/tally/pending" replace />;
+  }
+  if (user?.role === 'due') {
+    return <Navigate to="/due/credit-notes" replace />;
   }
   return <DashboardPage />;
 }
@@ -87,6 +91,14 @@ function App() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="tally/pending" element={<TallyPendingPage />} />
             <Route path="tally/posted" element={<TallyPostedPage />} />
+            <Route
+              path="due/credit-notes"
+              element={
+                <RequireRoles roles={['due']}>
+                  <DueCreditNotesPage />
+                </RequireRoles>
+              }
+            />
             <Route
               path="tally/credit-notes/pending"
               element={

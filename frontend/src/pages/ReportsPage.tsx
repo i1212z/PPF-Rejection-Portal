@@ -25,7 +25,12 @@ interface ReportCreditNote {
   id: string;
   delivery_date: string;
   customer_name: string;
+  market_area: string;
   amount: number;
+  amount_safe: number;
+  amount_warning: number;
+  amount_danger: number;
+  amount_doubtful: number;
   status: CreditNoteStatus;
   created_at: string;
   created_by: string;
@@ -325,8 +330,13 @@ export default function ReportsPage() {
   const creditNoteExportHeaders = [
     'Credit note ID',
     'Customer',
+    'Market area',
     'Delivery date',
-    'Amount',
+    'Safe',
+    'Warning',
+    'Danger',
+    'Doubtful',
+    'Total',
     'Status',
     'Remarks',
     'Created',
@@ -444,7 +454,12 @@ export default function ReportsPage() {
         const row = [
           did,
           n.customer_name.replace(/"/g, '""'),
+          (n.market_area ?? '').replace(/"/g, '""'),
           n.delivery_date.slice(0, 10),
+          formatCreditNoteAmount(n.amount_safe ?? 0),
+          formatCreditNoteAmount(n.amount_warning ?? 0),
+          formatCreditNoteAmount(n.amount_danger ?? 0),
+          formatCreditNoteAmount(n.amount_doubtful ?? 0),
           formatCreditNoteAmount(n.amount),
           n.status,
           remarks,
@@ -484,7 +499,12 @@ export default function ReportsPage() {
         return [
           did,
           n.customer_name,
+          n.market_area ?? '',
           n.delivery_date.slice(0, 10),
+          formatCreditNoteAmount(n.amount_safe ?? 0),
+          formatCreditNoteAmount(n.amount_warning ?? 0),
+          formatCreditNoteAmount(n.amount_danger ?? 0),
+          formatCreditNoteAmount(n.amount_doubtful ?? 0),
           formatCreditNoteAmount(n.amount),
           n.status,
           n.approval_remarks ?? n.rejection_remarks ?? '',
@@ -745,8 +765,13 @@ export default function ReportsPage() {
                         <tr>
                           <th className="px-4 py-2 text-left">Credit note ID</th>
                           <th className="px-4 py-2 text-left">Customer</th>
+                          <th className="px-4 py-2 text-left">Market</th>
                           <th className="px-4 py-2 text-left">Delivery date</th>
-                          <th className="px-4 py-2 text-right">Amount</th>
+                          <th className="px-4 py-2 text-right">Safe</th>
+                          <th className="px-4 py-2 text-right">Warn</th>
+                          <th className="px-4 py-2 text-right">Dngr</th>
+                          <th className="px-4 py-2 text-right">Dbfl</th>
+                          <th className="px-4 py-2 text-right">Total</th>
                           <th className="px-4 py-2 text-left">Status</th>
                           <th className="px-4 py-2 text-left">Remarks</th>
                           <th className="px-4 py-2 text-left">Created</th>
@@ -763,7 +788,20 @@ export default function ReportsPage() {
                               <tr key={n.id} className="hover:bg-gray-50">
                                 <td className="px-4 py-2 font-mono font-medium text-[11px] text-gray-800">{did}</td>
                                 <td className="px-4 py-2 text-gray-900">{n.customer_name}</td>
+                                <td className="px-4 py-2 text-gray-700">{n.market_area}</td>
                                 <td className="px-4 py-2">{formatDeliveryDate(n.delivery_date)}</td>
+                                <td className="px-4 py-2 text-right tabular-nums text-[11px]">
+                                  {formatCreditNoteAmount(n.amount_safe ?? 0)}
+                                </td>
+                                <td className="px-4 py-2 text-right tabular-nums text-[11px]">
+                                  {formatCreditNoteAmount(n.amount_warning ?? 0)}
+                                </td>
+                                <td className="px-4 py-2 text-right tabular-nums text-[11px]">
+                                  {formatCreditNoteAmount(n.amount_danger ?? 0)}
+                                </td>
+                                <td className="px-4 py-2 text-right tabular-nums text-[11px]">
+                                  {formatCreditNoteAmount(n.amount_doubtful ?? 0)}
+                                </td>
                                 <td className="px-4 py-2 text-right tabular-nums font-medium">
                                   {formatCreditNoteAmount(n.amount)}
                                 </td>

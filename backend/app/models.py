@@ -25,6 +25,7 @@ class UserRole(str, enum.Enum):
     MANAGER = "manager"
     ADMIN = "admin"
     TALLY = "tally"
+    DUE = "due"
 
 
 class TicketStatus(str, enum.Enum):
@@ -109,6 +110,11 @@ class CreditNote(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     delivery_date = Column(Date, nullable=False, index=True)
     customer_name = Column(String(255), nullable=False)
+    market_area = Column(String(128), nullable=False, default="Calicut")
+    amount_safe = Column(Numeric(12, 2), nullable=False, default=0)
+    amount_warning = Column(Numeric(12, 2), nullable=False, default=0)
+    amount_danger = Column(Numeric(12, 2), nullable=False, default=0)
+    amount_doubtful = Column(Numeric(12, 2), nullable=False, default=0)
     amount = Column(Numeric(12, 2), nullable=False)
     status = Column(
         Enum(TicketStatus, name="ticket_status"),

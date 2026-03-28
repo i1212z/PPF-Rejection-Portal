@@ -93,6 +93,7 @@ async def seed_users(db: AsyncSession = Depends(get_db)):
         ("Manager", "manager@ppf.local", "manager123", UserRole.MANAGER),
         ("Admin", "admin@ppf.local", "admin123", UserRole.ADMIN),
         ("Tally Dept", "tally@ppf.local", "tally123", UserRole.TALLY),
+        ("Due Desk", "due@ppf.local", "due123", UserRole.DUE),
     ]
 
     created = 0

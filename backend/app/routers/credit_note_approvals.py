@@ -14,7 +14,7 @@ from ..models import (
     TicketStatus,
     Decision,
 )
-from ..schemas import ApprovalCreate, CreditNoteApprovalRead, CreditNoteRead
+from ..schemas import ApprovalCreate, CreditNoteApprovalRead, CreditNoteRead, credit_note_to_read
 
 router = APIRouter(prefix="/credit-note-approvals", tags=["credit-note-approvals"])
 
@@ -33,20 +33,7 @@ async def list_pending_credit_notes(
         select(CreditNote).where(CreditNote.status == TicketStatus.PENDING).order_by(CreditNote.created_at.asc()),
     )
     notes = result.scalars().unique().all()
-    return [
-        CreditNoteRead(
-            id=n.id,
-            delivery_date=n.delivery_date,
-            customer_name=n.customer_name,
-            amount=float(n.amount),
-            status=n.status,
-            created_by=n.created_by,
-            created_at=n.created_at,
-            rejection_remarks=None,
-            approval_remarks=None,
-        )
-        for n in notes
-    ]
+    return [credit_note_to_read(n, None) for n in notes]
 
 
 @router.post("/{credit_note_id}/decision", response_model=CreditNoteApprovalRead)
