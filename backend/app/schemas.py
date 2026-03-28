@@ -188,7 +188,7 @@ class DueCreditNoteRow(BaseModel):
 
 
 class DuePhaseLengthBody(BaseModel):
-    phase_length_days: int = Field(ge=1, le=365)
+    phase_length_days: int = Field(ge=1, le=30)
 
 
 class DueReorderNotesBody(BaseModel):

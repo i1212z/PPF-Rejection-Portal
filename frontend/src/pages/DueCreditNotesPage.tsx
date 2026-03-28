@@ -27,7 +27,12 @@ interface DueRow {
   custom_cells: Record<string, string>;
 }
 
-const PHASE_PRESETS = [10, 11, 12, 13, 14, 15] as const;
+const PHASE_LENGTH_MIN = 1;
+const PHASE_LENGTH_MAX = 30;
+const PHASE_LENGTH_OPTIONS = Array.from(
+  { length: PHASE_LENGTH_MAX - PHASE_LENGTH_MIN + 1 },
+  (_, i) => PHASE_LENGTH_MIN + i,
+);
 
 function fmt(n: number) {
   return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -238,7 +243,8 @@ export default function DueCreditNotesPage() {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Due — open credit notes</h2>
           <p className="text-sm text-gray-500">
-            Timer starts at approval: amount sits in <strong>Safe</strong>, then moves through{' '}
+            Timer runs from <strong>approval time</strong> (not from opening this page); the list refreshes every 30s.
+            Amount sits in <strong>Safe</strong>, then moves through{' '}
             <strong>Warning → Danger → Doubtful</strong> by phase length (days). Drag the row grip to reorder rows;
             drag custom column headers to reorder columns. Click two custom cells to swap those values, or use{' '}
             <strong>⇄</strong> on a row then another row or custom cell to swap <em>all</em> custom values between those
@@ -274,7 +280,7 @@ export default function DueCreditNotesPage() {
 
       <Card
         title="Due register"
-        subtitle="Phase length applies to each bucket (same number of days per step). Paid moves the row to the Paid page."
+        subtitle="Phase length is 1–30 days per bucket (same days for Safe, Warning, Danger, then Doubtful). Paid moves the row to the Paid page."
         className="text-sm"
       >
         {loading && rows.length === 0 ? (
@@ -378,7 +384,8 @@ export default function DueCreditNotesPage() {
                         onChange={(e) => void persistPhaseDays(r.id, Number(e.target.value))}
                         className="max-w-[4.5rem] rounded border border-slate-200 bg-white px-1 py-0.5 text-[11px]"
                       >
-                        {Array.from(new Set([...PHASE_PRESETS, r.phase_length_days]))
+                        {Array.from(new Set([...PHASE_LENGTH_OPTIONS, r.phase_length_days]))
+                          .filter((d) => (d >= PHASE_LENGTH_MIN && d <= PHASE_LENGTH_MAX) || d === r.phase_length_days)
                           .sort((a, b) => a - b)
                           .map((d) => (
                             <option key={d} value={d}>
