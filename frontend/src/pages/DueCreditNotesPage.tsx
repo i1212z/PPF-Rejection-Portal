@@ -41,7 +41,8 @@ export default function DueCreditNotesPage() {
   const [error, setError] = useState<string | null>(null);
   const [dragRowId, setDragRowId] = useState<string | null>(null);
   const [dragColId, setDragColId] = useState<string | null>(null);
-  const [swapPick, setSwapPick] = useState<{ noteId: string; colId: string } | null>(null);
+  const [swapPick, setSwapPick] =
+    useState<{ kind: 'cell'; noteId: string; colId: string } | { kind: 'row'; noteId: string } | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -94,6 +95,16 @@ export default function DueCreditNotesPage() {
       await load();
     } catch {
       setError('Could not add column.');
+    }
+  };
+
+  const deleteColumn = async (colId: string, label: string) => {
+    if (!window.confirm(`Remove column "${label}" and all its cell values?`)) return;
+    try {
+      await apiClient.delete(`/due/custom-columns/${colId}`);
+      await load();
+    } catch {
+      setError('Could not remove column.');
     }
   };
 
@@ -157,9 +168,26 @@ export default function DueCreditNotesPage() {
     setDragColId(null);
   };
 
+  const swapRowsCustomData = async (noteIdA: string, noteIdB: string) => {
+    try {
+      await apiClient.post('/due/swap-rows-custom-data', {
+        credit_note_id_a: noteIdA,
+        credit_note_id_b: noteIdB,
+      });
+      setSwapPick(null);
+      await load();
+    } catch {
+      setError('Could not swap custom data between rows.');
+    }
+  };
+
   const onCustomCellClick = async (noteId: string, colId: string) => {
     if (!swapPick) {
-      setSwapPick({ noteId, colId });
+      setSwapPick({ kind: 'cell', noteId, colId });
+      return;
+    }
+    if (swapPick.kind === 'row') {
+      await swapRowsCustomData(swapPick.noteId, noteId);
       return;
     }
     if (swapPick.noteId === noteId && swapPick.colId === colId) {
@@ -180,6 +208,22 @@ export default function DueCreditNotesPage() {
     }
   };
 
+  const onRowSwapClick = async (noteId: string) => {
+    if (!swapPick) {
+      setSwapPick({ kind: 'row', noteId });
+      return;
+    }
+    if (swapPick.kind === 'row') {
+      if (swapPick.noteId === noteId) {
+        setSwapPick(null);
+        return;
+      }
+      await swapRowsCustomData(swapPick.noteId, noteId);
+      return;
+    }
+    await swapRowsCustomData(swapPick.noteId, noteId);
+  };
+
   const saveCell = async (noteId: string, colId: string, value: string) => {
     try {
       await apiClient.patch(`/due/credit-notes/${noteId}/cell`, { column_id: colId, value });
@@ -195,10 +239,14 @@ export default function DueCreditNotesPage() {
           <h2 className="text-lg font-semibold text-gray-900">Due — open credit notes</h2>
           <p className="text-sm text-gray-500">
             Timer starts at approval: amount sits in <strong>Safe</strong>, then moves through{' '}
-            <strong>Warning → Danger → Doubtful</strong> by phase length (days). Drag rows or column headers to swap
-            order. Click two custom cells to swap values.{' '}
-            {swapPick ? (
-              <span className="text-amber-700 font-medium">Select second cell to swap.</span>
+            <strong>Warning → Danger → Doubtful</strong> by phase length (days). Drag the row grip to reorder rows;
+            drag custom column headers to reorder columns. Click two custom cells to swap those values, or use{' '}
+            <strong>⇄</strong> on a row then another row or custom cell to swap <em>all</em> custom values between those
+            rows.{' '}
+            {swapPick?.kind === 'cell' ? (
+              <span className="text-amber-700 font-medium">Select second cell, or a row ⇄ / another row.</span>
+            ) : swapPick?.kind === 'row' ? (
+              <span className="text-amber-700 font-medium">Select another row ⇄ or any custom cell on another row.</span>
             ) : null}
           </p>
         </div>
@@ -238,8 +286,8 @@ export default function DueCreditNotesPage() {
             <table className="min-w-full text-xs border-collapse select-none">
               <thead>
                 <tr className="bg-slate-800 text-white text-[10px] uppercase tracking-wide">
-                  <th className="px-2 py-2 border border-slate-600 w-8" title="Drag row to swap with another">
-                    ⋮
+                  <th className="px-2 py-2 border border-slate-600 w-16" title="Row grip: drag to reorder; ⇄ swaps custom data">
+                    ⋮ / ⇄
                   </th>
                   <th className="px-3 py-2 text-left font-semibold border border-slate-600">CN ID</th>
                   <th className="px-3 py-2 text-left font-semibold border border-slate-600">Particulars</th>
@@ -264,7 +312,20 @@ export default function DueCreditNotesPage() {
                       className="px-3 py-2 text-left font-semibold border border-slate-600 cursor-grab min-w-[100px]"
                       title="Drag header to swap column order"
                     >
-                      {c.label}
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="truncate">{c.label}</span>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded px-1 leading-none text-red-200 hover:bg-white/10 hover:text-white"
+                          title="Remove column"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void deleteColumn(c.id, c.label);
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
                     </th>
                   ))}
                 </tr>
@@ -273,13 +334,36 @@ export default function DueCreditNotesPage() {
                 {rows.map((r) => (
                   <tr
                     key={r.id}
-                    draggable
-                    onDragStart={() => setDragRowId(r.id)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => void onDropRow(r.id)}
-                    className={`hover:bg-slate-50 ${dragRowId === r.id ? 'opacity-70' : ''}`}
+                    className={`hover:bg-slate-50 ${dragRowId === r.id ? 'opacity-70' : ''} ${
+                      swapPick?.kind === 'row' && swapPick.noteId === r.id ? 'bg-amber-50' : ''
+                    }`}
                   >
-                    <td className="px-2 py-2 border border-slate-200 text-slate-400 cursor-grab text-center">⠿</td>
+                    <td
+                      className="px-1 py-2 border border-slate-200 text-slate-500 text-center align-middle"
+                      draggable
+                      onDragStart={() => setDragRowId(r.id)}
+                      onDragEnd={() => setDragRowId(null)}
+                    >
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="cursor-grab text-slate-400" title="Drag to swap row order">
+                          ⠿
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void onRowSwapClick(r.id)}
+                          className={`rounded border px-1 py-0 text-[10px] font-semibold leading-tight ${
+                            swapPick?.kind === 'row' && swapPick.noteId === r.id
+                              ? 'border-amber-500 bg-amber-100 text-amber-900'
+                              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                          }`}
+                          title="Pick this row to swap all custom column values with another row or cell row"
+                        >
+                          ⇄
+                        </button>
+                      </div>
+                    </td>
                     <td className="px-3 py-2 border border-slate-200 font-mono text-[11px] whitespace-nowrap">
                       {r.display_id}
                     </td>
@@ -327,7 +411,9 @@ export default function DueCreditNotesPage() {
                     </td>
                     {cols.map((c) => {
                       const picked =
-                        swapPick?.noteId === r.id && swapPick?.colId === c.id ? 'ring-2 ring-amber-400' : '';
+                        swapPick?.kind === 'cell' && swapPick.noteId === r.id && swapPick.colId === c.id
+                          ? 'ring-2 ring-amber-400'
+                          : '';
                       return (
                         <td
                           key={c.id}

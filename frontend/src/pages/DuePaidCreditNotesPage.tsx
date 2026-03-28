@@ -91,6 +91,16 @@ export default function DuePaidCreditNotesPage() {
     }
   };
 
+  const deleteColumn = async (colId: string, label: string) => {
+    if (!window.confirm(`Remove column "${label}" and all its cell values?`)) return;
+    try {
+      await apiClient.delete(`/due/custom-columns/${colId}`);
+      await load();
+    } catch {
+      setError('Could not remove column.');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -136,8 +146,18 @@ export default function DuePaidCreditNotesPage() {
                   <th className="px-3 py-2 text-left font-semibold border border-emerald-700">Paid at</th>
                   <th className="px-3 py-2 text-center font-semibold border border-emerald-700">Action</th>
                   {cols.map((c) => (
-                    <th key={c.id} className="px-3 py-2 text-left font-semibold border border-emerald-700">
-                      {c.label}
+                    <th key={c.id} className="px-3 py-2 text-left font-semibold border border-emerald-700 min-w-[100px]">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="truncate">{c.label}</span>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded px-1 leading-none text-red-200 hover:bg-white/10 hover:text-white"
+                          title="Remove column"
+                          onClick={() => void deleteColumn(c.id, c.label)}
+                        >
+                          ×
+                        </button>
+                      </div>
                     </th>
                   ))}
                 </tr>

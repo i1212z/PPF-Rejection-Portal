@@ -368,3 +368,61 @@ async def swap_row_order(
     ta.sort_order, tb.sort_order = tb.sort_order, ta.sort_order
     await db.commit()
     return None
+
+
+@router.post("/swap-rows-custom-data", status_code=status.HTTP_204_NO_CONTENT)
+async def swap_all_custom_cells_between_rows(
+    body: DueSwapRowsBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    """Interchange every custom-column value between two credit notes (block swap across rows)."""
+    if body.credit_note_id_a == body.credit_note_id_b:
+        return None
+    await _ensure_tracking(db, body.credit_note_id_a)
+    await _ensure_tracking(db, body.credit_note_id_b)
+
+    async def read_val(cn_id: UUID, col_id: UUID) -> str:
+        r = await db.execute(
+            select(DueCustomCell).where(
+                DueCustomCell.credit_note_id == cn_id,
+                DueCustomCell.column_id == col_id,
+            ),
+        )
+        c = r.scalars().first()
+        return (c.value if c else "") or ""
+
+    col_ids = (await db.execute(select(DueCustomColumn.id))).scalars().all()
+    for col_id in col_ids:
+        va = await read_val(body.credit_note_id_a, col_id)
+        vb = await read_val(body.credit_note_id_b, col_id)
+        await db.execute(
+            sql_delete(DueCustomCell).where(
+                DueCustomCell.credit_note_id == body.credit_note_id_a,
+                DueCustomCell.column_id == col_id,
+            ),
+        )
+        await db.execute(
+            sql_delete(DueCustomCell).where(
+                DueCustomCell.credit_note_id == body.credit_note_id_b,
+                DueCustomCell.column_id == col_id,
+            ),
+        )
+        if vb:
+            db.add(
+                DueCustomCell(
+                    credit_note_id=body.credit_note_id_a,
+                    column_id=col_id,
+                    value=vb,
+                ),
+            )
+        if va:
+            db.add(
+                DueCustomCell(
+                    credit_note_id=body.credit_note_id_b,
+                    column_id=col_id,
+                    value=va,
+                ),
+            )
+    await db.commit()
+    return None
