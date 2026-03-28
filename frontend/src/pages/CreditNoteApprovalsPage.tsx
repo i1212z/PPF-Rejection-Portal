@@ -11,10 +11,6 @@ interface CreditNoteRow {
   customer_name: string;
   market_area: string;
   amount: number;
-  amount_safe: number;
-  amount_warning: number;
-  amount_danger: number;
-  amount_doubtful: number;
   created_at: string;
 }
 
@@ -119,7 +115,7 @@ export default function CreditNoteApprovalsPage() {
                     <div className="text-sm font-mono font-medium">{did}</div>
                     <div className="text-[11px] text-gray-500 mt-0.5">{n.customer_name}</div>
                     <div className="text-[11px] text-gray-600">
-                      {n.market_area} • Delivery: {new Date(n.delivery_date).toLocaleDateString()} • Total:{' '}
+                      {n.market_area} • Delivery: {new Date(n.delivery_date).toLocaleDateString()} • Amount:{' '}
                       {Number(n.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div className="mt-2">
@@ -156,7 +152,7 @@ export default function CreditNoteApprovalsPage() {
                     <th className="px-4 py-2 text-left">Customer</th>
                     <th className="px-4 py-2 text-left">Market area</th>
                     <th className="px-4 py-2 text-left">Delivery date</th>
-                    <th className="px-4 py-2 text-right">Total</th>
+                    <th className="px-4 py-2 text-right">Amount</th>
                     <th className="px-4 py-2 text-left">Status</th>
                     <th className="px-4 py-2 text-left">Created</th>
                     <th className="px-4 py-2 text-left">Action</th>

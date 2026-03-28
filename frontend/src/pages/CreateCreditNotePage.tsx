@@ -16,10 +16,6 @@ export default function CreateCreditNotePage() {
   const [customerName, setCustomerName] = useState('');
   const [marketArea, setMarketArea] = useState<string>(CREDIT_NOTE_MARKET_AREAS[0]);
   const [amount, setAmount] = useState('');
-  const [amountSafe, setAmountSafe] = useState('');
-  const [amountWarning, setAmountWarning] = useState('');
-  const [amountDanger, setAmountDanger] = useState('');
-  const [amountDoubtful, setAmountDoubtful] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,20 +32,12 @@ export default function CreateCreditNotePage() {
       setLoading(false);
       return;
     }
-    const parseBucket = (s: string) => {
-      const x = Number(String(s).trim());
-      return Number.isFinite(x) && x >= 0 ? x : 0;
-    };
     try {
       await apiClient.post('/credit-notes', {
         delivery_date: deliveryDate,
         customer_name: customerName.trim(),
         market_area: marketArea,
         amount: num,
-        amount_safe: parseBucket(amountSafe),
-        amount_warning: parseBucket(amountWarning),
-        amount_danger: parseBucket(amountDanger),
-        amount_doubtful: parseBucket(amountDoubtful),
       });
       rememberCustomerNameAfterSubmit('credit_note', customerName, CUSTOMER_SUGGESTIONS);
       navigate('/credit-notes');
@@ -80,11 +68,11 @@ export default function CreateCreditNotePage() {
       <div>
         <h2 className="text-lg font-semibold text-gray-900">New credit note</h2>
         <p className="text-sm text-gray-500">
-          B2B credit note: delivery date, market area, customer name, classification amounts (optional), and total.
-          Submitted as pending until a manager or admin approves or rejects it.
+          B2B credit note: delivery date, market area, customer name, and amount. Safe / Warning / Danger / Doubtful /
+          Total breakdown appears only on the Due desk register after approval.
         </p>
       </div>
-      <Card title="Credit note details" className="text-sm max-w-2xl">
+      <Card title="Credit note details" className="text-sm max-w-lg">
         {error && (
           <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
         )}
@@ -125,58 +113,8 @@ export default function CreateCreditNotePage() {
               className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
             />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Safe</label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={amountSafe}
-                onChange={(e) => setAmountSafe(e.target.value)}
-                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Warning</label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={amountWarning}
-                onChange={(e) => setAmountWarning(e.target.value)}
-                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Danger</label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={amountDanger}
-                onChange={(e) => setAmountDanger(e.target.value)}
-                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Doubtful</label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={amountDoubtful}
-                onChange={(e) => setAmountDoubtful(e.target.value)}
-                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
-                placeholder="0"
-              />
-            </div>
-          </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Total</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
             <input
               type="number"
               required

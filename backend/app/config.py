@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     # Database
     database_url: Optional[str] = None
 
+    # Bootstrap Due desk account if missing (production DBs often never run /auth/seed-users).
+    due_user_email: str = "due@ppf.local"
+    due_user_password: str = "due123"
+
     # CORS
     backend_cors_origins: List[str] = ["http://localhost:5174", "http://localhost:5173"]
 

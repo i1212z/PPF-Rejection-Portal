@@ -42,10 +42,6 @@ export default function CreditNotesPage() {
   const [editDeliveryDate, setEditDeliveryDate] = useState('');
   const [editMarketArea, setEditMarketArea] = useState('');
   const [editAmount, setEditAmount] = useState('');
-  const [editAmountSafe, setEditAmountSafe] = useState('');
-  const [editAmountWarning, setEditAmountWarning] = useState('');
-  const [editAmountDanger, setEditAmountDanger] = useState('');
-  const [editAmountDoubtful, setEditAmountDoubtful] = useState('');
 
   const isManager = user?.role === 'manager' || user?.role === 'admin';
   const canAccess = user?.role === 'b2b' || isManager;
@@ -84,19 +80,11 @@ export default function CreditNotesPage() {
       setEditDeliveryDate(editing.delivery_date.slice(0, 10));
       setEditMarketArea(editing.market_area || CREDIT_NOTE_MARKET_AREAS[0]);
       setEditAmount(String(editing.amount));
-      setEditAmountSafe(String(editing.amount_safe ?? 0));
-      setEditAmountWarning(String(editing.amount_warning ?? 0));
-      setEditAmountDanger(String(editing.amount_danger ?? 0));
-      setEditAmountDoubtful(String(editing.amount_doubtful ?? 0));
     } else {
       setEditCustomerName('');
       setEditDeliveryDate('');
       setEditMarketArea('');
       setEditAmount('');
-      setEditAmountSafe('');
-      setEditAmountWarning('');
-      setEditAmountDanger('');
-      setEditAmountDoubtful('');
     }
   }, [editing]);
 
@@ -161,19 +149,15 @@ export default function CreditNotesPage() {
   const submitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editing) return;
-    const parseBucket = (s: string) => {
-      const x = Number(String(s).trim());
-      return Number.isFinite(x) && x >= 0 ? x : 0;
-    };
     const payload = {
       delivery_date: editDeliveryDate,
       customer_name: editCustomerName.trim(),
       market_area: editMarketArea,
       amount: Number(editAmount),
-      amount_safe: parseBucket(editAmountSafe),
-      amount_warning: parseBucket(editAmountWarning),
-      amount_danger: parseBucket(editAmountDanger),
-      amount_doubtful: parseBucket(editAmountDoubtful),
+      amount_safe: editing.amount_safe ?? 0,
+      amount_warning: editing.amount_warning ?? 0,
+      amount_danger: editing.amount_danger ?? 0,
+      amount_doubtful: editing.amount_doubtful ?? 0,
     };
     setError(null);
     try {
@@ -298,11 +282,7 @@ export default function CreditNotesPage() {
                     <th className="px-4 py-2 text-left">Delivery date</th>
                     <th className="px-4 py-2 text-left">Market area</th>
                     <th className="px-4 py-2 text-left">Customer</th>
-                    <th className="px-4 py-2 text-right">Safe</th>
-                    <th className="px-4 py-2 text-right">Warn</th>
-                    <th className="px-4 py-2 text-right">Dngr</th>
-                    <th className="px-4 py-2 text-right">Dbfl</th>
-                    <th className="px-4 py-2 text-right">Total</th>
+                    <th className="px-4 py-2 text-right">Amount</th>
                     <th className="px-4 py-2 text-left">Status</th>
                     <th className="px-4 py-2 text-left">Admin remark</th>
                     <th className="px-4 py-2 text-left">Created</th>
@@ -319,18 +299,6 @@ export default function CreditNotesPage() {
                         <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString()}</td>
                         <td className="px-4 py-2 text-gray-700">{n.market_area}</td>
                         <td className="px-4 py-2">{n.customer_name}</td>
-                        <td className="px-4 py-2 text-right tabular-nums text-[11px]">
-                          {Number(n.amount_safe ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-[11px]">
-                          {Number(n.amount_warning ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-[11px]">
-                          {Number(n.amount_danger ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-[11px]">
-                          {Number(n.amount_doubtful ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
                         <td className="px-4 py-2 text-right font-medium tabular-nums">
                           {Number(n.amount).toLocaleString(undefined, {
                             minimumFractionDigits: 2,
@@ -389,7 +357,7 @@ export default function CreditNotesPage() {
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b">
               <h3 className="font-semibold text-gray-900">Edit credit note</h3>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -432,54 +400,8 @@ export default function CreditNotesPage() {
                   className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Safe</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={editAmountSafe}
-                    onChange={(e) => setEditAmountSafe(e.target.value)}
-                    className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Warning</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={editAmountWarning}
-                    onChange={(e) => setEditAmountWarning(e.target.value)}
-                    className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Danger</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={editAmountDanger}
-                    onChange={(e) => setEditAmountDanger(e.target.value)}
-                    className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Doubtful</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={editAmountDoubtful}
-                    onChange={(e) => setEditAmountDoubtful(e.target.value)}
-                    className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Total</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                 <input
                   type="number"
                   min={0}

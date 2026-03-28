@@ -5,12 +5,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from sqlalchemy import delete, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
 from .routers import auth, tickets, approvals, admin, tally, credit_notes, credit_note_approvals, credit_note_tally, due
-from .database import engine, Base, get_db
+from .database import engine, Base, get_db, AsyncSessionLocal
 from .models import (
     User,
     UserRole,
@@ -84,7 +84,8 @@ async def on_startup():
         # whole transaction; isolating avoids breaking startup when a no-op migration fails.
         for stmt in (
             "ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'TALLY'",
-            "ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'due'",
+            # SQLAlchemy persists enum member names (DUE, TALLY), not .value strings.
+            "ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'DUE'",
             "ALTER TABLE rejection_tickets ADD COLUMN IF NOT EXISTS uom VARCHAR(16) NOT NULL DEFAULT 'EA'",
             "ALTER TABLE tally_pending ADD COLUMN IF NOT EXISTS posted_at TIMESTAMP WITH TIME ZONE",
         ):
@@ -123,7 +124,37 @@ async def on_startup():
             except Exception:
                 pass
 
+    await _ensure_due_user_bootstrap()
+
     print("PPF Backend started. POST /tickets (create) is allowed for any authenticated user.")
+
+
+async def _ensure_due_user_bootstrap() -> None:
+    """Create Due desk user on first deploy / empty DB so login works without calling /auth/seed-users."""
+    from passlib.context import CryptContext
+
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    email = settings.due_user_email.strip().lower()
+    password = settings.due_user_password
+    if not email or not password:
+        return
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(User).where(User.email == email))
+            if result.scalars().first():
+                return
+            session.add(
+                User(
+                    name="Due Desk",
+                    email=email,
+                    password_hash=pwd_context.hash(password),
+                    role=UserRole.DUE,
+                ),
+            )
+            await session.commit()
+            print(f"PPF: created bootstrap user {email} (Due desk).")
+    except Exception as e:
+        print(f"PPF: could not bootstrap Due user ({email}): {e}")
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
