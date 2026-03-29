@@ -1,8 +1,13 @@
-from datetime import datetime, timezone
+import csv
+from datetime import date, datetime, timezone
+from io import BytesIO, StringIO
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete as sql_delete, func, or_, select, update
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import Date as SA_Date, delete as sql_delete, func, or_, select, update
+from sqlalchemy.sql import cast
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.deps import require_roles
@@ -426,3 +431,129 @@ async def swap_all_custom_cells_between_rows(
             )
     await db.commit()
     return None
+
+
+def _fmt_money(n: float) -> str:
+    return f"{n:.2f}"
+
+
+@router.get("/report.csv")
+async def due_account_report_csv(
+    date_from: date = Query(..., description="Start date (inclusive)"),
+    date_to: date = Query(..., description="End date (inclusive)"),
+    basis: Literal["delivery", "approved"] = Query(
+        "delivery",
+        description="Filter rows by credit note delivery date or approval timestamp date",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    """
+    CSV export for the Due desk: approved B2B credit notes in the date range, with bucket amounts and custom columns.
+    """
+    if date_from > date_to:
+        raise HTTPException(status_code=400, detail="date_from must be on or before date_to")
+
+    display_map = await _display_id_map(db)
+    q = (
+        select(CreditNote, CreditNoteApproval.approved_at, CreditNoteDueTracking)
+        .join(CreditNoteApproval, CreditNoteApproval.credit_note_id == CreditNote.id)
+        .outerjoin(CreditNoteDueTracking, CreditNoteDueTracking.credit_note_id == CreditNote.id)
+        .where(
+            CreditNote.status == TicketStatus.APPROVED,
+            CreditNoteApproval.decision == Decision.APPROVED,
+        )
+    )
+    if basis == "delivery":
+        q = q.where(
+            CreditNote.delivery_date >= date_from,
+            CreditNote.delivery_date <= date_to,
+        )
+    else:
+        q = q.where(
+            cast(CreditNoteApproval.approved_at, SA_Date) >= date_from,
+            cast(CreditNoteApproval.approved_at, SA_Date) <= date_to,
+        )
+    q = q.order_by(CreditNote.delivery_date.asc(), CreditNote.id.asc())
+    result = await db.execute(q)
+    raw = result.all()
+
+    col_defs = (
+        await db.execute(
+            select(DueCustomColumn).order_by(DueCustomColumn.sort_order.asc(), DueCustomColumn.label.asc()),
+        )
+    ).scalars().all()
+
+    note_ids = [cn.id for cn, _, _ in raw]
+    cells_map = await _custom_cells_map(db, note_ids)
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+
+    headers = [
+        "Due Account",
+        "CN ID",
+        "Particulars",
+        "Market Area",
+        "Delivery Date",
+        "Phase Length (Days)",
+        "Phase",
+        "Timer Label",
+        "Safe",
+        "Warning",
+        "Danger",
+        "Doubtful",
+        "Total",
+        "Approved At",
+        "Register Status",
+        "Paid At",
+    ]
+    for c in col_defs:
+        headers.append(c.label)
+    writer.writerow(headers)
+
+    for cn, approved_at, tr in raw:
+        phase_length = tr.phase_length_days if tr else 15
+        paid_at = tr.paid_at if tr else None
+        phase, s, w, dg, dbf, label = compute_phase_and_buckets(
+            approved_at,
+            paid_at,
+            phase_length,
+            float(cn.amount),
+        )
+        did = display_map.get(cn.id, f"{CN_PREFIX}-???")
+        market = (cn.market_area or "Calicut").strip() or "Calicut"
+        reg_status = "Paid" if paid_at else "Open"
+        paid_str = paid_at.replace(microsecond=0).isoformat() if paid_at else ""
+        appr_str = approved_at.replace(microsecond=0).isoformat()
+
+        row = [
+            "Due desk",
+            did,
+            cn.customer_name,
+            market,
+            cn.delivery_date.isoformat(),
+            str(phase_length),
+            phase,
+            label,
+            _fmt_money(s),
+            _fmt_money(w),
+            _fmt_money(dg),
+            _fmt_money(dbf),
+            _fmt_money(float(cn.amount)),
+            appr_str,
+            reg_status,
+            paid_str,
+        ]
+        cell_for = cells_map.get(cn.id, {})
+        for c in col_defs:
+            row.append(cell_for.get(str(c.id), ""))
+        writer.writerow(row)
+
+    data = buf.getvalue().encode("utf-8-sig")
+    filename = f"due-account-report-{date_from.isoformat()}-to-{date_to.isoformat()}.csv"
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

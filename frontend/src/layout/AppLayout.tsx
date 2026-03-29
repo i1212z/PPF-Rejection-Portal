@@ -49,6 +49,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/credit-notes')) return 'Credit notes';
     if (location.pathname.startsWith('/credit-note-approvals')) return 'Credit note approvals';
     if (location.pathname.startsWith('/due/paid')) return 'Due — paid credit notes';
+    if (location.pathname.startsWith('/due/report')) return 'Due — account report';
     if (location.pathname.startsWith('/due/')) return 'Due — credit notes';
     if (location.pathname.startsWith('/approvals')) return 'Approvals';
     if (location.pathname.startsWith('/reports')) return 'Reports';
@@ -116,6 +117,11 @@ export default function AppLayout() {
                 to="/due/paid-credit-notes"
                 icon={<FileText className="w-4 h-4" />}
                 label="Paid credit notes"
+              />
+              <SidebarLink
+                to="/due/report"
+                icon={<BarChart3 className="w-4 h-4" />}
+                label="Due account report"
               />
             </>
           ) : isTally ? (
@@ -272,6 +278,18 @@ export default function AppLayout() {
                   }
                 >
                   Paid
+                </NavLink>
+                <NavLink
+                  to="/due/report"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  Report
                 </NavLink>
                 {canChangePassword && (
                   <button
