@@ -11,7 +11,7 @@ interface CardProps {
 export function Card({ title, subtitle, rightSlot, children, className }: CardProps) {
   return (
     <section
-      className={`bg-white border border-gray-100 rounded-2xl shadow-sm px-4 py-3 sm:px-5 sm:py-4 min-w-0 max-w-full ${className ?? ''}`}
+      className={`bg-white border border-gray-100 rounded-2xl shadow-sm px-3 py-3 md:px-4 md:py-4 min-w-0 max-w-full ${className ?? ''}`}
     >
       {(title || subtitle || rightSlot) && (
         <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-3 sm:gap-3 min-w-0">

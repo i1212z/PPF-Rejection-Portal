@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
@@ -206,8 +207,6 @@ export default function DashboardPage() {
   const [tallyPostedIds, setTallyPostedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showB2BConfirmedBreakdown, setShowB2BConfirmedBreakdown] = useState(false);
-  const [showB2CConfirmedBreakdown, setShowB2CConfirmedBreakdown] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -347,125 +346,155 @@ export default function DashboardPage() {
       };
     }, [tickets, channelFilter, tallyPostedIds]);
 
-  const b2bUnitEntries = Object.entries(
-    ((rejectedByUnit as any)?.B2B ?? {}) as Record<string, number>,
-  ).sort(([a], [b]) => a.localeCompare(b));
-  const b2cUnitEntries = Object.entries(
-    ((rejectedByUnit as any)?.B2C ?? {}) as Record<string, number>,
-  ).sort(([a], [b]) => a.localeCompare(b));
+  const totalB2BUnits = useMemo(
+    () =>
+      Object.values(rejectedByUnit.B2B || {}).reduce(
+        (acc, v) => acc + Number(v || 0),
+        0,
+      ),
+    [rejectedByUnit.B2B],
+  );
+
+  const totalB2CUnits = useMemo(
+    () =>
+      Object.values(rejectedByUnit.B2C || {}).reduce(
+        (acc, v) => acc + Number(v || 0),
+        0,
+      ),
+    [rejectedByUnit.B2C],
+  );
 
   return (
-    <div className="space-y-3 sm:space-y-6 min-w-0 max-w-full">
+    <div className="space-y-3 md:space-y-6 min-w-0 max-w-full">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0">
-        <div className="min-w-0">
-          <h2 className="hidden md:block text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">
-            Dashboard
-          </h2>
-          <p className="text-sm text-gray-500">
-            Rejection overview for {user?.role} across B2B and B2C.
-          </p>
+      <div className="space-y-3 md:space-y-0">
+        <div className="hidden md:flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0">
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">
+              Dashboard
+            </h2>
+            <p className="text-sm text-gray-500">
+              Rejection overview for {user?.role} across B2B and B2C.
+            </p>
+          </div>
+          <div className="inline-flex w-full md:w-auto justify-center md:justify-start items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-[11px] text-emerald-700 shrink-0">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="truncate">Live rejection tracking</span>
+          </div>
         </div>
-        <div className="inline-flex w-full md:w-auto justify-center md:justify-start items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-2 md:py-1.5 text-xs text-emerald-700 shrink-0">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          Live rejection tracking
+
+        {/* Mobile quick actions + live badge */}
+        <div className="md:hidden space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-[11px] text-emerald-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="truncate">Live rejection tracking</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Link
+              to="/tickets/new"
+              className="flex items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm min-h-[44px]"
+            >
+              New Ticket
+            </Link>
+            <Link
+              to="/credit-notes/new"
+              className="flex items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm min-h-[44px]"
+            >
+              New CN
+            </Link>
+          </div>
         </div>
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-6 min-w-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-6 min-w-0">
         <Card
           title="Total tickets"
-          subtitle="All B2B & B2C rejection tickets"
+          subtitle="All B2B & B2C tickets"
           className="border-t-4 border-t-amber-400"
         >
-          <div className="text-2xl font-semibold text-gray-900">
+          <div className="text-2xl font-bold text-gray-900">
             {loading ? '…' : totalTickets || '0'}
           </div>
-          <p className="mt-1 text-[11px] text-emerald-700">
-            {totalTickets ? `${totalTickets} tickets in the system` : 'No tickets yet'}
+          <p className="mt-1 text-xs text-gray-500">
+            {totalTickets ? `${totalTickets} active` : 'No tickets yet'}
           </p>
         </Card>
         <Card
           title="B2B confirmed rejected qty"
-          subtitle="Across all B2B customers"
+          subtitle="Confirmed rejections (B2B)"
           className="border-t-4 border-t-sky-400"
         >
           <button
             type="button"
-            onClick={() => setShowB2BConfirmedBreakdown((v) => !v)}
-            className="w-full text-left"
+            className="w-full text-left min-h-[44px]"
           >
-            <div className="text-2xl font-semibold text-gray-900">
-              {loading ? '…' : showB2BConfirmedBreakdown ? 'By unit' : 'Tap to view'}
+            <div className="text-2xl font-bold text-gray-900">
+              {loading ? '…' : totalB2BUnits || 0}
             </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              Approved = confirmed rejections. Totals are shown per unit (no KG+GM mixing).
-            </p>
-            {showB2BConfirmedBreakdown && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {Object.entries(rejectedByUnit?.B2B ?? {})
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([u, v]) => (
-                    <span
-                      key={u}
-                      className="inline-flex items-center rounded-full bg-sky-50 border border-sky-100 px-3 py-1 text-[11px] font-semibold text-sky-800"
-                    >
-                      {v} {u}
-                    </span>
-                  ))}
-                {Object.keys(rejectedByUnit?.B2B ?? {}).length === 0 && (
-                  <span className="text-[11px] text-gray-500">No confirmed rejections yet.</span>
-                )}
-              </div>
-            )}
+            <p className="mt-1 text-xs text-gray-500">By unit</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Object.entries(rejectedByUnit?.B2B ?? {})
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([u, v]) => (
+                  <span
+                    key={u}
+                    className="inline-flex items-center rounded-full bg-sky-50 border border-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-800"
+                  >
+                    {v} {u}
+                  </span>
+                ))}
+              {Object.keys(rejectedByUnit?.B2B ?? {}).length === 0 && (
+                <span className="text-[11px] text-gray-500">No confirmed rejections yet.</span>
+              )}
+            </div>
           </button>
         </Card>
         <Card
           title="B2C confirmed rejected qty"
-          subtitle="Across all B2C orders"
+          subtitle="Confirmed rejections (B2C)"
           className="border-t-4 border-t-rose-400"
         >
           <button
             type="button"
-            onClick={() => setShowB2CConfirmedBreakdown((v) => !v)}
-            className="w-full text-left"
+            className="w-full text-left min-h-[44px]"
           >
-            <div className="text-2xl font-semibold text-gray-900">
-              {loading ? '…' : showB2CConfirmedBreakdown ? 'By unit' : 'Tap to view'}
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              Approved = confirmed rejections. Totals are shown per unit (no KG+GM mixing).
-            </p>
-            {showB2CConfirmedBreakdown && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {Object.entries(rejectedByUnit?.B2C ?? {})
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([u, v]) => (
-                    <span
-                      key={u}
-                      className="inline-flex items-center rounded-full bg-rose-50 border border-rose-100 px-3 py-1 text-[11px] font-semibold text-rose-800"
-                    >
-                      {v} {u}
-                    </span>
-                  ))}
-                {Object.keys(rejectedByUnit?.B2C ?? {}).length === 0 && (
-                  <span className="text-[11px] text-gray-500">No confirmed rejections yet.</span>
-                )}
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="text-2xl font-bold text-gray-900">
+                {loading ? '…' : totalB2CUnits || 0}
               </div>
-            )}
+              <span className="text-xs text-gray-400">→</span>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">By unit</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Object.entries(rejectedByUnit?.B2C ?? {})
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([u, v]) => (
+                  <span
+                    key={u}
+                    className="inline-flex items-center rounded-full bg-rose-50 border border-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-800"
+                  >
+                    {v} {u}
+                  </span>
+                ))}
+              {Object.keys(rejectedByUnit?.B2C ?? {}).length === 0 && (
+                <span className="text-[11px] text-gray-500">No confirmed rejections yet.</span>
+              )}
+            </div>
           </button>
         </Card>
         <Card
-          title="Pending approvals"
-          subtitle="Awaiting manager / admin decision"
+          title="Pending"
+          subtitle="Waiting for manager / admin"
           className="border-t-4 border-t-emerald-400"
         >
-          <div className="text-2xl font-semibold text-gray-900">
+          <div className="text-2xl font-bold text-gray-900">
             {loading ? '…' : pendingCount || '0'}
           </div>
-          <p className="mt-1 text-[11px] text-gray-500">
-            See full list in Approvals.
+          <p className="mt-1 text-xs text-gray-500 hidden md:block">
+            Use Approvals tab to action these.
           </p>
         </Card>
       </div>
@@ -512,16 +541,10 @@ export default function DashboardPage() {
               </div>
               <div className="mt-1 text-[11px] text-sky-700">
                 <strong>By unit:</strong>{' '}
-                {b2bUnitEntries.length === 0 && '–'}
-                {b2bUnitEntries.length > 0 && (
-                  <span className="mt-0.5 block space-y-0.5">
-                    {b2bUnitEntries.map(([u, v]) => (
-                      <span key={u} className="block">
-                        {v} {u}
-                      </span>
-                    ))}
-                  </span>
-                )}
+                {Object.entries((rejectedByUnit as any)?.B2B ?? {})
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([u, v]) => `${v} ${u}`)
+                  .join(' • ') || '–'}
               </div>
             </div>
           )}
@@ -533,16 +556,10 @@ export default function DashboardPage() {
               </div>
               <div className="mt-1 text-[11px] text-orange-700">
                 <strong>By unit:</strong>{' '}
-                {b2cUnitEntries.length === 0 && '–'}
-                {b2cUnitEntries.length > 0 && (
-                  <span className="mt-0.5 block space-y-0.5">
-                    {b2cUnitEntries.map(([u, v]) => (
-                      <span key={u} className="block">
-                        {v} {u}
-                      </span>
-                    ))}
-                  </span>
-                )}
+                {Object.entries((rejectedByUnit as any)?.B2C ?? {})
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([u, v]) => `${v} ${u}`)
+                  .join(' • ') || '–'}
               </div>
             </div>
           )}

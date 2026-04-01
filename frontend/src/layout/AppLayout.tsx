@@ -205,14 +205,16 @@ export default function AppLayout() {
 
       <main className="flex-1 flex flex-col min-w-0 max-w-full">
         {/* Top header bar */}
-        <header className="h-11 sm:min-h-16 border-b border-gray-200 bg-white flex items-center justify-between px-3 sm:px-6 py-1 sm:py-0 min-w-0 shadow-sm">
+        <header className="min-h-12 sm:min-h-16 border-b border-gray-200 bg-white flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between px-3 sm:px-6 py-2 sm:py-0 min-w-0">
           <div className="flex flex-col min-w-0">
             <span className="hidden sm:inline text-xs font-medium text-gray-400 uppercase tracking-wide">
               Rejection Ticket Management
             </span>
-            <span className="text-sm sm:text-base font-semibold text-gray-900 truncate">{pageTitle}</span>
+            <span className="text-base sm:text-base font-semibold text-gray-900 truncate">
+              {pageTitle}
+            </span>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-4 min-w-0">
             {/* Search: hide on very small screens to keep header compact */}
             <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1.5 text-xs text-gray-500 w-40 md:w-56 min-w-0 shrink-0">
               <Search className="w-3.5 h-3.5" />
@@ -222,7 +224,7 @@ export default function AppLayout() {
                 className="bg-transparent border-none outline-none placeholder:text-gray-400 text-xs w-full"
               />
             </div>
-            <button className="relative rounded-full p-1.5 min-h-[32px] text-gray-500 hover:text-gray-900 hover:bg-gray-100">
+            <button className="relative rounded-full p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100">
               <Bell className="w-4 h-4" />
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500" />
             </button>
@@ -242,7 +244,7 @@ export default function AppLayout() {
             {/* Compact logout for mobile (always visible, but mainly helps on small screens) */}
             <button
               onClick={logout}
-              className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1.5 min-h-[32px] text-[11px] text-gray-600 hover:bg-gray-100 hover:text-gray-900 sm:hidden"
+              className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600 hover:bg-gray-100 hover:text-gray-900 sm:hidden"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Logout</span>
@@ -251,8 +253,8 @@ export default function AppLayout() {
         </header>
 
         {/* Mobile primary nav for quick access (desktop uses sidebar) */}
-        <nav className="border-b border-gray-200 bg-white px-3 py-2 lg:hidden min-w-0 shadow-sm">
-          <div className="grid grid-cols-2 gap-2 text-xs">
+        <nav className="border-b border-gray-200 bg-white px-3 py-2 lg:hidden min-w-0">
+          <div className="flex flex-wrap gap-2 text-xs pb-0.5">
             {isDue ? (
               <>
                 <NavLink
@@ -372,23 +374,50 @@ export default function AppLayout() {
             ) : (
               <>
                 <NavLink
-                  to="/"
+                  to="/tickets/new"
                   className={({ isActive }) =>
-                    `inline-flex items-center justify-center rounded-full border px-3 py-1.5 whitespace-nowrap ${
+                    `inline-flex items-center justify-center rounded-full border px-4 py-2 whitespace-nowrap text-[11px] font-semibold ${
                       isActive
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 bg-gray-50 text-gray-600'
-                    }`
+                        ? 'border-indigo-600 bg-indigo-600 text-white'
+                        : 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    } shadow-sm min-h-[44px] flex-1`
                   }
                 >
-                  Dashboard
+                  New ticket
                 </NavLink>
+                {canCreditNotes && (
+                  <NavLink
+                    to="/credit-notes/new"
+                    className={({ isActive }) =>
+                      `inline-flex items-center justify-center rounded-full border px-3 py-2 whitespace-nowrap text-[11px] font-semibold ${
+                        isActive
+                          ? 'border-indigo-600 bg-indigo-600 text-white'
+                          : 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                      } shadow-sm min-h-[44px] flex-1`
+                    }
+                  >
+                    New CN
+                  </NavLink>
+                )}
+                {canChangePassword && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPwError(null);
+                      setPwSuccess(null);
+                      setIsPwModalOpen(true);
+                    }}
+                    className="inline-flex items-center justify-center rounded-full border border-gray-200 bg-gray-50 px-3 py-2 whitespace-nowrap text-gray-700 min-h-[44px] w-full sm:w-auto"
+                  >
+                    Change password
+                  </button>
+                )}
               </>
             )}
           </div>
         </nav>
 
-        <section className="flex-1 px-3 py-4 sm:px-4 sm:py-6 md:px-6 overflow-auto min-w-0">
+        <section className="flex-1 px-3 py-4 sm:px-4 sm:py-6 md:px-6 pb-20 md:pb-6 overflow-auto min-w-0">
           <div className="max-w-6xl mx-auto space-y-6 w-full min-w-0">
             <Outlet />
           </div>
@@ -460,6 +489,55 @@ export default function AppLayout() {
           </div>
         )}
       </main>
+      {/* Mobile bottom navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white md:hidden">
+        <div className="mx-auto max-w-6xl flex justify-around px-2 py-1.5 text-[11px] text-gray-500">
+          <NavLink
+            to="/"
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                isActive ? 'text-indigo-600' : 'text-gray-500'
+              }`
+            }
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            <span className="truncate">Home</span>
+          </NavLink>
+          <NavLink
+            to="/tickets"
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                isActive ? 'text-indigo-600' : 'text-gray-500'
+              }`
+            }
+          >
+            <Ticket className="w-4 h-4" />
+            <span className="truncate">Tickets</span>
+          </NavLink>
+          <NavLink
+            to="/credit-notes"
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                isActive ? 'text-indigo-600' : 'text-gray-500'
+              }`
+            }
+          >
+            <FileText className="w-4 h-4" />
+            <span className="truncate">Credit notes</span>
+          </NavLink>
+          <NavLink
+            to="/admin"
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                isActive ? 'text-indigo-600' : 'text-gray-500'
+              }`
+            }
+          >
+            <User className="w-4 h-4" />
+            <span className="truncate">Profile</span>
+          </NavLink>
+        </div>
+      </nav>
     </div>
   );
 }
