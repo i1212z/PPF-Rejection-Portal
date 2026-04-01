@@ -398,8 +398,8 @@ export default function DashboardPage() {
           </p>
         </Card>
         <Card
-          title="B2B confirmed rejected qty"
-          subtitle="Across all B2B customers"
+          title="B2B Rejected"
+          subtitle="Confirmed qty"
           className="border-t-4 border-t-sky-400"
         >
           <button
@@ -407,11 +407,20 @@ export default function DashboardPage() {
             onClick={() => setShowB2BConfirmedBreakdown((v) => !v)}
             className="w-full text-left"
           >
-            <div className="text-2xl font-semibold text-gray-900">
-              {loading ? '…' : showB2BConfirmedBreakdown ? 'By unit' : 'Tap to view'}
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 flex items-baseline gap-1">
+              <span>
+                {loading
+                  ? '…'
+                  : Object.entries(rejectedByUnit?.B2B ?? {}).length === 0
+                  ? '0'
+                  : Object.entries(rejectedByUnit?.B2B ?? {})
+                      .map(([u, v]) => `${v} ${u}`)
+                      .join(' + ')}
+              </span>
+              <span className="text-xs text-gray-500 ml-auto">→</span>
             </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              Approved = confirmed rejections. Totals are shown per unit (no KG+GM mixing).
+            <p className="hidden sm:block mt-1 text-[11px] text-gray-500">
+              Tap to toggle unit breakdown.
             </p>
             {showB2BConfirmedBreakdown && (
               <div className="mt-2 flex flex-wrap gap-2">
@@ -433,8 +442,8 @@ export default function DashboardPage() {
           </button>
         </Card>
         <Card
-          title="B2C confirmed rejected qty"
-          subtitle="Across all B2C orders"
+          title="B2C Rejected"
+          subtitle="Confirmed qty"
           className="border-t-4 border-t-rose-400"
         >
           <button
@@ -442,11 +451,20 @@ export default function DashboardPage() {
             onClick={() => setShowB2CConfirmedBreakdown((v) => !v)}
             className="w-full text-left"
           >
-            <div className="text-2xl font-semibold text-gray-900">
-              {loading ? '…' : showB2CConfirmedBreakdown ? 'By unit' : 'Tap to view'}
+            <div className="text-xl sm:text-2xl font-bold text-gray-900 flex items-baseline gap-1">
+              <span>
+                {loading
+                  ? '…'
+                  : Object.entries(rejectedByUnit?.B2C ?? {}).length === 0
+                  ? '0'
+                  : Object.entries(rejectedByUnit?.B2C ?? {})
+                      .map(([u, v]) => `${v} ${u}`)
+                      .join(' + ')}
+              </span>
+              <span className="text-xs text-gray-500 ml-auto">→</span>
             </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              Approved = confirmed rejections. Totals are shown per unit (no KG+GM mixing).
+            <p className="hidden sm:block mt-1 text-[11px] text-gray-500">
+              Tap to toggle unit breakdown.
             </p>
             {showB2CConfirmedBreakdown && (
               <div className="mt-2 flex flex-wrap gap-2">

@@ -205,12 +205,12 @@ export default function AppLayout() {
 
       <main className="flex-1 flex flex-col min-w-0 max-w-full">
         {/* Top header bar */}
-        <header className="h-12 sm:min-h-16 border-b border-gray-200 bg-white flex items-center justify-between px-3 sm:px-6 py-1.5 sm:py-0 min-w-0">
+        <header className="h-11 sm:min-h-16 border-b border-gray-200 bg-white flex items-center justify-between px-3 sm:px-6 py-1 sm:py-0 min-w-0 shadow-sm">
           <div className="flex flex-col min-w-0">
             <span className="hidden sm:inline text-xs font-medium text-gray-400 uppercase tracking-wide">
               Rejection Ticket Management
             </span>
-            <span className="text-sm sm:text-base font-semibold text-gray-800 truncate">{pageTitle}</span>
+            <span className="text-sm sm:text-base font-semibold text-gray-900 truncate">{pageTitle}</span>
           </div>
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             {/* Search: hide on very small screens to keep header compact */}
@@ -251,7 +251,7 @@ export default function AppLayout() {
         </header>
 
         {/* Mobile primary nav for quick access (desktop uses sidebar) */}
-        <nav className="border-b border-gray-200 bg-white px-3 py-2 lg:hidden min-w-0">
+        <nav className="border-b border-gray-200 bg-white px-3 py-2 lg:hidden min-w-0 shadow-sm">
           <div className="grid grid-cols-2 gap-2 text-xs">
             {isDue ? (
               <>
@@ -371,137 +371,18 @@ export default function AppLayout() {
               </>
             ) : (
               <>
-            <NavLink
-              to="/"
-              className={({ isActive }) =>
-                `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
-                  isActive
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-gray-200 bg-gray-50 text-gray-600'
-                }`
-              }
-            >
-              Dashboard
-            </NavLink>
-            <NavLink
-              to="/tickets/new"
-              className={({ isActive }) =>
-                `inline-flex items-center rounded-full border px-4 py-1.5 whitespace-nowrap text-[11px] font-semibold ${
-                  isActive
-                    ? 'border-indigo-600 bg-indigo-600 text-white'
-                    : 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                } shadow-sm`
-              }
-            >
-              New ticket
-            </NavLink>
-            <NavLink
-              to="/tickets"
-              className={({ isActive }) =>
-                `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
-                  isActive
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-gray-200 bg-gray-50 text-gray-600'
-                }`
-              }
-            >
-              Tickets
-            </NavLink>
-            {canCreditNotes && (
-              <>
                 <NavLink
-                  to="/credit-notes/new"
+                  to="/"
                   className={({ isActive }) =>
-                    `inline-flex items-center rounded-full border px-3 py-1.5 whitespace-nowrap text-[11px] font-semibold ${
-                      isActive
-                        ? 'border-indigo-600 bg-indigo-600 text-white'
-                        : 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                    }`
-                  }
-                >
-                  New CN
-                </NavLink>
-                <NavLink
-                  to="/credit-notes"
-                  className={({ isActive }) =>
-                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                    `inline-flex items-center justify-center rounded-full border px-3 py-1.5 whitespace-nowrap ${
                       isActive
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                         : 'border-gray-200 bg-gray-50 text-gray-600'
                     }`
                   }
                 >
-                  Credit notes
+                  Dashboard
                 </NavLink>
-              </>
-            )}
-            {canChangePassword && (
-              <button
-                type="button"
-                onClick={() => {
-                  setPwError(null);
-                  setPwSuccess(null);
-                  setIsPwModalOpen(true);
-                }}
-                className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 whitespace-nowrap text-gray-700"
-              >
-                Change password
-              </button>
-            )}
-            {(user?.role === 'manager' || user?.role === 'admin') && (
-              <>
-                <NavLink
-                  to="/approvals"
-                  className={({ isActive }) =>
-                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
-                      isActive
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 bg-gray-50 text-gray-600'
-                    }`
-                  }
-                >
-                  Approvals
-                </NavLink>
-                <NavLink
-                  to="/credit-note-approvals"
-                  className={({ isActive }) =>
-                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
-                      isActive
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 bg-gray-50 text-gray-600'
-                    }`
-                  }
-                >
-                  CN appr.
-                </NavLink>
-                <NavLink
-                  to="/reports"
-                  className={({ isActive }) =>
-                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
-                      isActive
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-gray-200 bg-gray-50 text-gray-600'
-                    }`
-                  }
-                >
-                  Reports
-                </NavLink>
-              </>
-            )}
-            {user?.role === 'admin' && (
-              <NavLink
-                to="/admin"
-                className={({ isActive }) =>
-                  `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
-                    isActive
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-200 bg-gray-50 text-gray-600'
-                  }`
-                }
-              >
-                Admin
-              </NavLink>
-            )}
               </>
             )}
           </div>
