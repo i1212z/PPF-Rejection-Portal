@@ -59,6 +59,7 @@ export default function AppLayout() {
 
   const isTally = user?.role === 'tally';
   const isDue = user?.role === 'due';
+  const isManager = user?.role === 'manager' || user?.role === 'admin';
   const canChangePassword =
     user?.role === 'manager' || user?.role === 'admin' || user?.role === 'due';
   const canCreditNotes = user?.role === 'b2b' || user?.role === 'manager' || user?.role === 'admin';
@@ -436,18 +437,18 @@ export default function AppLayout() {
             <span className="truncate">Home</span>
           </NavLink>
           <NavLink
-            to="/tickets"
+            to={isManager ? '/approvals' : '/tickets'}
             className={({ isActive }) =>
               `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
                 isActive ? 'text-indigo-600' : 'text-gray-500'
               }`
             }
           >
-            <Ticket className="w-4 h-4" />
-            <span className="truncate">Tickets</span>
+            {isManager ? <CheckCircle2 className="w-4 h-4" /> : <Ticket className="w-4 h-4" />}
+            <span className="truncate">{isManager ? 'Approvals' : 'Tickets'}</span>
           </NavLink>
           <NavLink
-            to="/credit-notes"
+            to={isManager ? '/credit-note-approvals' : '/credit-notes'}
             className={({ isActive }) =>
               `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
                 isActive ? 'text-indigo-600' : 'text-gray-500'
@@ -455,7 +456,7 @@ export default function AppLayout() {
             }
           >
             <FileText className="w-4 h-4" />
-            <span className="truncate">Credit notes</span>
+            <span className="truncate">{isManager ? 'CN approvals' : 'Credit notes'}</span>
           </NavLink>
           <NavLink
             to="/more"
