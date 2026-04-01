@@ -205,14 +205,14 @@ export default function AppLayout() {
 
       <main className="flex-1 flex flex-col min-w-0 max-w-full">
         {/* Top header bar */}
-        <header className="min-h-14 sm:min-h-16 border-b border-gray-200 bg-white flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 sm:px-6 py-2 sm:py-0 min-w-0">
+        <header className="h-12 sm:min-h-16 border-b border-gray-200 bg-white flex items-center justify-between px-3 sm:px-6 py-1.5 sm:py-0 min-w-0">
           <div className="flex flex-col min-w-0">
-            <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+            <span className="hidden sm:inline text-xs font-medium text-gray-400 uppercase tracking-wide">
               Rejection Ticket Management
             </span>
-            <span className="text-sm sm:text-base text-gray-700 truncate">{pageTitle}</span>
+            <span className="text-sm sm:text-base font-semibold text-gray-800 truncate">{pageTitle}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             {/* Search: hide on very small screens to keep header compact */}
             <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1.5 text-xs text-gray-500 w-40 md:w-56 min-w-0 shrink-0">
               <Search className="w-3.5 h-3.5" />
@@ -222,7 +222,7 @@ export default function AppLayout() {
                 className="bg-transparent border-none outline-none placeholder:text-gray-400 text-xs w-full"
               />
             </div>
-            <button className="relative rounded-full p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100">
+            <button className="relative rounded-full p-1.5 min-h-[32px] text-gray-500 hover:text-gray-900 hover:bg-gray-100">
               <Bell className="w-4 h-4" />
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500" />
             </button>
@@ -242,7 +242,7 @@ export default function AppLayout() {
             {/* Compact logout for mobile (always visible, but mainly helps on small screens) */}
             <button
               onClick={logout}
-              className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600 hover:bg-gray-100 hover:text-gray-900 sm:hidden"
+              className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1.5 min-h-[32px] text-[11px] text-gray-600 hover:bg-gray-100 hover:text-gray-900 sm:hidden"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Logout</span>
@@ -252,7 +252,7 @@ export default function AppLayout() {
 
         {/* Mobile primary nav for quick access (desktop uses sidebar) */}
         <nav className="border-b border-gray-200 bg-white px-3 py-2 lg:hidden min-w-0">
-          <div className="flex gap-2 overflow-x-auto overscroll-x-contain text-xs pb-0.5 -mx-0.5 px-0.5">
+          <div className="grid grid-cols-2 gap-2 text-xs">
             {isDue ? (
               <>
                 <NavLink

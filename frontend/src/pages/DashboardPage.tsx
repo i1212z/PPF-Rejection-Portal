@@ -348,34 +348,52 @@ export default function DashboardPage() {
     }, [tickets, channelFilter, tallyPostedIds]);
 
   return (
-    <div className="space-y-6 min-w-0 max-w-full">
+    <div className="space-y-4 sm:space-y-6 min-w-0 max-w-full">
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0">
         <div className="min-w-0">
-          <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">
+          <h2 className="text-base sm:text-xl font-semibold text-gray-900 tracking-tight">
             Dashboard
           </h2>
-          <p className="text-sm text-gray-500">
+          <p className="hidden sm:block text-sm text-gray-500">
             Rejection overview for {user?.role} across B2B and B2C.
           </p>
         </div>
-        <div className="inline-flex w-full md:w-auto justify-center md:justify-start items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-2 md:py-1.5 text-xs text-emerald-700 shrink-0">
+        <div className="inline-flex w-full md:w-auto justify-center md:justify-start items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1.5 md:py-1 text-[11px] text-emerald-700 shrink-0">
           <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          Live rejection tracking
+          <span>Live tracking</span>
         </div>
       </div>
 
+      {/* Mobile quick actions */}
+      <div className="grid grid-cols-2 gap-2 md:hidden">
+        <button
+          type="button"
+          onClick={() => (window.location.href = '/tickets/new')}
+          className="min-h-[44px] rounded-2xl border border-indigo-200 bg-indigo-600 px-3 py-2 text-[13px] font-semibold text-white shadow-sm"
+        >
+          New Ticket
+        </button>
+        <button
+          type="button"
+          onClick={() => (window.location.href = '/credit-notes/new')}
+          className="min-h-[44px] rounded-2xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-[13px] font-semibold text-indigo-700"
+        >
+          New CN
+        </button>
+      </div>
+
       {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 min-w-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-6 min-w-0">
         <Card
           title="Total tickets"
           subtitle="All B2B & B2C rejection tickets"
           className="border-t-4 border-t-amber-400"
         >
-          <div className="text-2xl font-semibold text-gray-900">
+          <div className="text-2xl sm:text-3xl font-bold text-gray-900">
             {loading ? '…' : totalTickets || '0'}
           </div>
-          <p className="mt-1 text-[11px] text-emerald-700">
+          <p className="hidden sm:block mt-1 text-[11px] text-emerald-700">
             {totalTickets ? `${totalTickets} tickets in the system` : 'No tickets yet'}
           </p>
         </Card>
