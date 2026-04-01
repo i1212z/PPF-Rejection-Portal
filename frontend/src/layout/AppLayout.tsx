@@ -425,6 +425,7 @@ export default function AppLayout() {
       {/* Mobile bottom navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white md:hidden">
         <div className="mx-auto max-w-6xl flex justify-around px-2 py-1.5 text-[11px] text-gray-500">
+          {/* Item 1: Home (all roles) */}
           <NavLink
             to="/"
             className={({ isActive }) =>
@@ -436,39 +437,74 @@ export default function AppLayout() {
             <LayoutDashboard className="w-4 h-4" />
             <span className="truncate">Home</span>
           </NavLink>
-          <NavLink
-            to={isManager ? '/approvals' : '/tickets'}
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
-                isActive ? 'text-indigo-600' : 'text-gray-500'
-              }`
-            }
-          >
-            {isManager ? <CheckCircle2 className="w-4 h-4" /> : <Ticket className="w-4 h-4" />}
-            <span className="truncate">{isManager ? 'Approvals' : 'Tickets'}</span>
-          </NavLink>
-          <NavLink
-            to={isManager ? '/credit-note-approvals' : '/credit-notes'}
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
-                isActive ? 'text-indigo-600' : 'text-gray-500'
-              }`
-            }
-          >
-            <FileText className="w-4 h-4" />
-            <span className="truncate">{isManager ? 'CN approvals' : 'Credit notes'}</span>
-          </NavLink>
-          <NavLink
-            to="/more"
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
-                isActive ? 'text-indigo-600' : 'text-gray-500'
-              }`
-            }
-          >
-            <MoreHorizontal className="w-4 h-4" />
-            <span className="truncate">More</span>
-          </NavLink>
+
+          {/* Items 2 & 3: role-specific */}
+          {isDue ? (
+            <>
+              <NavLink
+                to="/due/paid-credit-notes"
+                className={({ isActive }) =>
+                  `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                    isActive ? 'text-indigo-600' : 'text-gray-500'
+                  }`
+                }
+              >
+                <FileText className="w-4 h-4" />
+                <span className="truncate">Paid notes</span>
+              </NavLink>
+              <NavLink
+                to="/due/report"
+                className={({ isActive }) =>
+                  `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                    isActive ? 'text-indigo-600' : 'text-gray-500'
+                  }`
+                }
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span className="truncate">Report</span>
+              </NavLink>
+            </>
+          ) : (
+            <>
+              <NavLink
+                to={isManager ? '/approvals' : '/tickets'}
+                className={({ isActive }) =>
+                  `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                    isActive ? 'text-indigo-600' : 'text-gray-500'
+                  }`
+                }
+              >
+                {isManager ? <CheckCircle2 className="w-4 h-4" /> : <Ticket className="w-4 h-4" />}
+                <span className="truncate">{isManager ? 'Approvals' : 'Tickets'}</span>
+              </NavLink>
+              <NavLink
+                to={isManager ? '/credit-note-approvals' : '/credit-notes'}
+                className={({ isActive }) =>
+                  `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                    isActive ? 'text-indigo-600' : 'text-gray-500'
+                  }`
+                }
+              >
+                <FileText className="w-4 h-4" />
+                <span className="truncate">{isManager ? 'CN approvals' : 'Credit notes'}</span>
+              </NavLink>
+            </>
+          )}
+
+          {/* Item 4: More (all non-Due roles) */}
+          {!isDue && (
+            <NavLink
+              to="/more"
+              className={({ isActive }) =>
+                `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                  isActive ? 'text-indigo-600' : 'text-gray-500'
+                }`
+              }
+            >
+              <MoreHorizontal className="w-4 h-4" />
+              <span className="truncate">More</span>
+            </NavLink>
+          )}
         </div>
       </nav>
     </div>
