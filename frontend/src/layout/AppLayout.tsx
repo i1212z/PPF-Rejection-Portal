@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut, FileText } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut, FileText, MoreHorizontal } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { apiClient } from '../api/client';
 
@@ -293,19 +293,6 @@ export default function AppLayout() {
                 >
                   Report
                 </NavLink>
-                {canChangePassword && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPwError(null);
-                      setPwSuccess(null);
-                      setIsPwModalOpen(true);
-                    }}
-                    className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 whitespace-nowrap text-gray-700"
-                  >
-                    Change password
-                  </button>
-                )}
               </>
             ) : isTally ? (
               <>
@@ -357,63 +344,8 @@ export default function AppLayout() {
                 >
                   CN posted
                 </NavLink>
-                {canChangePassword && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPwError(null);
-                      setPwSuccess(null);
-                      setIsPwModalOpen(true);
-                    }}
-                    className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 whitespace-nowrap text-gray-700"
-                  >
-                    Change password
-                  </button>
-                )}
               </>
-            ) : (
-              <>
-                <NavLink
-                  to="/tickets/new"
-                  className={({ isActive }) =>
-                    `inline-flex items-center justify-center rounded-full border px-4 py-2 whitespace-nowrap text-[11px] font-semibold ${
-                      isActive
-                        ? 'border-indigo-600 bg-indigo-600 text-white'
-                        : 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    } shadow-sm min-h-[44px] flex-1`
-                  }
-                >
-                  New ticket
-                </NavLink>
-                {canCreditNotes && (
-                  <NavLink
-                    to="/credit-notes/new"
-                    className={({ isActive }) =>
-                      `inline-flex items-center justify-center rounded-full border px-3 py-2 whitespace-nowrap text-[11px] font-semibold ${
-                        isActive
-                          ? 'border-indigo-600 bg-indigo-600 text-white'
-                          : 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                      } shadow-sm min-h-[44px] flex-1`
-                    }
-                  >
-                    New CN
-                  </NavLink>
-                )}
-                {canChangePassword && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPwError(null);
-                      setPwSuccess(null);
-                      setIsPwModalOpen(true);
-                    }}
-                    className="inline-flex items-center justify-center rounded-full border border-gray-200 bg-gray-50 px-3 py-2 whitespace-nowrap text-gray-700 min-h-[44px] w-full sm:w-auto"
-                  >
-                    Change password
-                  </button>
-                )}
-              </>
-            )}
+            ) : null}
           </div>
         </nav>
 
@@ -526,15 +458,15 @@ export default function AppLayout() {
             <span className="truncate">Credit notes</span>
           </NavLink>
           <NavLink
-            to="/admin"
+            to="/more"
             className={({ isActive }) =>
               `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
                 isActive ? 'text-indigo-600' : 'text-gray-500'
               }`
             }
           >
-            <User className="w-4 h-4" />
-            <span className="truncate">Profile</span>
+            <MoreHorizontal className="w-4 h-4" />
+            <span className="truncate">More</span>
           </NavLink>
         </div>
       </nav>

@@ -19,6 +19,7 @@ import CreditNoteTallyPostedPage from './pages/CreditNoteTallyPostedPage';
 import DueCreditNotesPage from './pages/DueCreditNotesPage';
 import DuePaidCreditNotesPage from './pages/DuePaidCreditNotesPage';
 import DueReportPage from './pages/DueReportPage';
+import MobileMorePage from './pages/MobileMorePage';
 import AppLayout from './layout/AppLayout';
 import { RequireRoles } from './auth/RequireRoles';
 
@@ -117,6 +118,7 @@ function App() {
                 </RequireRoles>
               }
             />
+            <Route path="more" element={<MobileMorePage />} />
             <Route
               path="tally/credit-notes/pending"
               element={
