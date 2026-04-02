@@ -185,7 +185,7 @@ export default function ApprovalsPage() {
                   <div className="text-sm font-medium text-gray-900">{getDisplayId(g)}</div>
                   <div className="mt-0.5 text-[11px] text-gray-500">
                     {g.delivery_batch} • {g.channel} •{' '}
-                    {new Date(g.delivery_date).toLocaleDateString()}
+                    {new Date(g.delivery_date).toLocaleDateString('en-GB')}
                   </div>
                   <div className="mt-3 space-y-2">
                     {g.items.map((item) => (
@@ -222,7 +222,7 @@ export default function ApprovalsPage() {
                     ))}
                   </div>
                   <div className="mt-1 text-[11px] text-gray-400">
-                    {new Date(g.created_at).toLocaleString()}
+                    {new Date(g.created_at).toLocaleString('en-GB')}
                   </div>
                 </div>
               ))}
@@ -253,7 +253,7 @@ export default function ApprovalsPage() {
                         </td>
                         <td className="px-4 py-2">{idx === 0 ? g.delivery_batch : ''}</td>
                         <td className="px-4 py-2">
-                          {idx === 0 ? new Date(g.delivery_date).toLocaleDateString() : ''}
+                          {idx === 0 ? new Date(g.delivery_date).toLocaleDateString('en-GB') : ''}
                         </td>
                         <td className="px-4 py-2">
                           <div className="text-[11px] text-gray-700">
@@ -285,7 +285,7 @@ export default function ApprovalsPage() {
                           <StatusBadge status="pending" />
                         </td>
                         <td className="px-4 py-2 text-[11px] text-gray-500">
-                          {idx === 0 ? new Date(g.created_at).toLocaleString() : ''}
+                          {idx === 0 ? new Date(g.created_at).toLocaleString('en-GB') : ''}
                         </td>
                         <td className="px-4 py-2">
                           <div className="flex gap-2">

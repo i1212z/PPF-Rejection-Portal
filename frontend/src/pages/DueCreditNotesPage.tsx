@@ -376,7 +376,7 @@ export default function DueCreditNotesPage() {
                     <td className="px-3 py-2 border border-slate-200 text-gray-900">{r.particulars}</td>
                     <td className="px-3 py-2 border border-slate-200 text-gray-700">{r.market_area}</td>
                     <td className="px-3 py-2 border border-slate-200 whitespace-nowrap">
-                      {new Date(r.date).toLocaleDateString()}
+                      {new Date(r.date).toLocaleDateString('en-GB')}
                     </td>
                     <td className="px-3 py-2 border border-slate-200" onClick={(e) => e.stopPropagation()}>
                       <select
@@ -414,7 +414,7 @@ export default function DueCreditNotesPage() {
                     <td className="px-3 py-2 border border-slate-200 text-right tabular-nums">{fmt(r.doubtful)}</td>
                     <td className="px-3 py-2 border border-slate-200 text-right tabular-nums font-medium">{fmt(r.total)}</td>
                     <td className="px-3 py-2 border border-slate-200 text-[11px] text-gray-500 whitespace-nowrap">
-                      {new Date(r.approved_at).toLocaleString()}
+                      {new Date(r.approved_at).toLocaleString('en-GB')}
                     </td>
                     {cols.map((c) => {
                       const picked =

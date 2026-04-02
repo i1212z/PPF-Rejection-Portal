@@ -109,7 +109,7 @@ export default function CreditNoteTallyPostedPage() {
                   return (
                     <tr key={n.id} className="hover:bg-gray-50">
                       <td className="px-4 py-2 font-mono text-[11px]">{did}</td>
-                      <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString()}</td>
+                      <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString('en-GB')}</td>
                       <td className="px-4 py-2">{n.customer_name}</td>
                       <td className="px-4 py-2 text-right font-medium">
                         {Number(n.amount).toLocaleString(undefined, {
@@ -120,7 +120,7 @@ export default function CreditNoteTallyPostedPage() {
                       <td className="px-4 py-2">
                         <StatusBadge status={n.status} />
                       </td>
-                      <td className="px-4 py-2 text-gray-500">{new Date(n.created_at).toLocaleString()}</td>
+                      <td className="px-4 py-2 text-gray-500">{new Date(n.created_at).toLocaleString('en-GB')}</td>
                       <td className="px-4 py-2">
                         <button
                           type="button"

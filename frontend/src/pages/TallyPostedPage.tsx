@@ -293,7 +293,7 @@ export default function TallyPostedPage() {
                           {displayId}
                         </td>
                         <td className="px-4 py-2">
-                          {new Date(g.delivery_date).toLocaleDateString()}
+                          {new Date(g.delivery_date).toLocaleDateString('en-GB')}
                         </td>
                         <td className="px-4 py-2">{g.delivery_batch}</td>
                         <td className="px-4 py-2">
@@ -319,7 +319,7 @@ export default function TallyPostedPage() {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-[11px] text-gray-500">
-                          {new Date(g.created_at).toLocaleString()}
+                          {new Date(g.created_at).toLocaleString('en-GB')}
                         </td>
                       </tr>
                       {isExpanded && (
@@ -421,7 +421,7 @@ export default function TallyPostedPage() {
                   return (
                     <tr key={n.id}>
                       <td className="px-4 py-2 font-mono font-medium text-[11px] text-gray-800">{did}</td>
-                      <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString()}</td>
+                      <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString('en-GB')}</td>
                       <td className="px-4 py-2">{n.customer_name}</td>
                       <td className="px-4 py-2 text-right tabular-nums">
                         {Number(n.amount).toLocaleString(undefined, {
@@ -433,7 +433,7 @@ export default function TallyPostedPage() {
                         <StatusBadge status={n.status} />
                       </td>
                       <td className="px-4 py-2 text-[11px] text-gray-500">
-                        {new Date(n.created_at).toLocaleString()}
+                        {new Date(n.created_at).toLocaleString('en-GB')}
                       </td>
                       <td className="px-4 py-2">
                         <button

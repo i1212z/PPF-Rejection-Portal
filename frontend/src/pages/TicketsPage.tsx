@@ -376,7 +376,7 @@ export default function TicketsPage() {
                       })()}
                     </div>
                     <div className="mt-1 text-[11px] text-gray-500">
-                      {g.channel} • {new Date(g.delivery_date).toLocaleDateString()}
+                      {g.channel} • {new Date(g.delivery_date).toLocaleDateString('en-GB')}
                     </div>
                     <div className="mt-2 space-y-2 text-[11px] text-gray-600">
                       {g.items.map((item) => {
@@ -445,7 +445,7 @@ export default function TicketsPage() {
                       })}
                     </div>
                     <div className="mt-1 text-[11px] text-gray-400">
-                      {new Date(g.created_at).toLocaleString()}
+                      {new Date(g.created_at).toLocaleString('en-GB')}
                     </div>
                   </div>
                 ))}
@@ -504,7 +504,7 @@ export default function TicketsPage() {
                               {displayId}
                             </td>
                             <td className="px-4 py-2">
-                              {new Date(g.delivery_date).toLocaleDateString()}
+                              {new Date(g.delivery_date).toLocaleDateString('en-GB')}
                             </td>
                             <td className="px-4 py-2">
                               <span>{g.delivery_batch}</span>
@@ -540,7 +540,7 @@ export default function TicketsPage() {
                                 : '–'}
                             </td>
                             <td className="px-4 py-2 text-[11px] text-gray-500">
-                              {new Date(g.created_at).toLocaleString()}
+                              {new Date(g.created_at).toLocaleString('en-GB')}
                             </td>
                             <td className="px-4 py-2 text-[11px] text-gray-500" onClick={(e) => e.stopPropagation()}>
                               {(() => {
@@ -785,7 +785,7 @@ export default function TicketsPage() {
                           )}
                         </div>
                         <div className="mt-1 text-[11px] text-gray-500">
-                          {new Date(g.delivery_date).toLocaleDateString()}
+                          {new Date(g.delivery_date).toLocaleDateString('en-GB')}
                         </div>
                         <div className="mt-2 space-y-1 text-[11px] text-gray-600">
                           {g.items.map((item) => (
@@ -813,7 +813,7 @@ export default function TicketsPage() {
                           ))}
                         </div>
                         <div className="mt-1 text-[11px] text-gray-400">
-                          {new Date(g.created_at).toLocaleString()}
+                          {new Date(g.created_at).toLocaleString('en-GB')}
                         </div>
                         {isManagerView && base && (
                           <div className="mt-2 flex flex-wrap gap-2">
@@ -904,7 +904,7 @@ export default function TicketsPage() {
                               {displayId}
                             </td>
                             <td className="px-4 py-2">
-                              {new Date(g.delivery_date).toLocaleDateString()}
+                              {new Date(g.delivery_date).toLocaleDateString('en-GB')}
                             </td>
                             <td className="px-4 py-2">
                               <span>{g.delivery_batch}</span>
@@ -934,7 +934,7 @@ export default function TicketsPage() {
                                 : '–'}
                             </td>
                             <td className="px-4 py-2 text-[11px] text-gray-500">
-                              {new Date(g.created_at).toLocaleString()}
+                              {new Date(g.created_at).toLocaleString('en-GB')}
                             </td>
                             {isManagerView && (
                               <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
@@ -1147,7 +1147,7 @@ export default function TicketsPage() {
                           )}
                         </div>
                         <div className="mt-1 text-[11px] text-gray-500">
-                          {new Date(g.delivery_date).toLocaleDateString()}
+                          {new Date(g.delivery_date).toLocaleDateString('en-GB')}
                         </div>
                         <div className="mt-2 space-y-1 text-[11px] text-gray-600">
                           {g.items.map((item) => (
@@ -1172,7 +1172,7 @@ export default function TicketsPage() {
                           ))}
                         </div>
                         <div className="mt-1 text-[11px] text-gray-400">
-                          {new Date(g.created_at).toLocaleString()}
+                          {new Date(g.created_at).toLocaleString('en-GB')}
                         </div>
                         {isManagerView && base && (
                           <div className="mt-2 flex flex-wrap gap-2">
@@ -1263,7 +1263,7 @@ export default function TicketsPage() {
                                 {displayId}
                               </td>
                               <td className="px-4 py-2">
-                                {new Date(g.delivery_date).toLocaleDateString()}
+                                {new Date(g.delivery_date).toLocaleDateString('en-GB')}
                               </td>
                               <td className="px-4 py-2">
                                 <span>{g.delivery_batch}</span>
@@ -1293,7 +1293,7 @@ export default function TicketsPage() {
                                   : '–'}
                               </td>
                               <td className="px-4 py-2 text-[11px] text-gray-500">
-                                {new Date(g.created_at).toLocaleString()}
+                                {new Date(g.created_at).toLocaleString('en-GB')}
                               </td>
                               {isManagerView && (
                                 <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>

@@ -117,7 +117,7 @@ function TicketRow({
         </td>
         <td className="px-4 py-2">{g.delivery_batch}</td>
         <td className="px-4 py-2">
-          {new Date(g.delivery_date).toLocaleDateString()}
+          {new Date(g.delivery_date).toLocaleDateString('en-GB')}
         </td>
         <td className="px-4 py-2 text-xs">
           <span
@@ -140,7 +140,7 @@ function TicketRow({
           )}
         </td>
         <td className="px-4 py-2 text-xs text-gray-500">
-          {new Date(g.created_at).toLocaleString()}
+          {new Date(g.created_at).toLocaleString('en-GB')}
         </td>
       </tr>
       {expanded && (
@@ -383,14 +383,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Mobile quick actions + live badge */}
+        {/* Mobile quick actions */}
         <div className="md:hidden space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-[11px] text-emerald-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="truncate">Live rejection tracking</span>
-            </div>
-          </div>
           <div className="grid grid-cols-2 gap-2">
             <Link
               to="/tickets/new"
@@ -409,7 +403,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-6 min-w-0">
+      <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-6 min-w-0">
         <Card
           title="Total tickets"
           subtitle="All B2B & B2C tickets"

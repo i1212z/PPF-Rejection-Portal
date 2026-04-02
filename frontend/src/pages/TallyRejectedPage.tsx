@@ -211,7 +211,7 @@ export default function TallyRejectedPage() {
                           {displayId}
                         </td>
                         <td className="px-4 py-2">
-                          {new Date(g.delivery_date).toLocaleDateString()}
+                          {new Date(g.delivery_date).toLocaleDateString('en-GB')}
                         </td>
                         <td className="px-4 py-2">{g.delivery_batch}</td>
                         <td className="px-4 py-2">
@@ -224,7 +224,7 @@ export default function TallyRejectedPage() {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-[11px] text-gray-500">
-                          {new Date(g.created_at).toLocaleString()}
+                          {new Date(g.created_at).toLocaleString('en-GB')}
                         </td>
                       </tr>
                       {isExpanded && (

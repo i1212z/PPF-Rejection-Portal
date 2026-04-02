@@ -115,7 +115,7 @@ export default function CreditNoteApprovalsPage() {
                     <div className="text-sm font-mono font-medium">{did}</div>
                     <div className="text-[11px] text-gray-500 mt-0.5">{n.customer_name}</div>
                     <div className="text-[11px] text-gray-600">
-                      {n.market_area} • Delivery: {new Date(n.delivery_date).toLocaleDateString()} • Amount:{' '}
+                      {n.market_area} • Delivery: {new Date(n.delivery_date).toLocaleDateString('en-GB')} • Amount:{' '}
                       {Number(n.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div className="mt-2">
@@ -166,7 +166,7 @@ export default function CreditNoteApprovalsPage() {
                         <td className="px-4 py-2 font-mono text-[11px]">{did}</td>
                         <td className="px-4 py-2">{n.customer_name}</td>
                         <td className="px-4 py-2 text-gray-700">{n.market_area}</td>
-                        <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString()}</td>
+                        <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString('en-GB')}</td>
                         <td className="px-4 py-2 text-right font-medium">
                           {Number(n.amount).toLocaleString(undefined, {
                             minimumFractionDigits: 2,
@@ -176,7 +176,7 @@ export default function CreditNoteApprovalsPage() {
                         <td className="px-4 py-2">
                           <StatusBadge status="pending" />
                         </td>
-                        <td className="px-4 py-2 text-gray-500">{new Date(n.created_at).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-gray-500">{new Date(n.created_at).toLocaleString('en-GB')}</td>
                         <td className="px-4 py-2">
                           <div className="flex gap-2">
                             <button

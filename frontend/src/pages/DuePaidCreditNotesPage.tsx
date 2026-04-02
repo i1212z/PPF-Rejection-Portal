@@ -169,7 +169,7 @@ export default function DuePaidCreditNotesPage() {
                     <td className="px-3 py-2 border border-slate-200">{r.particulars}</td>
                     <td className="px-3 py-2 border border-slate-200">{r.market_area}</td>
                     <td className="px-3 py-2 border border-slate-200 whitespace-nowrap">
-                      {new Date(r.date).toLocaleDateString()}
+                      {new Date(r.date).toLocaleDateString('en-GB')}
                     </td>
                     <td className="px-3 py-2 border border-slate-200 capitalize text-[11px]">
                       {r.phase}
@@ -181,7 +181,7 @@ export default function DuePaidCreditNotesPage() {
                     <td className="px-3 py-2 border border-slate-200 text-right tabular-nums">{fmt(r.doubtful)}</td>
                     <td className="px-3 py-2 border border-slate-200 text-right tabular-nums font-medium">{fmt(r.total)}</td>
                     <td className="px-3 py-2 border border-slate-200 text-[11px] text-gray-600 whitespace-nowrap">
-                      {r.paid_at ? new Date(r.paid_at).toLocaleString() : '–'}
+                      {r.paid_at ? new Date(r.paid_at).toLocaleString('en-GB') : '–'}
                     </td>
                     <td className="px-3 py-2 border border-slate-200 text-center">
                       <button

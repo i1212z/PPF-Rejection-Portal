@@ -231,7 +231,7 @@ export default function CreditNotesPage() {
                   <div key={n.id} className="rounded-xl border border-gray-100 bg-white px-3 py-3 shadow-sm">
                     <div className="text-sm font-mono font-medium text-gray-900">{did}</div>
                     <div className="text-[11px] text-gray-500 mt-0.5">
-                      {n.market_area} • {n.customer_name} • {new Date(n.delivery_date).toLocaleDateString()}
+                      {n.market_area} • {n.customer_name} • {new Date(n.delivery_date).toLocaleDateString('en-GB')}
                     </div>
                     <div className="mt-1 text-sm font-semibold text-gray-800">
                       Amount: {Number(n.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -244,7 +244,7 @@ export default function CreditNotesPage() {
                         {remark}
                       </div>
                     ) : null}
-                    <div className="mt-2 text-[11px] text-gray-400">{new Date(n.created_at).toLocaleString()}</div>
+                    <div className="mt-2 text-[11px] text-gray-400">{new Date(n.created_at).toLocaleString('en-GB')}</div>
                     {(canMutate(n) || canUndo(n)) && (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {canMutate(n) && (
@@ -305,7 +305,7 @@ export default function CreditNotesPage() {
                     return (
                       <tr key={n.id} className="hover:bg-gray-50">
                         <td className="px-4 py-2 font-mono text-[11px]">{did}</td>
-                        <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString()}</td>
+                        <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString('en-GB')}</td>
                         <td className="px-4 py-2 text-gray-700">{n.market_area}</td>
                         <td className="px-4 py-2">{n.customer_name}</td>
                         <td className="px-4 py-2 text-right font-medium tabular-nums">
@@ -320,7 +320,7 @@ export default function CreditNotesPage() {
                         <td className="px-4 py-2 text-gray-600 max-w-[160px] truncate" title={remark}>
                           {remark || '–'}
                         </td>
-                        <td className="px-4 py-2 text-gray-500">{new Date(n.created_at).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-gray-500">{new Date(n.created_at).toLocaleString('en-GB')}</td>
                         <td className="px-4 py-2">
                           <div className="flex flex-wrap gap-1">
                             {canMutate(n) && (
