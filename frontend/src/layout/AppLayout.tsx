@@ -60,6 +60,7 @@ export default function AppLayout() {
   const isTally = user?.role === 'tally';
   const isDue = user?.role === 'due';
   const isManager = user?.role === 'manager' || user?.role === 'admin';
+  const showMobileTopNav = isTally;
   const canChangePassword =
     user?.role === 'manager' || user?.role === 'admin' || user?.role === 'due';
   const canCreditNotes = user?.role === 'b2b' || user?.role === 'manager' || user?.role === 'admin';
@@ -206,7 +207,7 @@ export default function AppLayout() {
 
       <main className="flex-1 flex flex-col min-w-0 max-w-full">
         {/* Top header bar */}
-        <header className="min-h-12 sm:min-h-16 border-b border-gray-200 bg-white flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between px-3 sm:px-6 py-2 sm:py-0 min-w-0">
+        <header className="min-h-12 sm:min-h-16 border-b border-gray-200 bg-white flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between px-3 sm:px-6 py-1.5 sm:py-0 min-w-0">
           <div className="flex flex-col min-w-0">
             <span className="hidden sm:inline text-xs font-medium text-gray-400 uppercase tracking-wide">
               Rejection Ticket Management
@@ -254,6 +255,7 @@ export default function AppLayout() {
         </header>
 
         {/* Mobile primary nav for quick access (desktop uses sidebar) */}
+        {showMobileTopNav && (
         <nav className="border-b border-gray-200 bg-white px-3 py-2 lg:hidden min-w-0">
           <div className="flex flex-wrap gap-2 text-xs pb-0.5">
             {isDue ? (
@@ -349,6 +351,7 @@ export default function AppLayout() {
             ) : null}
           </div>
         </nav>
+        )}
 
         <section className="flex-1 px-3 py-4 sm:px-4 sm:py-6 md:px-6 pb-20 md:pb-6 overflow-auto min-w-0">
           <div className="max-w-6xl mx-auto space-y-6 w-full min-w-0">

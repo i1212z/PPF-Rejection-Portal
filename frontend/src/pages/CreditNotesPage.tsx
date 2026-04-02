@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { CustomerNameField } from '../components/CustomerNameField';
@@ -203,6 +204,14 @@ export default function CreditNotesPage() {
             <option value="rejected">Rejected</option>
           </select>
         </div>
+      </div>
+      <div className="md:hidden">
+        <Link
+          to="/credit-notes/new"
+          className="inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white min-h-[44px]"
+        >
+          New CN
+        </Link>
       </div>
 
       {error && (
