@@ -540,14 +540,76 @@ async def aging_workbook_csv(
 
     buf = StringIO()
     writer = csv.writer(buf)
+    writer.writerow(["Due aging workbook export"])
     writer.writerow(["Workbook title", title])
     writer.writerow(["Sheet date range", dr])
     writer.writerow([])
+
+    n_unpaid = sum(1 for r in rows if r.paid_at is None)
+    n_paid = sum(1 for r in rows if r.paid_at is not None)
+    writer.writerow(["Summary", "", "", "", "", "", "", "", "", "", ""])
+    writer.writerow(["Unpaid (open) lines", str(n_unpaid), "", "", "", "", "", "", "", "", ""])
+    writer.writerow(["Paid lines", str(n_paid), "", "", "", "", "", "", "", "", ""])
+    writer.writerow([])
+
+    us = uw = udg = udb = ut = 0.0
+    ps = pw = pdg = pdb = pt = 0.0
+    for r in rows:
+        s = float(r.amount_safe or 0)
+        w = float(r.amount_warning or 0)
+        dg = float(r.amount_danger or 0)
+        dbf = float(r.amount_doubtful or 0)
+        t = float(r.amount_total or 0)
+        if r.paid_at is None:
+            us += s
+            uw += w
+            udg += dg
+            udb += dbf
+            ut += t
+        else:
+            ps += s
+            pw += w
+            pdg += dg
+            pdb += dbf
+            pt += t
+
+    writer.writerow(
+        [
+            "Subtotal UNPAID only",
+            "",
+            "",
+            "",
+            _fmt_csv_money(us),
+            _fmt_csv_money(uw),
+            _fmt_csv_money(udg),
+            _fmt_csv_money(udb),
+            _fmt_csv_money(ut),
+            "",
+            "",
+        ],
+    )
+    writer.writerow(
+        [
+            "Subtotal PAID only",
+            "",
+            "",
+            "",
+            _fmt_csv_money(ps),
+            _fmt_csv_money(pw),
+            _fmt_csv_money(pdg),
+            _fmt_csv_money(pdb),
+            _fmt_csv_money(pt),
+            "",
+            "",
+        ],
+    )
+    writer.writerow([])
+
     writer.writerow(
         [
             "Location group",
             "Location label",
-            "Register",
+            "Status",
             "Particulars",
             "Safe",
             "Warning",
@@ -561,7 +623,7 @@ async def aging_workbook_csv(
 
     gs = gw = gdg = gdb = gt = 0.0
     for r in rows:
-        reg = "Open" if r.paid_at is None else "Paid"
+        status = "Unpaid" if r.paid_at is None else "Paid"
         paid_s = r.paid_at.replace(microsecond=0).isoformat() if r.paid_at else ""
         imp = _imported_at_aware(r).replace(microsecond=0).isoformat()
         s = float(r.amount_safe or 0)
@@ -578,7 +640,7 @@ async def aging_workbook_csv(
             [
                 r.location_group,
                 r.location_label,
-                reg,
+                status,
                 r.particulars,
                 _fmt_csv_money(s),
                 _fmt_csv_money(w),
@@ -593,7 +655,7 @@ async def aging_workbook_csv(
     writer.writerow([])
     writer.writerow(
         [
-            "Grand total",
+            "GRAND TOTAL (unpaid + paid)",
             "",
             "",
             "",
