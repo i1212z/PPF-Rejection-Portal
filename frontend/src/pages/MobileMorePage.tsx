@@ -45,7 +45,7 @@ export default function MobileMorePage() {
             },
             {
               to: '/due/report',
-              label: 'CN CSV export',
+              label: 'Reports',
               icon: <BarChart3 className="w-4 h-4" />,
             },
           ],

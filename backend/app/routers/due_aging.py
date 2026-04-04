@@ -4,12 +4,15 @@ Due desk aging workbook: static zone balances per row (no automatic phase/timer 
 Open rows can be replaced on upload; paid rows are kept. All bucket changes are explicit
 (edit, swap endpoints, or import)—the server never shifts Safe → Warning over time.
 """
+import csv
 import json
 from datetime import datetime, timezone
+from io import BytesIO, StringIO
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import delete as sql_delete, select
+from fastapi.responses import StreamingResponse
+from sqlalchemy import case, delete as sql_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.deps import require_roles
@@ -504,6 +507,114 @@ async def swap_zones_global(
     m.updated_at = datetime.now(timezone.utc)
     await db.commit()
     return None
+
+
+def _fmt_csv_money(n: float) -> str:
+    return f"{float(n):.2f}"
+
+
+@router.get("/report.csv")
+async def aging_workbook_csv(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    """
+    Full aging workbook snapshot: all open and paid rows, UTF-8 BOM for Excel,
+    plus workbook title/date range and a grand total row.
+    """
+    m = await _get_meta_row(db)
+    title = (m.company_title if m else "") or ""
+    dr = (m.date_range_label if m else "") or ""
+
+    q = (
+        select(DueAgingRow)
+        .order_by(
+            DueAgingRow.location_sort.asc(),
+            DueAgingRow.location_group.asc(),
+            case((DueAgingRow.paid_at.is_(None), 0), else_=1),
+            DueAgingRow.sort_order.asc(),
+            DueAgingRow.id.asc(),
+        )
+    )
+    rows = (await db.execute(q)).scalars().all()
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Workbook title", title])
+    writer.writerow(["Sheet date range", dr])
+    writer.writerow([])
+    writer.writerow(
+        [
+            "Location group",
+            "Location label",
+            "Register",
+            "Particulars",
+            "Safe",
+            "Warning",
+            "Danger",
+            "Doubtful",
+            "Total",
+            "Paid at (UTC)",
+            "Imported at (UTC)",
+        ],
+    )
+
+    gs = gw = gdg = gdb = gt = 0.0
+    for r in rows:
+        reg = "Open" if r.paid_at is None else "Paid"
+        paid_s = r.paid_at.replace(microsecond=0).isoformat() if r.paid_at else ""
+        imp = _imported_at_aware(r).replace(microsecond=0).isoformat()
+        s = float(r.amount_safe or 0)
+        w = float(r.amount_warning or 0)
+        dg = float(r.amount_danger or 0)
+        dbf = float(r.amount_doubtful or 0)
+        t = float(r.amount_total or 0)
+        gs += s
+        gw += w
+        gdg += dg
+        gdb += dbf
+        gt += t
+        writer.writerow(
+            [
+                r.location_group,
+                r.location_label,
+                reg,
+                r.particulars,
+                _fmt_csv_money(s),
+                _fmt_csv_money(w),
+                _fmt_csv_money(dg),
+                _fmt_csv_money(dbf),
+                _fmt_csv_money(t),
+                paid_s,
+                imp,
+            ],
+        )
+
+    writer.writerow([])
+    writer.writerow(
+        [
+            "Grand total",
+            "",
+            "",
+            "",
+            _fmt_csv_money(gs),
+            _fmt_csv_money(gw),
+            _fmt_csv_money(gdg),
+            _fmt_csv_money(gdb),
+            _fmt_csv_money(gt),
+            "",
+            "",
+        ],
+    )
+
+    data = buf.getvalue().encode("utf-8-sig")
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    filename = f"due-aging-register-{stamp}.csv"
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/clear-open", status_code=status.HTTP_204_NO_CONTENT)

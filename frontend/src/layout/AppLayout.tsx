@@ -49,7 +49,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/credit-notes')) return 'Credit notes';
     if (location.pathname.startsWith('/credit-note-approvals')) return 'Credit note approvals';
     if (location.pathname.startsWith('/due/paid')) return 'Due — paid sheet';
-    if (location.pathname.startsWith('/due/report')) return 'Due — CN export';
+    if (location.pathname.startsWith('/due/report')) return 'Due — reports';
     if (location.pathname.startsWith('/due/')) return 'Due — open sheet';
     if (location.pathname.startsWith('/approvals')) return 'Approvals';
     if (location.pathname.startsWith('/reports')) return 'Reports';
@@ -136,7 +136,7 @@ export default function AppLayout() {
               <SidebarLink
                 to="/due/report"
                 icon={<BarChart3 className="w-4 h-4" />}
-                label="CN CSV export"
+                label="Reports"
               />
             </>
           ) : isTally ? (
@@ -321,7 +321,7 @@ export default function AppLayout() {
                     }`
                   }
                 >
-                  CN export
+                  Reports
                 </NavLink>
               </>
             ) : isTally ? (
@@ -491,7 +491,7 @@ export default function AppLayout() {
                 }
               >
                 <BarChart3 className="w-4 h-4" />
-                <span className="truncate">Report</span>
+                <span className="truncate">Reports</span>
               </NavLink>
             </>
           ) : (

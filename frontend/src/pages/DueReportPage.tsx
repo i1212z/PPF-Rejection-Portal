@@ -16,56 +16,73 @@ export default function DueReportPage() {
   const [fromDate, setFromDate] = useState(defaultFromDateStr);
   const [toDate, setToDate] = useState(defaultToDateStr);
   const [basis, setBasis] = useState<'delivery' | 'approved'>('delivery');
-  const [loading, setLoading] = useState(false);
+  const [loadingCn, setLoadingCn] = useState(false);
+  const [loadingAging, setLoadingAging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const basisHint = useMemo(() => {
     if (basis === 'delivery') {
-      return 'Includes rows whose credit note delivery date falls in the range (open and paid registers).';
+      return 'Only approved B2B credit notes whose delivery date is in the range.';
     }
-    return 'Includes rows whose manager approval date falls in the range (open and paid registers).';
+    return 'Only approved B2B credit notes whose manager approval date is in the range.';
   }, [basis]);
 
-  const downloadCsv = async () => {
+  const downloadBlob = async (path: string, filename: string, params?: Record<string, string>) => {
+    const res = await apiClient.get<Blob>(path, {
+      params,
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadAgingCsv = async () => {
     setError(null);
-    setLoading(true);
+    setLoadingAging(true);
     try {
-      const res = await apiClient.get<Blob>('/due/report.csv', {
-        params: {
-          date_from: fromDate,
-          date_to: toDate,
-          basis,
-        },
-        responseType: 'blob',
-      });
-      const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `due-account-report-${fromDate}-to-${toDate}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      const stamp = new Date().toISOString().slice(0, 10);
+      await downloadBlob('/due/aging/report.csv', `due-aging-register-${stamp}.csv`);
     } catch (err: unknown) {
-      const msg =
-        err && typeof err === 'object' && 'response' in err && (err as { response?: { data?: unknown } }).response?.data
-          ? await tryBlobErrorDetail((err as { response: { data: Blob } }).response.data)
-          : 'Could not download report.';
-      setError(msg);
+      setError(await blobErrorMessage(err));
     } finally {
-      setLoading(false);
+      setLoadingAging(false);
+    }
+  };
+
+  const downloadCnCsv = async () => {
+    setError(null);
+    if (fromDate > toDate) {
+      setError('From date must be on or before To date.');
+      return;
+    }
+    setLoadingCn(true);
+    try {
+      await downloadBlob('/due/report.csv', `due-credit-notes-${fromDate}-to-${toDate}.csv`, {
+        date_from: fromDate,
+        date_to: toDate,
+        basis,
+      });
+    } catch (err: unknown) {
+      setError(await blobErrorMessage(err));
+    } finally {
+      setLoadingCn(false);
     }
   };
 
   return (
     <div className="space-y-4 min-w-0 max-w-full">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Credit notes CSV export</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Due desk — reports</h2>
         <p className="text-sm text-gray-500">
-          Download approved B2B credit notes as CSV (separate from the Excel aging sheet). The file includes a{' '}
-          <strong>Due Account</strong> column
-          plus CN ID, particulars, buckets, phase, custom columns, and register status.
+          Two separate exports: your <strong>uploaded aging workbook</strong> (open + paid lines) and{' '}
+          <strong>approved B2B credit notes</strong> from the ticket system (filtered by date).
         </p>
       </div>
 
@@ -73,7 +90,28 @@ export default function DueReportPage() {
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
       )}
 
-      <Card title="Date range & basis" subtitle={basisHint} className="text-sm">
+      <Card
+        title="Aging workbook (Excel register)"
+        subtitle="Everything currently in the due sheet: all locations, open and paid rows, zone amounts, and grand total. UTF-8 with BOM for Excel."
+        className="text-sm"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <button
+            type="button"
+            disabled={loadingAging}
+            onClick={() => void downloadAgingCsv()}
+            className="w-full sm:w-auto rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 px-4 py-2.5 sm:py-2 text-sm font-semibold text-white"
+          >
+            {loadingAging ? 'Preparing…' : 'Download aging CSV'}
+          </button>
+          <p className="text-xs text-gray-500 sm:flex-1">
+            Columns: location, register (Open/Paid), particulars, Safe–Doubtful, Total, paid time, imported time, then
+            grand total row.
+          </p>
+        </div>
+      </Card>
+
+      <Card title="B2B credit notes" subtitle={basisHint} className="text-sm">
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 sm:gap-4">
           <div className="w-full sm:w-auto sm:min-w-[10rem]">
             <label className="block text-xs font-medium text-gray-700 mb-1">From</label>
@@ -106,11 +144,11 @@ export default function DueReportPage() {
           </div>
           <button
             type="button"
-            disabled={loading}
-            onClick={() => void downloadCsv()}
-            className="w-full sm:w-auto rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 px-4 py-2.5 sm:py-2 text-sm font-semibold text-white"
+            disabled={loadingCn}
+            onClick={() => void downloadCnCsv()}
+            className="w-full sm:w-auto rounded-md bg-slate-800 hover:bg-slate-700 disabled:opacity-60 px-4 py-2.5 sm:py-2 text-sm font-semibold text-white"
           >
-            {loading ? 'Preparing…' : 'Download CSV'}
+            {loadingCn ? 'Preparing…' : 'Download credit notes CSV'}
           </button>
         </div>
         <button
@@ -121,30 +159,30 @@ export default function DueReportPage() {
           }}
           className="mt-3 text-xs text-indigo-700 hover:underline"
         >
-          Reset to last 30 days → today
+          Reset dates to last 30 days → today
         </button>
-      </Card>
-
-      <Card title="CSV columns" className="text-sm text-gray-600">
-        <p className="text-xs leading-relaxed">
-          <strong>Due Account</strong> (Due desk), <strong>CN ID</strong>, <strong>Particulars</strong>,{' '}
-          <strong>Market Area</strong>, <strong>Delivery Date</strong>, <strong>Phase Length (Days)</strong>,{' '}
-          <strong>Phase</strong>, <strong>Timer Label</strong>, <strong>Safe</strong>–<strong>Doubtful</strong>,{' '}
-          <strong>Total</strong>, <strong>Approved At</strong>, <strong>Register Status</strong> (Open / Paid),{' '}
-          <strong>Paid At</strong>, then each custom Due column in order.
+        <p className="mt-3 text-xs text-gray-500 leading-relaxed">
+          If the file only has a header row, no credit notes matched the range—widen the dates or switch{' '}
+          <em>Match date by</em>. Includes CN ID, market area, phase/timer columns from the CN workflow, and custom Due
+          columns.
         </p>
       </Card>
     </div>
   );
 }
 
-async function tryBlobErrorDetail(data: Blob): Promise<string> {
-  try {
-    const text = await data.text();
-    const j = JSON.parse(text) as { detail?: string };
-    if (typeof j.detail === 'string') return j.detail;
-  } catch {
-    /* ignore */
+async function blobErrorMessage(err: unknown): Promise<string> {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const r = (err as { response?: { data?: Blob } }).response;
+    if (r?.data instanceof Blob) {
+      try {
+        const text = await r.data.text();
+        const j = JSON.parse(text) as { detail?: string };
+        if (typeof j.detail === 'string') return j.detail;
+      } catch {
+        /* ignore */
+      }
+    }
   }
-  return 'Could not download report.';
+  return 'Could not download file.';
 }
