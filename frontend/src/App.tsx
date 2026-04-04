@@ -16,7 +16,8 @@ import CreditNotesPage from './pages/CreditNotesPage';
 import CreditNoteApprovalsPage from './pages/CreditNoteApprovalsPage';
 import CreditNoteTallyPendingPage from './pages/CreditNoteTallyPendingPage';
 import CreditNoteTallyPostedPage from './pages/CreditNoteTallyPostedPage';
-import DueBlankPage from './pages/DueBlankPage';
+import DueAgingRegisterPage from './pages/DueAgingRegisterPage';
+import DueReportPage from './pages/DueReportPage';
 import MobileMorePage from './pages/MobileMorePage';
 import AppLayout from './layout/AppLayout';
 import { RequireRoles } from './auth/RequireRoles';
@@ -96,7 +97,7 @@ function App() {
               path="due/credit-notes"
               element={
                 <RequireRoles roles={['due']}>
-                  <DueBlankPage />
+                  <DueAgingRegisterPage mode="open" />
                 </RequireRoles>
               }
             />
@@ -104,7 +105,7 @@ function App() {
               path="due/paid-credit-notes"
               element={
                 <RequireRoles roles={['due']}>
-                  <DueBlankPage />
+                  <DueAgingRegisterPage mode="paid" />
                 </RequireRoles>
               }
             />
@@ -112,7 +113,7 @@ function App() {
               path="due/report"
               element={
                 <RequireRoles roles={['due']}>
-                  <DueBlankPage />
+                  <DueReportPage />
                 </RequireRoles>
               }
             />

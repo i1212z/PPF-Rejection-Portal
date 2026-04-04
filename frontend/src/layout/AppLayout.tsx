@@ -48,9 +48,9 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/credit-notes/new')) return 'New credit note';
     if (location.pathname.startsWith('/credit-notes')) return 'Credit notes';
     if (location.pathname.startsWith('/credit-note-approvals')) return 'Credit note approvals';
-    if (location.pathname.startsWith('/due/paid')) return 'Due — paid credit notes';
-    if (location.pathname.startsWith('/due/report')) return 'Due — account report';
-    if (location.pathname.startsWith('/due/')) return 'Due — credit notes';
+    if (location.pathname.startsWith('/due/paid')) return 'Due — paid sheet';
+    if (location.pathname.startsWith('/due/report')) return 'Due — CN export';
+    if (location.pathname.startsWith('/due/')) return 'Due — open sheet';
     if (location.pathname.startsWith('/approvals')) return 'Approvals';
     if (location.pathname.startsWith('/reports')) return 'Reports';
     if (location.pathname.startsWith('/admin')) return 'Admin Panel';
@@ -113,17 +113,17 @@ export default function AppLayout() {
               <SidebarLink
                 to="/due/credit-notes"
                 icon={<FileText className="w-4 h-4" />}
-                label="Open credit notes"
+                label="Open due sheet"
               />
               <SidebarLink
                 to="/due/paid-credit-notes"
                 icon={<FileText className="w-4 h-4" />}
-                label="Paid credit notes"
+                label="Paid due sheet"
               />
               <SidebarLink
                 to="/due/report"
                 icon={<BarChart3 className="w-4 h-4" />}
-                label="Due account report"
+                label="CN CSV export"
               />
             </>
           ) : isTally ? (
@@ -453,7 +453,7 @@ export default function AppLayout() {
                 }
               >
                 <FileText className="w-4 h-4" />
-                <span className="truncate">Paid notes</span>
+                <span className="truncate">Paid sheet</span>
               </NavLink>
               <NavLink
                 to="/due/report"

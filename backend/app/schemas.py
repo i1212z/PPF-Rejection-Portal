@@ -220,6 +220,85 @@ class DueSwapRowsBody(BaseModel):
     credit_note_id_b: UUID
 
 
+class DueAgingMetaRead(BaseModel):
+    company_title: str
+    date_range_label: str
+    bucket_order: List[str]
+
+
+class DueAgingRowRead(BaseModel):
+    id: UUID
+    location_group: str
+    location_sort: int
+    location_label: str
+    particulars: str
+    safe: float
+    warning: float
+    danger: float
+    doubtful: float
+    total: float
+    sort_order: int
+    paid_at: Optional[datetime] = None
+
+
+class DueAgingLocationBlock(BaseModel):
+    location_group: str
+    location_sort: int
+    location_label: str
+    rows: List[DueAgingRowRead]
+
+
+class DueAgingTotals(BaseModel):
+    safe: float
+    warning: float
+    danger: float
+    doubtful: float
+    total: float
+    row_count: int
+
+
+class DueAgingSheetResponse(BaseModel):
+    meta: DueAgingMetaRead
+    locations: List[DueAgingLocationBlock]
+    grand_totals: DueAgingTotals
+
+
+class DueAgingPatchRowBody(BaseModel):
+    particulars: Optional[str] = None
+    safe: Optional[float] = None
+    warning: Optional[float] = None
+    danger: Optional[float] = None
+    doubtful: Optional[float] = None
+    total: Optional[float] = None
+
+
+class DueAgingReorderBody(BaseModel):
+    location_group: str
+    ordered_row_ids: List[UUID]
+
+
+class DueAgingSwapRowsBody(BaseModel):
+    row_id_a: UUID
+    row_id_b: UUID
+
+
+class DueAgingSwapZoneCellsBody(BaseModel):
+    row_id_a: UUID
+    row_id_b: UUID
+    zone: str  # safe | warning | danger | doubtful
+
+
+class DueAgingBucketOrderBody(BaseModel):
+    bucket_order: List[str]
+
+
+class DueAgingSwapZonesGlobalBody(BaseModel):
+    """Swap one zone column with another for all unpaid rows (data move, not just display)."""
+
+    zone_a: str
+    zone_b: str
+
+
 class PaginatedCreditNotes(BaseModel):
     items: List[CreditNoteRead]
     total: int

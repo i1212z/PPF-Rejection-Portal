@@ -9,7 +9,7 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .routers import auth, tickets, approvals, admin, tally, credit_notes, credit_note_approvals, credit_note_tally, due
+from .routers import auth, tickets, approvals, admin, tally, credit_notes, credit_note_approvals, credit_note_tally, due, due_aging
 from .database import engine, Base, get_db, AsyncSessionLocal
 from .models import (
     User,
@@ -23,6 +23,8 @@ from .models import (
     DueCustomCell,
     DueCustomColumn,
     CreditNoteDueTracking,
+    DueAgingMeta,
+    DueAgingRow,
 )
 from .auth.deps import require_roles
 
@@ -182,6 +184,8 @@ async def reset_database(
     await db.execute(delete(CreditNoteTallyPending))
     await db.execute(delete(DueCustomCell))
     await db.execute(delete(CreditNoteDueTracking))
+    await db.execute(delete(DueAgingRow))
+    await db.execute(delete(DueAgingMeta))
     await db.execute(delete(DueCustomColumn))
     await db.execute(delete(CreditNoteApproval))
     await db.execute(delete(CreditNote))
@@ -200,5 +204,6 @@ app.include_router(credit_notes.router)
 app.include_router(credit_note_approvals.router)
 app.include_router(credit_note_tally.router)
 app.include_router(due.router)
+app.include_router(due_aging.router)
 app.include_router(admin.router)
 

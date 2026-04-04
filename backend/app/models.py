@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -187,4 +187,44 @@ class DueCustomCell(Base):
         primary_key=True,
     )
     value = Column(Text, nullable=False, default="")
+
+
+class DueAgingMeta(Base):
+    """Singleton-style workbook header for the Due aging Excel register (one active row)."""
+
+    __tablename__ = "due_aging_meta"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    company_title = Column(String(512), nullable=False, default="")
+    date_range_label = Column(String(255), nullable=False, default="")
+    bucket_order_json = Column(Text, nullable=False, default='["safe","warning","danger","doubtful"]')
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class DueAgingRow(Base):
+    """One customer line from an imported aging sheet (zones + particulars), with paid tracking.
+
+    Zone amounts are stored as-is: there is no time-based migration (e.g. Safe → Warning). Users change
+    buckets only by editing, swapping cells, or re-uploading the open register.
+    """
+
+    __tablename__ = "due_aging_rows"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    location_group = Column(String(32), nullable=False, index=True)
+    location_sort = Column(Integer, nullable=False, default=9)
+    location_label = Column(String(255), nullable=False, default="")
+    particulars = Column(Text, nullable=False, default="")
+    amount_safe = Column(Numeric(14, 2), nullable=False, default=0)
+    amount_warning = Column(Numeric(14, 2), nullable=False, default=0)
+    amount_danger = Column(Numeric(14, 2), nullable=False, default=0)
+    amount_doubtful = Column(Numeric(14, 2), nullable=False, default=0)
+    amount_total = Column(Numeric(14, 2), nullable=False, default=0)
+    sort_order = Column(Integer, nullable=False, default=0)
+    paid_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
 

@@ -35,17 +35,17 @@ export default function MobileMorePage() {
           items: [
             {
               to: '/due/credit-notes',
-              label: 'Open credit notes',
+              label: 'Open due sheet',
               icon: <FileText className="w-4 h-4" />,
             },
             {
               to: '/due/paid-credit-notes',
-              label: 'Paid credit notes',
+              label: 'Paid due sheet',
               icon: <FileText className="w-4 h-4" />,
             },
             {
               to: '/due/report',
-              label: 'Due account report',
+              label: 'CN CSV export',
               icon: <BarChart3 className="w-4 h-4" />,
             },
           ],
