@@ -60,7 +60,7 @@ export default function AppLayout() {
   const isTally = user?.role === 'tally';
   const isDue = user?.role === 'due';
   const isManager = user?.role === 'manager' || user?.role === 'admin';
-  const showMobileTopNav = isTally;
+  const showMobileTopNav = isTally || isDue;
   const canChangePassword =
     user?.role === 'manager' || user?.role === 'admin' || user?.role === 'due';
   const canCreditNotes = user?.role === 'b2b' || user?.role === 'manager' || user?.role === 'admin';
@@ -98,12 +98,25 @@ export default function AppLayout() {
       {/* Sidebar: visible on desktop, hidden on smaller screens */}
       <aside className="hidden lg:flex lg:w-60 lg:flex-col bg-gray-900 text-gray-100">
         <div className="px-4 py-4 border-b border-gray-800 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-indigo-600 flex items-center justify-center text-xs font-semibold">
-            CLS
+          <div
+            className={`h-9 w-9 rounded-xl flex items-center justify-center text-[10px] font-bold tracking-tight ${
+              isDue ? 'bg-emerald-700 text-white' : 'bg-indigo-600 text-white'
+            }`}
+          >
+            {isDue ? 'DUE' : 'CLS'}
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold">Complaint Log System</span>
-            <span className="text-[11px] text-gray-400">Daily complaint tracking</span>
+          <div className="flex flex-col min-w-0">
+            {isDue ? (
+              <>
+                <span className="text-sm font-semibold truncate">Due account</span>
+                <span className="text-[11px] text-gray-400">Excel sheet, zones, paid register</span>
+              </>
+            ) : (
+              <>
+                <span className="text-sm font-semibold truncate">Complaint Log System</span>
+                <span className="text-[11px] text-gray-400">Daily complaint tracking</span>
+              </>
+            )}
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 text-sm">
@@ -191,9 +204,21 @@ export default function AppLayout() {
             <div className="h-7 w-7 rounded-full bg-gray-700 flex items-center justify-center">
               <User className="w-3.5 h-3.5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="font-medium text-gray-100 truncate">{user?.name}</div>
-              <div className="capitalize text-gray-400">{user?.role}</div>
+              <div className="text-gray-400 truncate">
+                {user?.role === 'due'
+                  ? 'Due desk'
+                  : user?.role === 'tally'
+                    ? 'Tally'
+                    : user?.role === 'b2b'
+                      ? 'B2B'
+                      : user?.role === 'b2c'
+                        ? 'B2C'
+                        : user?.role
+                          ? `${user.role.charAt(0).toUpperCase()}${user.role.slice(1)}`
+                          : ''}
+              </div>
             </div>
           </div>
           <button
@@ -210,22 +235,24 @@ export default function AppLayout() {
         <header className="min-h-12 sm:min-h-16 border-b border-gray-200 bg-white flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between px-3 sm:px-6 py-1.5 sm:py-0 min-w-0">
           <div className="flex flex-col min-w-0">
             <span className="hidden sm:inline text-xs font-medium text-gray-400 uppercase tracking-wide">
-              Rejection Ticket Management
+              {isDue ? 'Due desk' : 'Rejection ticket management'}
             </span>
             <span className="text-base sm:text-base font-semibold text-gray-900 truncate">
               {pageTitle}
             </span>
           </div>
           <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-4 min-w-0">
-            {/* Search: hide on very small screens to keep header compact */}
-            <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1.5 text-xs text-gray-500 w-40 md:w-56 min-w-0 shrink-0">
-              <Search className="w-3.5 h-3.5" />
-              <input
-                type="text"
-                placeholder="Search tickets..."
-                className="bg-transparent border-none outline-none placeholder:text-gray-400 text-xs w-full"
-              />
-            </div>
+            {/* Ticket search — not used on Due desk */}
+            {!isDue && (
+              <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1.5 text-xs text-gray-500 w-40 md:w-56 min-w-0 shrink-0">
+                <Search className="w-3.5 h-3.5" />
+                <input
+                  type="text"
+                  placeholder="Search tickets..."
+                  className="bg-transparent border-none outline-none placeholder:text-gray-400 text-xs w-full"
+                />
+              </div>
+            )}
             <button className="relative rounded-full p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100">
               <Bell className="w-4 h-4" />
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500" />
@@ -270,7 +297,7 @@ export default function AppLayout() {
                     }`
                   }
                 >
-                  Open
+                  Open sheet
                 </NavLink>
                 <NavLink
                   to="/due/paid-credit-notes"
@@ -282,7 +309,7 @@ export default function AppLayout() {
                     }`
                   }
                 >
-                  Paid
+                  Paid sheet
                 </NavLink>
                 <NavLink
                   to="/due/report"
@@ -294,7 +321,7 @@ export default function AppLayout() {
                     }`
                   }
                 >
-                  Report
+                  CN export
                 </NavLink>
               </>
             ) : isTally ? (
@@ -365,7 +392,7 @@ export default function AppLayout() {
               <div className="border-b border-gray-100 px-4 py-3">
                 <div className="text-sm font-semibold text-gray-900">Change password</div>
                 <div className="mt-0.5 text-[11px] text-gray-500">
-                  For manager/admin accounts.
+                  For manager, admin, and Due desk accounts.
                 </div>
               </div>
               <div className="px-4 py-3 space-y-3">
@@ -428,9 +455,9 @@ export default function AppLayout() {
       {/* Mobile bottom navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white md:hidden">
         <div className="mx-auto max-w-6xl flex justify-around px-2 py-1.5 text-[11px] text-gray-500">
-          {/* Item 1: Home (all roles) */}
+          {/* Item 1: Due users land on open sheet; others use dashboard home */}
           <NavLink
-            to="/"
+            to={isDue ? '/due/credit-notes' : '/'}
             className={({ isActive }) =>
               `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
                 isActive ? 'text-indigo-600' : 'text-gray-500'
@@ -438,7 +465,7 @@ export default function AppLayout() {
             }
           >
             <LayoutDashboard className="w-4 h-4" />
-            <span className="truncate">Home</span>
+            <span className="truncate">{isDue ? 'Open sheet' : 'Home'}</span>
           </NavLink>
 
           {/* Items 2 & 3: role-specific */}

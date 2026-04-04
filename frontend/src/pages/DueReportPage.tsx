@@ -61,9 +61,10 @@ export default function DueReportPage() {
   return (
     <div className="space-y-4 min-w-0 max-w-full">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Due account report</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Credit notes CSV export</h2>
         <p className="text-sm text-gray-500">
-          Export a CSV of approved credit notes for the Due desk. The file includes a <strong>Due Account</strong> column
+          Download approved B2B credit notes as CSV (separate from the Excel aging sheet). The file includes a{' '}
+          <strong>Due Account</strong> column
           plus CN ID, particulars, buckets, phase, custom columns, and register status.
         </p>
       </div>
