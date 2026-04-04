@@ -18,6 +18,10 @@ interface DueAgingRow {
   total: number;
   sort_order: number;
   paid_at?: string | null;
+  imported_at: string;
+  source_excel_row?: number | null;
+  source_particulars_col?: string | null;
+  register_row_index: number;
 }
 
 interface DueAgingLocationBlock {
@@ -64,6 +68,30 @@ function parseMoneyInput(raw: string): number | null {
   return Number.isFinite(v) ? v : null;
 }
 
+/** Elapsed since import: seconds → minutes → hours → days (pass refreshToken so UI re-renders on interval). */
+function formatAgeSinceImport(iso: string, _refreshToken?: number): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '—';
+  let ms = Date.now() - t;
+  if (ms < 0) ms = 0;
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min`;
+  const hr = Math.floor(min / 60);
+  if (hr < 48) return `${hr}h ${min % 60}m`;
+  const d = Math.floor(hr / 24);
+  return `${d}d ${hr % 24}h`;
+}
+
+function sheetRowColRef(r: DueAgingRow): string {
+  const bits: string[] = [];
+  if (r.source_excel_row != null) bits.push(`R${r.source_excel_row}`);
+  if (r.source_particulars_col) bits.push(`col ${r.source_particulars_col}`);
+  bits.push(`#${r.register_row_index}`);
+  return bits.join(' · ');
+}
+
 export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }) {
   const paidOnly = mode === 'paid';
   const navigate = useNavigate();
@@ -76,8 +104,14 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   const [zonePick, setZonePick] = useState<{ rowId: string; zone: BucketKey } | null>(null);
   const [rowDataPick, setRowDataPick] = useState<string | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [ageTick, setAgeTick] = useState(0);
 
   const endpoint = paidOnly ? '/due/aging/paid' : '/due/aging/open';
+
+  useEffect(() => {
+    const id = window.setInterval(() => setAgeTick((x) => x + 1), 15_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -423,7 +457,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                   <span className="ml-2 text-xs font-normal text-gray-500">({block.location_group})</span>
                 </h3>
                 <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
-                  <table className="min-w-[640px] w-full text-xs border-collapse select-none">
+                  <table className="min-w-[880px] w-full text-xs border-collapse select-none">
                     <thead>
                       <tr className="bg-slate-800 text-white">
                         <th
@@ -446,6 +480,18 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                           Particulars
                         </th>
                         <th
+                          className="px-2 py-2 border border-slate-600 text-left text-[10px] font-semibold w-[5.5rem] sm:w-24"
+                          title="Time since this row was added on upload"
+                        >
+                          Since import
+                        </th>
+                        <th
+                          className="px-2 py-2 border border-slate-600 text-left text-[10px] font-semibold min-w-[6.5rem]"
+                          title="Excel row & Particulars column; # = row number in this location block"
+                        >
+                          Sheet R / C
+                        </th>
+                        <th
                           colSpan={bucketOrder.length}
                           className="px-2 py-1 border border-slate-600 text-center text-[10px] font-bold tracking-wide"
                         >
@@ -457,6 +503,8 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                         <th className="border border-slate-600" />
                         {!paidOnly && <th className="border border-slate-600" />}
                         {paidOnly && <th className="border border-slate-600" />}
+                        <th className="border border-slate-600" />
+                        <th className="border border-slate-600" />
                         <th className="border border-slate-600" />
                         {bucketOrder.map((bk) => (
                           <th
@@ -543,6 +591,24 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                               className="w-full min-w-[8rem] rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] hover:border-slate-200 focus:border-indigo-400 focus:outline-none"
                             />
                           </td>
+                          <td className="px-2 py-1.5 border border-slate-200 align-top whitespace-nowrap">
+                            <div className="text-[10px] font-semibold tabular-nums text-slate-800 leading-tight">
+                              {formatAgeSinceImport(r.imported_at ?? '', ageTick)}
+                            </div>
+                            <div className="text-[9px] text-slate-500 tabular-nums leading-tight mt-0.5">
+                              {r.imported_at
+                                ? new Date(r.imported_at).toLocaleString('en-GB', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })
+                                : '—'}
+                            </div>
+                          </td>
+                          <td className="px-2 py-1.5 border border-slate-200 align-top text-[10px] text-slate-700 leading-snug">
+                            {sheetRowColRef(r)}
+                          </td>
                           {bucketOrder.map((bk) => renderAmountCell(r, bk))}
                           <td className="px-2 py-1.5 border border-slate-200 text-right tabular-nums font-medium text-[11px]">
                             {fmt(r.total)}
@@ -553,7 +619,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                     <tfoot>
                       <tr className="bg-slate-100 font-semibold text-gray-900">
                         <td
-                          colSpan={3}
+                          colSpan={5}
                           className="px-2 py-2 border border-slate-200 text-right text-[11px]"
                         >
                           Block total

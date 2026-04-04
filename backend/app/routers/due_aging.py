@@ -82,7 +82,35 @@ async def _ensure_meta(db: AsyncSession) -> DueAgingMeta:
     return m
 
 
-def _row_to_read(r: DueAgingRow) -> DueAgingRowRead:
+def _imported_at_aware(r: DueAgingRow) -> datetime:
+    ca = r.created_at
+    if ca is None:
+        return datetime.now(timezone.utc)
+    if ca.tzinfo is None:
+        return ca.replace(tzinfo=timezone.utc)
+    return ca
+
+
+async def _register_index_in_location(db: AsyncSession, row: DueAgingRow) -> int:
+    if row.paid_at is not None:
+        cond = DueAgingRow.paid_at.is_not(None)
+    else:
+        cond = DueAgingRow.paid_at.is_(None)
+    q = (
+        select(DueAgingRow.id)
+        .where(DueAgingRow.location_group == row.location_group)
+        .where(cond)
+        .order_by(DueAgingRow.sort_order.asc(), DueAgingRow.id.asc())
+    )
+    ids = (await db.execute(q)).scalars().all()
+    for i, rid in enumerate(ids, start=1):
+        if rid == row.id:
+            return i
+    return 1
+
+
+def _row_to_read(r: DueAgingRow, *, register_row_index: int = 1) -> DueAgingRowRead:
+    src_col = getattr(r, "source_particulars_col", None)
     return DueAgingRowRead(
         id=r.id,
         location_group=r.location_group,
@@ -96,6 +124,10 @@ def _row_to_read(r: DueAgingRow) -> DueAgingRowRead:
         total=float(r.amount_total or 0),
         sort_order=r.sort_order,
         paid_at=r.paid_at,
+        imported_at=_imported_at_aware(r),
+        source_excel_row=getattr(r, "source_excel_row", None),
+        source_particulars_col=src_col,
+        register_row_index=register_row_index,
     )
 
 
@@ -158,7 +190,8 @@ async def _build_sheet(db: AsyncSession, *, paid_only: bool) -> DueAgingSheetRes
         if not arr:
             continue
         label = arr[0].location_label
-        reads = [_row_to_read(x) for x in sorted(arr, key=lambda x: (x.sort_order, str(x.id)))]
+        sorted_rows = sorted(arr, key=lambda x: (x.sort_order, str(x.id)))
+        reads = [_row_to_read(x, register_row_index=i) for i, x in enumerate(sorted_rows, start=1)]
         blocks.append(
             DueAgingLocationBlock(
                 location_group=lg,
@@ -225,6 +258,7 @@ async def upload_workbook(
     for pr in parsed.rows:
         n = per_loc.get(pr.location_group, 0) + 10
         per_loc[pr.location_group] = n
+        col = (pr.source_particulars_col or "")[:8] or None
         db.add(
             DueAgingRow(
                 location_group=pr.location_group,
@@ -237,6 +271,8 @@ async def upload_workbook(
                 amount_doubtful=pr.doubtful,
                 amount_total=pr.total,
                 sort_order=n,
+                source_excel_row=pr.source_excel_row,
+                source_particulars_col=col,
             ),
         )
 
@@ -278,7 +314,8 @@ async def patch_row(
     m.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(row)
-    return _row_to_read(row)
+    idx = await _register_index_in_location(db, row)
+    return _row_to_read(row, register_row_index=idx)
 
 
 @router.post("/rows/{row_id}/mark-paid", status_code=status.HTTP_204_NO_CONTENT)
@@ -384,6 +421,8 @@ async def swap_rows_data(
         "amount_danger",
         "amount_doubtful",
         "amount_total",
+        "source_excel_row",
+        "source_particulars_col",
     ]
     for f in fields:
         va = getattr(ra, f)

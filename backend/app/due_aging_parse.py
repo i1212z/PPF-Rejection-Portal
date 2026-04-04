@@ -18,6 +18,7 @@ from io import BytesIO
 from typing import Any
 
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 
 DATE_RANGE_RE = re.compile(
     r"\d{1,2}[-/][A-Za-z]{3}[-/]\d{2,4}\s+to\s+\d{1,2}[-/][A-Za-z]{3}[-/]\d{2,4}",
@@ -36,6 +37,8 @@ class ParsedAgingRow:
     danger: float
     doubtful: float
     total: float
+    source_excel_row: int | None = None
+    source_particulars_col: str | None = None
 
 
 @dataclass
@@ -238,8 +241,10 @@ def parse_due_aging_xlsx(file_bytes: bytes) -> ParsedWorkbook:
         out_rows: list[ParsedAgingRow] = []
         pending_header_part1: list[str] | None = None
 
-        for row in ws.iter_rows(values_only=True):
-            cells = _row_values(row)
+        max_r = ws.max_row or 1
+        for row_cells in ws.iter_rows(min_row=1, max_row=max_r, values_only=False):
+            excel_row_num = row_cells[0].row
+            cells = [_cell_str(c.value) for c in row_cells]
             if not any(x for x in cells):
                 continue
 
@@ -316,6 +321,8 @@ def parse_due_aging_xlsx(file_bytes: bytes) -> ParsedWorkbook:
             if tot == 0.0 and (s or w or dg or db):
                 tot = s + w + dg + db
 
+            col_letter = get_column_letter(pi + 1)
+
             out_rows.append(
                 ParsedAgingRow(
                     location_group=current_group,
@@ -327,6 +334,8 @@ def parse_due_aging_xlsx(file_bytes: bytes) -> ParsedWorkbook:
                     danger=dg,
                     doubtful=db,
                     total=tot,
+                    source_excel_row=excel_row_num,
+                    source_particulars_col=col_letter,
                 ),
             )
 

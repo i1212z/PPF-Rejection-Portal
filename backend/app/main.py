@@ -129,6 +129,24 @@ async def on_startup():
             except Exception:
                 pass
 
+        due_aging_alters: list[str] = []
+        if dialect == "sqlite":
+            due_aging_alters = [
+                "ALTER TABLE due_aging_rows ADD COLUMN source_excel_row INTEGER",
+                "ALTER TABLE due_aging_rows ADD COLUMN source_particulars_col VARCHAR(8)",
+            ]
+        elif dialect == "postgresql":
+            due_aging_alters = [
+                "ALTER TABLE due_aging_rows ADD COLUMN IF NOT EXISTS source_excel_row INTEGER",
+                "ALTER TABLE due_aging_rows ADD COLUMN IF NOT EXISTS source_particulars_col VARCHAR(8)",
+            ]
+        for stmt in due_aging_alters:
+            try:
+                async with conn.begin():
+                    await conn.execute(text(stmt))
+            except Exception:
+                pass
+
     await _ensure_due_user_bootstrap()
 
     print("PPF Backend started. POST /tickets (create) is allowed for any authenticated user.")

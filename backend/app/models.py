@@ -226,5 +226,12 @@ class DueAgingRow(Base):
     amount_total = Column(Numeric(14, 2), nullable=False, default=0)
     sort_order = Column(Integer, nullable=False, default=0)
     paid_at = Column(DateTime(timezone=True), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    # Original Excel position when imported (Particulars column letter + 1-based row).
+    source_excel_row = Column(Integer, nullable=True)
+    source_particulars_col = Column(String(8), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 

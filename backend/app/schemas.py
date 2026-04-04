@@ -239,6 +239,10 @@ class DueAgingRowRead(BaseModel):
     total: float
     sort_order: int
     paid_at: Optional[datetime] = None
+    imported_at: datetime
+    source_excel_row: Optional[int] = None
+    source_particulars_col: Optional[str] = None
+    register_row_index: int = 1
 
 
 class DueAgingLocationBlock(BaseModel):
