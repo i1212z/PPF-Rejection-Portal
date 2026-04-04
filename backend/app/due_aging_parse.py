@@ -2,8 +2,12 @@
 Parse Due desk aging workbooks (.xlsx): company header, location sections (CLT / Kochi / TN),
 and tabular rows with Particulars, SAFE, WARNING, DANGER, DOUBTFUL, TOTAL.
 
-Location rows: first-column text mentioning Calicut/CLT, Kochi, or Tamil Nadu/TN (case-insensitive).
-Header row: any cell contains 'particulars' and row mentions zone column names (safe, warning, etc.).
+Supports:
+- Single-row header: Particulars + zone columns + Total on one line.
+- Two-row header (common in PPF exports): row1 Particulars / ZONE / TOTAL, row2 SAFE / WARNING / DANGER / DOUBTFUL.
+- Merged cells (read_only mode may leave gaps; column indices still align with Excel columns).
+
+Location rows: band titles like "Calicut Customers" (not company names containing PVT+LTD).
 """
 
 from __future__ import annotations
@@ -89,13 +93,16 @@ def _is_grand_total(particulars: str) -> bool:
     return "grand" in t and "total" in t
 
 
-def _is_location_row(cells: list[str]) -> bool:
-    joined = " ".join(c for c in cells if c).strip()
-    if not joined:
-        return False
-    low = joined.lower()
-    if "particular" in low and "safe" in low:
-        return False
+def _looks_like_company_header_line(low: str) -> bool:
+    """Avoid treating '... PVT.LTD ... Calicut' title rows as location bands."""
+    if re.search(r"\bpvt\b", low) and re.search(r"\b(ltd|limited)\b", low):
+        return True
+    if "international" in low and re.search(r"\b(farm|farms|pvt|ltd)\b", low):
+        return True
+    return False
+
+
+def _has_geo_keyword(low: str) -> bool:
     return bool(
         re.search(
             r"\bcalicut\b|\bclt\b|\bkochi\b|\bkottayam\b|\btamil\b|\btn\b|tamilnadu|tamil nadu|\bchennai\b|\bcoimbatore\b",
@@ -104,15 +111,67 @@ def _is_location_row(cells: list[str]) -> bool:
     )
 
 
-def _is_header_row(cells: list[str]) -> bool:
-    joined = " ".join(_norm_key(c) for c in cells)
-    if "particular" not in joined:
+def _is_location_row(cells: list[str]) -> bool:
+    """
+    Section band only — not customer names like 'Beyondburg Inc Calicut' or 'Calicut Exhibition'.
+
+    Treat as location when a geographic keyword appears together with a band word (Customers, …),
+    or as a short Tamil Nadu / TN section title.
+    """
+    joined = " ".join(c for c in cells if c).strip()
+    if not joined:
         return False
-    return ("safe" in joined or "warning" in joined or "danger" in joined or "doubtful" in joined)
+    low = joined.lower()
+    if "particular" in low and "safe" in low:
+        return False
+    if not _has_geo_keyword(low):
+        return False
+    if _looks_like_company_header_line(low):
+        return False
+    if re.search(r"\bcustomers?\b|\bclients?\b|\bdesk\b|\bband\b|\bregister\b", low):
+        return True
+    if re.search(r"^tamil\s+nadu\b", low) or re.search(r"^tn\b", low):
+        return True
+    return False
+
+
+def _joined_norm(cells: list[str]) -> str:
+    return " ".join(_norm_key(c) for c in cells)
+
+
+def _is_single_line_header_row(cells: list[str]) -> bool:
+    """Particulars + at least one zone label on the same row."""
+    j = _joined_norm(cells)
+    if "particular" not in j:
+        return False
+    if "safe" not in j and "warning" not in j:
+        return False
+    return True
+
+
+def _is_header_row_part1(cells: list[str]) -> bool:
+    """
+    First row of a two-row header: Particulars + ZONE + TOTAL (no SAFE/WARNING on this row).
+    """
+    j = _joined_norm(cells)
+    if "particular" not in j:
+        return False
+    if "safe" in j or "warning" in j or "danger" in j or "doubtful" in j:
+        return False
+    return "zone" in j or "total" in j
+
+
+def _is_zone_labels_row(cells: list[str]) -> bool:
+    """Second row: SAFE, WARNING, DANGER, DOUBTFUL (no Particulars)."""
+    j = _joined_norm(cells)
+    if "particular" in j:
+        return False
+    hits = sum(1 for k in ("safe", "warning", "danger", "doubtful") if k in j)
+    return hits >= 2
 
 
 def _map_header_indices(cells: list[str]) -> dict[str, int]:
-    """Map bucket keys to 0-based column index."""
+    """Map bucket keys to 0-based column index (single-row header)."""
     idx: dict[str, int] = {}
     for i, c in enumerate(cells):
         k = _norm_key(c)
@@ -122,19 +181,48 @@ def _map_header_indices(cells: list[str]) -> dict[str, int]:
             idx.setdefault("particulars", i)
         if k == "safe" or k.startswith("safe "):
             idx.setdefault("safe", i)
-        if "warning" in k:
+        if "warning" in k and "doubt" not in k:
             idx.setdefault("warning", i)
         if "danger" in k:
             idx.setdefault("danger", i)
         if "doubtful" in k:
             idx.setdefault("doubtful", i)
-        if k == "total" or k.startswith("total "):
+        if k == "total" or (k.startswith("total ") and "doubtful" not in k):
             idx.setdefault("total", i)
     return idx
 
 
+def _map_two_row_header(row1: list[str], row2: list[str]) -> dict[str, int]:
+    """Combine Particulars/TOTAL from row1 with zone columns from row2."""
+    idx: dict[str, int] = {}
+    for i, c in enumerate(row1):
+        k = _norm_key(c)
+        if not k:
+            continue
+        if "particular" in k:
+            idx.setdefault("particulars", i)
+        if k == "total" or (k.startswith("total ") and "doubtful" not in k):
+            idx.setdefault("total", i)
+    for i, c in enumerate(row2):
+        k = _norm_key(c)
+        if not k:
+            continue
+        if k == "safe" or k.startswith("safe "):
+            idx.setdefault("safe", i)
+        if "warning" in k and "doubt" not in k:
+            idx.setdefault("warning", i)
+        if "danger" in k:
+            idx.setdefault("danger", i)
+        if "doubtful" in k:
+            idx.setdefault("doubtful", i)
+    if "particulars" not in idx:
+        idx["particulars"] = 0
+    return idx
+
+
 def parse_due_aging_xlsx(file_bytes: bytes) -> ParsedWorkbook:
-    wb = load_workbook(BytesIO(file_bytes), data_only=True, read_only=True)
+    # read_only=False: slightly heavier but matches real column positions with merged cells better.
+    wb = load_workbook(BytesIO(file_bytes), data_only=True, read_only=False)
     try:
         ws = wb.active
         title_guess = ""
@@ -148,6 +236,7 @@ def parse_due_aging_xlsx(file_bytes: bytes) -> ParsedWorkbook:
         col_map: dict[str, int] = {}
         in_table = False
         out_rows: list[ParsedAgingRow] = []
+        pending_header_part1: list[str] | None = None
 
         for row in ws.iter_rows(values_only=True):
             cells = _row_values(row)
@@ -161,10 +250,21 @@ def parse_due_aging_xlsx(file_bytes: bytes) -> ParsedWorkbook:
             if m_dates:
                 date_range = m_dates.group(0).strip()
 
-            if not preamble_done and not _is_location_row(cells) and not _is_header_row(cells):
-                if not title_guess and cells[0]:
-                    title_guess = cells[0]
-                elif cells[0] and len(cells[0]) > 5 and "particular" not in low_line:
+            if pending_header_part1 is not None:
+                if _is_zone_labels_row(cells):
+                    preamble_done = True
+                    col_map = _map_two_row_header(pending_header_part1, cells)
+                    pending_header_part1 = None
+                    in_table = True
+                    continue
+                pending_header_part1 = None
+
+            if not preamble_done and not _is_location_row(cells) and not _is_single_line_header_row(cells) and not _is_header_row_part1(cells):
+                if cells[0] and len(cells[0]) > 3:
+                    if not title_guess or len(cells[0]) > len(title_guess):
+                        title_guess = cells[0]
+                low0 = low_line
+                if "particular" not in low0 and not _looks_like_company_header_line(low0):
                     title_guess = title_guess or cells[0]
 
             if _is_location_row(cells):
@@ -173,14 +273,23 @@ def parse_due_aging_xlsx(file_bytes: bytes) -> ParsedWorkbook:
                 current_group, current_sort, current_label = grp, srt, lab
                 in_table = False
                 col_map = {}
+                pending_header_part1 = None
                 continue
 
-            if _is_header_row(cells):
+            if _is_single_line_header_row(cells):
                 preamble_done = True
                 col_map = _map_header_indices(cells)
+                pending_header_part1 = None
                 if "particulars" not in col_map:
                     col_map["particulars"] = 0
                 in_table = True
+                continue
+
+            if _is_header_row_part1(cells):
+                preamble_done = True
+                pending_header_part1 = cells
+                in_table = False
+                col_map = {}
                 continue
 
             if not in_table or not col_map:
@@ -193,7 +302,7 @@ def parse_due_aging_xlsx(file_bytes: bytes) -> ParsedWorkbook:
             if _is_grand_total(particulars):
                 continue
 
-            def col(name: str, default: int = 0) -> float:
+            def col(name: str) -> float:
                 j = col_map.get(name)
                 if j is None or j >= len(cells):
                     return 0.0
