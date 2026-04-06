@@ -51,6 +51,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/due/paid')) return 'Due — paid sheet';
     if (location.pathname.startsWith('/due/report')) return 'Due — reports';
     if (location.pathname.startsWith('/due/')) return 'Due — open sheet';
+    if (location.pathname.startsWith('/analytics')) return 'Analytics';
     if (location.pathname.startsWith('/approvals')) return 'Approvals';
     if (location.pathname.startsWith('/reports')) return 'Reports';
     if (location.pathname.startsWith('/admin')) return 'Admin Panel';
@@ -166,6 +167,7 @@ export default function AppLayout() {
                 Operations
               </div>
               <SidebarLink to="/" icon={<LayoutDashboard className="w-4 h-4" />} label="Dashboard" />
+              <SidebarLink to="/analytics" icon={<BarChart3 className="w-4 h-4" />} label="Analytics" />
               <SidebarLink to="/tickets/new" icon={<PlusCircle className="w-4 h-4" />} label="Create Ticket" />
               <SidebarLink to="/tickets" icon={<Ticket className="w-4 h-4" />} label="Tickets" />
               {canCreditNotes && (

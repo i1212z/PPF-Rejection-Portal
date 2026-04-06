@@ -18,6 +18,7 @@ import CreditNoteTallyPendingPage from './pages/CreditNoteTallyPendingPage';
 import CreditNoteTallyPostedPage from './pages/CreditNoteTallyPostedPage';
 import DueAgingRegisterPage from './pages/DueAgingRegisterPage';
 import DueReportPage from './pages/DueReportPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 import MobileMorePage from './pages/MobileMorePage';
 import AppLayout from './layout/AppLayout';
 import { RequireRoles } from './auth/RequireRoles';
@@ -91,6 +92,14 @@ function App() {
               }
             />
             <Route path="reports" element={<ReportsPage />} />
+            <Route
+              path="analytics"
+              element={
+                <RequireRoles roles={['b2b', 'b2c', 'manager', 'admin']}>
+                  <AnalyticsPage />
+                </RequireRoles>
+              }
+            />
             <Route path="tally/pending" element={<TallyPendingPage />} />
             <Route path="tally/posted" element={<TallyPostedPage />} />
             <Route

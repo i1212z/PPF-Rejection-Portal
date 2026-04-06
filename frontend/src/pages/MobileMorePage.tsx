@@ -99,6 +99,11 @@ export default function MobileMorePage() {
           icon: <PlusCircle className="w-4 h-4" />,
         },
         {
+          to: '/analytics',
+          label: 'Analytics',
+          icon: <BarChart3 className="w-4 h-4" />,
+        },
+        {
           to: '/tickets',
           label: 'Tickets',
           icon: <Ticket className="w-4 h-4" />,

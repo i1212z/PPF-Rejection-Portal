@@ -405,6 +405,16 @@ export default function DashboardPage() {
             <span className="truncate">Live rejection tracking</span>
           </div>
         </div>
+        {(user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b' || user?.role === 'b2c') && (
+          <div className="hidden md:flex">
+            <Link
+              to="/analytics"
+              className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+            >
+              Open analytics
+            </Link>
+          </div>
+        )}
 
         {/* Mobile quick actions */}
         <div className="md:hidden space-y-3">
@@ -422,6 +432,14 @@ export default function DashboardPage() {
               New CN
             </Link>
           </div>
+          {(user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b' || user?.role === 'b2c') && (
+            <Link
+              to="/analytics"
+              className="flex items-center justify-center rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm min-h-[44px]"
+            >
+              Analytics
+            </Link>
+          )}
         </div>
       </div>
 
