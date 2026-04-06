@@ -390,6 +390,23 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     }
   };
 
+  const undoHistoryItem = async (rowId: string, historyId: string) => {
+    try {
+      await apiClient.post(`/due/aging/adjustments/${historyId}/undo`);
+      await load();
+      await toggleHistory(rowId, true);
+    } catch (err: unknown) {
+      const msg =
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          ? String((err as { response: { data: { detail: string } } }).response.data.detail)
+          : 'Could not undo this history item.';
+      setError(msg);
+    }
+  };
+
   const blockTotals = (rows: DueAgingRow[]) =>
     rows.reduce(
       (a, r) => ({
@@ -570,7 +587,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
               </div>
             </Card>
           ))}
-          <Card title="Rows" className="text-sm">
+          <Card title="Customers" className="text-sm">
             <div className="text-lg font-semibold text-gray-900">{sheet.grand_totals.row_count}</div>
           </Card>
         </div>
@@ -712,15 +729,26 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                                 ) : (
                                   <div className="space-y-1.5">
                                     {(historyMap[r.id] ?? []).slice(0, 20).map((h) => (
-                                      <div key={h.id} className="text-[11px] text-slate-700">
-                                        <span className="font-semibold capitalize">{h.zone}</span>{' '}
-                                        <span className="uppercase text-[10px]">{h.action}</span>{' '}
-                                        <span className={`${h.delta >= 0 ? 'text-emerald-700' : 'text-red-700'} font-semibold`}>
-                                          {h.delta >= 0 ? '+' : ''}{fmt(h.delta)}
-                                        </span>{' '}
-                                        ({fmt(h.value_before)} → {fmt(h.value_after)}){' '}
-                                        <span className="text-slate-500">{new Date(h.created_at).toLocaleString('en-GB')}</span>
-                                        {h.note ? <span className="text-slate-600"> — {h.note}</span> : null}
+                                      <div key={h.id} className="text-[11px] text-slate-700 flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <span className="font-semibold capitalize">{h.zone}</span>{' '}
+                                          <span className="uppercase text-[10px]">{h.action}</span>{' '}
+                                          <span className={`${h.delta >= 0 ? 'text-emerald-700' : 'text-red-700'} font-semibold`}>
+                                            {h.delta >= 0 ? '+' : ''}{fmt(h.delta)}
+                                          </span>{' '}
+                                          ({fmt(h.value_before)} → {fmt(h.value_after)}){' '}
+                                          <span className="text-slate-500">{new Date(h.created_at).toLocaleString('en-GB')}</span>
+                                          {h.note ? <span className="text-slate-600"> — {h.note}</span> : null}
+                                        </div>
+                                        {h.action !== 'undo' && !paidOnly && (
+                                          <button
+                                            type="button"
+                                            onClick={() => void undoHistoryItem(r.id, h.id)}
+                                            className="shrink-0 rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
+                                          >
+                                            Undo
+                                          </button>
+                                        )}
                                       </div>
                                     ))}
                                   </div>

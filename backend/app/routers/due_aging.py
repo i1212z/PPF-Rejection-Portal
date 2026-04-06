@@ -383,6 +383,62 @@ async def row_adjustment_history(
     return [_adj_to_read(x) for x in items]
 
 
+@router.post("/adjustments/{adjustment_id}/undo", response_model=DueAgingRowRead)
+async def undo_adjustment(
+    adjustment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    a = (
+        await db.execute(select(DueAgingAdjustment).where(DueAgingAdjustment.id == adjustment_id))
+    ).scalars().first()
+    if not a:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    if a.action == "undo":
+        raise HTTPException(status_code=400, detail="This entry is already an undo action")
+    if a.zone not in ZONE_TO_ATTR:
+        raise HTTPException(status_code=400, detail="Invalid zone in history entry")
+
+    row = await _get_row(db, a.row_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Row not found")
+
+    attr = ZONE_TO_ATTR[a.zone]
+    current = float(getattr(row, attr) or 0)
+    expected_after = float(a.value_after or 0)
+    # Safety: only allow undo when the zone still matches this history step's result.
+    if abs(current - expected_after) > 0.000001:
+        raise HTTPException(
+            status_code=409,
+            detail="Undo only works for the latest zone state. Revert newer changes first.",
+        )
+
+    before = current
+    target = float(a.value_before or 0)
+    setattr(row, attr, target)
+    _recalc_total(row)
+    _recalc_paid_flag(row)
+
+    db.add(
+        DueAgingAdjustment(
+            row_id=row.id,
+            zone=a.zone,
+            action="undo",
+            delta=(target - before),
+            value_before=before,
+            value_after=target,
+            note=f"Undo {a.action}",
+            created_by=current_user.id,
+        ),
+    )
+    m = await _ensure_meta(db)
+    m.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(row)
+    idx = await _register_index_in_location(db, row)
+    return _row_to_read(row, register_row_index=idx)
+
+
 @router.post("/rows/{row_id}/adjust-zone", response_model=DueAgingRowRead)
 async def adjust_zone_amount(
     row_id: UUID,
