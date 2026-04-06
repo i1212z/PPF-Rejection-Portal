@@ -34,6 +34,7 @@ from ..schemas import (
     DueSwapCellsBody,
     DueSwapRowsBody,
 )
+from .due_aging import aging_workbook_csv
 
 router = APIRouter(prefix="/due", tags=["due"])
 
@@ -439,6 +440,20 @@ def _fmt_money(n: float) -> str:
 
 @router.get("/report.csv")
 async def due_account_report_csv(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    """
+    Backward-compatible Due report endpoint.
+
+    Returns the new workbook-based Due report (unpaid + paid aging rows) so old frontend
+    builds that still call /due/report.csv also get the new report format.
+    """
+    return await aging_workbook_csv(db=db, current_user=current_user)
+
+
+@router.get("/credit-notes-report.csv")
+async def due_credit_notes_legacy_report_csv(
     date_from: date = Query(..., description="Start date (inclusive)"),
     date_to: date = Query(..., description="End date (inclusive)"),
     basis: Literal["delivery", "approved"] = Query(
@@ -449,7 +464,7 @@ async def due_account_report_csv(
     current_user: User = Depends(require_roles(UserRole.DUE)),
 ):
     """
-    CSV export for the Due desk: approved B2B credit notes in the date range, with bucket amounts and custom columns.
+    Legacy CSV export for approved B2B credit notes (kept for compatibility).
     """
     if date_from > date_to:
         raise HTTPException(status_code=400, detail="date_from must be on or before date_to")
@@ -551,7 +566,7 @@ async def due_account_report_csv(
         writer.writerow(row)
 
     data = buf.getvalue().encode("utf-8-sig")
-    filename = f"due-account-report-{date_from.isoformat()}-to-{date_to.isoformat()}.csv"
+    filename = f"due-credit-notes-report-{date_from.isoformat()}-to-{date_to.isoformat()}.csv"
     return StreamingResponse(
         BytesIO(data),
         media_type="text/csv; charset=utf-8",
