@@ -119,7 +119,7 @@ async def list_tickets(
             TicketRead(
                 id=t.id,
                 product_name=t.product_name,
-                quantity=t.quantity,
+                quantity=float(t.quantity or 0),
                 uom=getattr(t, "uom", "EA"),
                 cost=float(getattr(t, "cost", 0) or 0),
                 reason=t.reason,
@@ -166,7 +166,7 @@ async def get_ticket(
     return TicketRead(
         id=ticket.id,
         product_name=ticket.product_name,
-        quantity=ticket.quantity,
+        quantity=float(ticket.quantity or 0),
         uom=getattr(ticket, "uom", "EA"),
         cost=float(getattr(ticket, "cost", 0) or 0),
         reason=ticket.reason,
@@ -207,7 +207,7 @@ async def revert_ticket_to_pending(
     return TicketRead(
         id=ticket.id,
         product_name=ticket.product_name,
-        quantity=ticket.quantity,
+        quantity=float(ticket.quantity or 0),
         uom=getattr(ticket, "uom", "EA"),
         cost=float(getattr(ticket, "cost", 0) or 0),
         reason=ticket.reason,
@@ -268,7 +268,7 @@ async def update_ticket(
     return TicketRead(
         id=ticket.id,
         product_name=ticket.product_name,
-        quantity=ticket.quantity,
+        quantity=float(ticket.quantity or 0),
         uom=getattr(ticket, "uom", "EA"),
         cost=float(getattr(ticket, "cost", 0) or 0),
         reason=ticket.reason,

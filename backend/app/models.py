@@ -58,7 +58,7 @@ class RejectionTicket(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     product_name = Column(String(255), nullable=False)
-    quantity = Column(Integer, nullable=False)
+    quantity = Column(Numeric(14, 3), nullable=False)
     uom = Column(String(16), nullable=False, default="EA")
     # Cost is deprecated in UI but kept for DB compatibility.
     cost = Column(Numeric(12, 2), nullable=False, default=0)
@@ -233,5 +233,32 @@ class DueAgingRow(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+
+
+class DueAgingAdjustment(Base):
+    """Audit trail of per-zone add/subtract/paid actions on Due aging rows."""
+
+    __tablename__ = "due_aging_adjustments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    row_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("due_aging_rows.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    zone = Column(String(16), nullable=False, index=True)  # safe|warning|danger|doubtful
+    action = Column(String(24), nullable=False)  # add|subtract|paid|set
+    delta = Column(Numeric(14, 2), nullable=False, default=0)
+    value_before = Column(Numeric(14, 2), nullable=False, default=0)
+    value_after = Column(Numeric(14, 2), nullable=False, default=0)
+    note = Column(Text, nullable=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
     )
 

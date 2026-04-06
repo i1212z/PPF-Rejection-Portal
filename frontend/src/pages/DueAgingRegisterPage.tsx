@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
@@ -46,11 +46,37 @@ interface DueAgingSheetResponse {
   };
 }
 
+interface DueAgingHistoryItem {
+  id: string;
+  row_id: string;
+  zone: BucketKey;
+  action: 'add' | 'subtract' | 'paid' | string;
+  delta: number;
+  value_before: number;
+  value_after: number;
+  note?: string | null;
+  created_at: string;
+}
+
 const BUCKET_LABELS: Record<BucketKey, string> = {
   safe: 'Safe',
   warning: 'Warning',
   danger: 'Danger',
   doubtful: 'Doubtful',
+};
+
+const ZONE_HEADER_CLASSES: Record<BucketKey, string> = {
+  safe: 'bg-green-700 border-green-600',
+  warning: 'bg-yellow-700 border-yellow-600',
+  danger: 'bg-orange-700 border-orange-600',
+  doubtful: 'bg-red-700 border-red-600',
+};
+
+const ZONE_CELL_CLASSES: Record<BucketKey, string> = {
+  safe: 'bg-green-50',
+  warning: 'bg-yellow-50',
+  danger: 'bg-orange-50',
+  doubtful: 'bg-red-50',
 };
 
 function fmt(n: number) {
@@ -77,6 +103,9 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   const [rowDataPick, setRowDataPick] = useState<string | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [zoneFilter, setZoneFilter] = useState<'all' | BucketKey>('all');
+  const [historyForRow, setHistoryForRow] = useState<string | null>(null);
+  const [historyMap, setHistoryMap] = useState<Record<string, DueAgingHistoryItem[]>>({});
 
   const endpoint = paidOnly ? '/due/aging/paid' : '/due/aging/open';
 
@@ -89,7 +118,10 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     } catch (err: unknown) {
       setSheet(null);
       const msg =
-        err && typeof err === 'object' && 'response' in err && (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
           ? String((err as { response: { data: { detail: string } } }).response.data.detail)
           : 'Could not load due sheet.';
       setError(msg);
@@ -116,6 +148,11 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     return out.slice(0, 4) as BucketKey[];
   }, [sheet?.meta.bucket_order]);
 
+  const visibleBuckets = useMemo(
+    () => (zoneFilter === 'all' ? bucketOrder : bucketOrder.filter((z) => z === zoneFilter)),
+    [zoneFilter, bucketOrder],
+  );
+
   const onUpload = async (file: File | null) => {
     if (!file) return;
     setUploading(true);
@@ -127,7 +164,10 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
       setSheet(res.data ?? null);
     } catch (err: unknown) {
       const msg =
-        err && typeof err === 'object' && 'response' in err && (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
           ? String((err as { response: { data: { detail: string } } }).response.data.detail)
           : 'Upload failed.';
       setError(msg);
@@ -192,7 +232,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
       return;
     }
     if (zone !== zonePick.zone) {
-      setError('Zone swap: choose another row in the same column (Safe, Warning, Danger, or Doubtful).');
+      setError('Zone swap: choose another row in the same column.');
       return;
     }
     try {
@@ -235,7 +275,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
       await apiClient.post('/due/aging/swap-rows-order', { row_id_a: dragRowId, row_id_b: targetId });
       await load();
     } catch {
-      setError('Reorder: drop on another row in the same location block (open with open, paid with paid).');
+      setError('Reorder only works within the same location block.');
     }
     setDragRowId(null);
   };
@@ -252,14 +292,17 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     }
   };
 
-  const resetOpenSheet = async () => {
-    if (
-      !window.confirm(
-        'Clear all open rows from the register? Paid rows are not removed. This cannot be undone.',
-      )
-    ) {
-      return;
+  const markUnpaid = async (id: string) => {
+    try {
+      await apiClient.post(`/due/aging/rows/${id}/mark-unpaid`);
+      await load();
+    } catch {
+      setError('Could not restore to open register.');
     }
+  };
+
+  const resetOpenSheet = async () => {
+    if (!window.confirm('Clear all open rows? Paid rows are not removed.')) return;
     setResetting(true);
     setError(null);
     try {
@@ -272,12 +315,78 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     }
   };
 
-  const markUnpaid = async (id: string) => {
+  const runAdjust = async (row: DueAgingRow, zone: BucketKey, sign: 1 | -1) => {
+    const label = sign > 0 ? 'Add amount' : 'Subtract amount';
+    const raw = window.prompt(`${label} in ${BUCKET_LABELS[zone]} for ${row.particulars}`, '');
+    if (!raw) return;
+    const amount = parseMoneyInput(raw);
+    if (amount === null || amount <= 0) return;
+    const note = window.prompt('Optional note for history', '') ?? '';
     try {
-      await apiClient.post(`/due/aging/rows/${id}/mark-unpaid`);
+      await apiClient.post(`/due/aging/rows/${row.id}/adjust-zone`, {
+        zone,
+        delta: sign * amount,
+        note,
+      });
       await load();
+      if (historyForRow === row.id) await toggleHistory(row.id, true);
+    } catch (err: unknown) {
+      const msg =
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          ? String((err as { response: { data: { detail: string } } }).response.data.detail)
+          : 'Could not adjust zone.';
+      setError(msg);
+    }
+  };
+
+  const runPayZone = async (row: DueAgingRow, zone: BucketKey) => {
+    const remaining = row[zone];
+    if (remaining <= 0) return;
+    const raw = window.prompt(
+      `Pay amount in ${BUCKET_LABELS[zone]} for ${row.particulars} (blank = full ${fmt(remaining)})`,
+      '',
+    );
+    let amount: number | undefined;
+    if (raw && raw.trim()) {
+      const n = parseMoneyInput(raw);
+      if (n === null || n <= 0) return;
+      amount = n;
+    }
+    const note = window.prompt('Optional note for history', 'Paid') ?? '';
+    try {
+      await apiClient.post(`/due/aging/rows/${row.id}/pay-zone`, {
+        zone,
+        ...(amount ? { amount } : {}),
+        note,
+      });
+      await load();
+      if (historyForRow === row.id) await toggleHistory(row.id, true);
+    } catch (err: unknown) {
+      const msg =
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          ? String((err as { response: { data: { detail: string } } }).response.data.detail)
+          : 'Could not mark zone paid.';
+      setError(msg);
+    }
+  };
+
+  const toggleHistory = async (rowId: string, forceOpen = false) => {
+    if (!forceOpen && historyForRow === rowId) {
+      setHistoryForRow(null);
+      return;
+    }
+    try {
+      const res = await apiClient.get<DueAgingHistoryItem[]>(`/due/aging/rows/${rowId}/history`);
+      setHistoryMap((prev) => ({ ...prev, [rowId]: res.data ?? [] }));
+      setHistoryForRow(rowId);
     } catch {
-      setError('Could not restore to open register.');
+      setError('Could not load history.');
     }
   };
 
@@ -295,12 +404,11 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
 
   const renderAmountCell = (r: DueAgingRow, zone: BucketKey) => {
     const val = r[zone];
-    const picked =
-      zonePick?.rowId === r.id && zonePick?.zone === zone ? 'ring-2 ring-amber-400 ring-inset' : '';
+    const picked = zonePick?.rowId === r.id && zonePick?.zone === zone ? 'ring-2 ring-indigo-400 ring-inset' : '';
     return (
       <td
         key={zone}
-        className={`px-2 py-1.5 border border-slate-200 text-right align-middle ${picked}`}
+        className={`px-2 py-1.5 border border-slate-200 text-right align-top ${picked} ${ZONE_CELL_CLASSES[zone]}`}
         onClick={() => void onZoneCellClick(r.id, zone)}
       >
         <input
@@ -314,8 +422,37 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
             void patchRow(r.id, { [zone]: n }).then(() => load());
           }}
           inputMode="decimal"
-          className="w-full min-w-[4.5rem] max-w-[7rem] ml-auto rounded border border-transparent bg-transparent px-1 py-0.5 text-right tabular-nums text-[11px] hover:border-slate-200 focus:border-indigo-400 focus:outline-none"
+          className="w-full min-w-[4.6rem] max-w-[7rem] ml-auto rounded border border-transparent bg-transparent px-1 py-0.5 text-right tabular-nums text-[11px] hover:border-slate-300 focus:border-indigo-400 focus:outline-none"
         />
+        {!paidOnly && (
+          <div className="mt-1 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => void runAdjust(r, zone, -1)}
+              className="rounded border border-slate-300 bg-white px-1 text-[10px] text-slate-700 hover:bg-slate-50"
+              title="Subtract and log history"
+            >
+              -
+            </button>
+            <button
+              type="button"
+              onClick={() => void runAdjust(r, zone, 1)}
+              className="rounded border border-slate-300 bg-white px-1 text-[10px] text-slate-700 hover:bg-slate-50"
+              title="Add and log history"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              disabled={val <= 0}
+              onClick={() => void runPayZone(r, zone)}
+              className="rounded border border-emerald-300 bg-emerald-50 px-1.5 text-[10px] font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+              title="Mark this zone amount paid and log history"
+            >
+              Paid
+            </button>
+          </div>
+        )}
       </td>
     );
   };
@@ -324,24 +461,19 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     <div className="space-y-4 min-w-0 max-w-full pb-20 md:pb-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between min-w-0">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {paidOnly ? 'Due — paid sheet' : 'Due — open sheet'}
-          </h2>
+          <h2 className="text-lg font-semibold text-gray-900">{paidOnly ? 'Due — paid sheet' : 'Due — open sheet'}</h2>
           <p className="text-sm text-gray-500">
             {paidOnly
-              ? 'Rows marked paid from the open register. Use Unpaid to send a row back.'
-              : 'Upload an Excel file with location bands (Calicut / Kochi / Tamil Nadu) and columns Particulars, Safe, Warning, Danger, Doubtful, Total. Amounts in each zone stay exactly as imported or as you edit them—nothing moves automatically over time. Drag row handles to swap order within a location; drag zone headers to reorder columns; tap two cells in the same zone column to swap that amount between rows; use ⇄ to swap all zone amounts and particulars between two rows; or type directly in any cell to move balances manually.'}
+              ? 'Paid rows. You can send a row back to open.'
+              : 'Customer-wise due sheet with zone colors, per-zone Paid, add/subtract with history, drag row swap, and zone filter.'}
           </p>
           {zonePick && (
-            <p className="text-xs text-amber-800 font-medium mt-1">Select another cell in the same zone column to swap amounts.</p>
-          )}
-          {rowDataPick && (
-            <p className="text-xs text-amber-800 font-medium mt-1">Select another row ⇄ to swap full row data.</p>
+            <p className="text-xs text-indigo-700 font-medium mt-1">Select another cell in the same zone to swap amounts.</p>
           )}
         </div>
         <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto shrink-0">
           {!paidOnly && (
-            <label className="w-full sm:w-auto inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2.5 sm:py-2 text-sm font-semibold text-white hover:bg-indigo-500 cursor-pointer disabled:opacity-60">
+            <label className="w-full sm:w-auto inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2.5 sm:py-2 text-sm font-semibold text-white hover:bg-indigo-500 cursor-pointer">
               <input
                 type="file"
                 accept=".xlsx,.xlsm"
@@ -394,27 +526,45 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
-      )}
+      <Card title="Zone visibility" className="text-sm">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setZoneFilter('all')}
+            className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+              zoneFilter === 'all' ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700'
+            }`}
+          >
+            All
+          </button>
+          {(['safe', 'warning', 'danger', 'doubtful'] as BucketKey[]).map((z) => (
+            <button
+              key={z}
+              type="button"
+              onClick={() => setZoneFilter(z)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+                zoneFilter === z ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-slate-700'
+              }`}
+            >
+              {BUCKET_LABELS[z]}
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
 
       {sheet?.meta.company_title && (
         <div className="text-center space-y-1 px-2">
           <div className="text-sm sm:text-base font-bold text-gray-900 tracking-tight">{sheet.meta.company_title}</div>
-          {sheet.meta.date_range_label ? (
-            <div className="text-xs text-gray-600">{sheet.meta.date_range_label}</div>
-          ) : null}
+          {sheet.meta.date_range_label ? <div className="text-xs text-gray-600">{sheet.meta.date_range_label}</div> : null}
         </div>
       )}
 
       {sheet && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {(['safe', 'warning', 'danger', 'doubtful', 'total'] as const).map((k) => (
-            <Card
-              key={k}
-              title={k === 'total' ? 'Total outstanding' : BUCKET_LABELS[k as BucketKey]}
-              className="text-sm"
-            >
+            <Card key={k} title={k === 'total' ? 'Total outstanding' : BUCKET_LABELS[k as BucketKey]} className="text-sm">
               <div className="text-lg font-semibold tabular-nums text-gray-900">
                 {fmt(sheet.grand_totals[k === 'total' ? 'total' : k])}
               </div>
@@ -426,23 +576,11 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
         </div>
       )}
 
-      <Card
-        title={paidOnly ? 'Paid register' : 'Aging register'}
-        subtitle={
-          paidOnly
-            ? 'Imported rows you marked as paid.'
-            : 'Paid clears only from the open sheet; upload replaces open rows and keeps paid history.'
-        }
-        className="text-sm"
-      >
+      <Card title={paidOnly ? 'Paid register' : 'Aging register'} className="text-sm">
         {loading && !sheet ? (
           <p className="text-gray-500 py-4">Loading…</p>
         ) : !sheet?.locations.length ? (
-          <p className="text-gray-500 py-4">
-            {paidOnly
-              ? 'No paid rows yet.'
-              : 'No open rows. Upload an .xlsx workbook that matches your due sheet layout.'}
-          </p>
+          <p className="text-gray-500 py-4">{paidOnly ? 'No paid rows yet.' : 'No open rows. Upload an .xlsx workbook.'}</p>
         ) : (
           sheet.locations.map((block) => {
             const bt = blockTotals(block.rows);
@@ -453,32 +591,15 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                   <span className="ml-2 text-xs font-normal text-gray-500">({block.location_group})</span>
                 </h3>
                 <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain -mx-1 px-1 sm:mx-0 sm:px-0">
-                  <table className="min-w-[640px] w-full text-xs border-collapse select-none">
+                  <table className="min-w-[720px] w-full text-xs border-collapse select-none">
                     <thead>
                       <tr className="bg-slate-800 text-white">
-                        <th
-                          className="px-2 py-2 border border-slate-600 w-14 text-center text-[10px] font-semibold"
-                          title="Drag to swap row order with another row in this block"
-                        >
-                          ⋮
-                        </th>
-                        {!paidOnly && (
-                          <th className="px-2 py-2 border border-slate-600 w-16 text-center text-[10px] font-semibold">
-                            Paid
-                          </th>
-                        )}
-                        {paidOnly && (
-                          <th className="px-2 py-2 border border-slate-600 w-16 text-center text-[10px] font-semibold">
-                            Unpaid
-                          </th>
-                        )}
-                        <th className="px-2 py-2 border border-slate-600 text-left text-[10px] font-semibold min-w-[140px]">
-                          Particulars
-                        </th>
-                        <th
-                          colSpan={bucketOrder.length}
-                          className="px-2 py-1 border border-slate-600 text-center text-[10px] font-bold tracking-wide"
-                        >
+                        <th className="px-2 py-2 border border-slate-600 w-14 text-center text-[10px] font-semibold">⋮</th>
+                        {!paidOnly && <th className="px-2 py-2 border border-slate-600 w-16 text-center text-[10px] font-semibold">Paid</th>}
+                        {paidOnly && <th className="px-2 py-2 border border-slate-600 w-16 text-center text-[10px] font-semibold">Unpaid</th>}
+                        <th className="px-2 py-2 border border-slate-600 text-left text-[10px] font-semibold min-w-[140px]">Customer</th>
+                        <th className="px-2 py-2 border border-slate-600 text-center text-[10px] font-semibold w-14">History</th>
+                        <th colSpan={visibleBuckets.length} className="px-2 py-1 border border-slate-600 text-center text-[10px] font-bold tracking-wide">
                           Zone
                         </th>
                         <th className="px-2 py-2 border border-slate-600 text-right text-[10px] font-semibold">Total</th>
@@ -488,15 +609,16 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                         {!paidOnly && <th className="border border-slate-600" />}
                         {paidOnly && <th className="border border-slate-600" />}
                         <th className="border border-slate-600" />
-                        {bucketOrder.map((bk) => (
+                        <th className="border border-slate-600" />
+                        {visibleBuckets.map((bk) => (
                           <th
                             key={bk}
-                            draggable
-                            onDragStart={() => setDragBucket(bk)}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={() => onDropBucket(bk)}
-                            className="px-2 py-2 border border-slate-600 text-right text-[10px] font-semibold cursor-grab whitespace-nowrap"
-                            title="Drag to reorder zone columns"
+                            draggable={zoneFilter === 'all'}
+                            onDragStart={() => zoneFilter === 'all' && setDragBucket(bk)}
+                            onDragOver={(e) => zoneFilter === 'all' && e.preventDefault()}
+                            onDrop={() => zoneFilter === 'all' && onDropBucket(bk)}
+                            className={`px-2 py-2 border text-right text-[10px] font-semibold whitespace-nowrap ${ZONE_HEADER_CLASSES[bk]}`}
+                            title={zoneFilter === 'all' ? 'Drag to reorder zone columns' : undefined}
                           >
                             {BUCKET_LABELS[bk].toUpperCase()}
                           </th>
@@ -506,96 +628,116 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                     </thead>
                     <tbody>
                       {block.rows.map((r) => (
-                        <tr
-                          key={r.id}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={() => void onDropRow(r.id)}
-                          className={`hover:bg-slate-50 ${dragRowId === r.id ? 'opacity-70' : ''} ${
-                            rowDataPick === r.id ? 'bg-amber-50' : ''
-                          }`}
-                        >
-                          <td
-                            className="px-1 py-2 border border-slate-200 text-center align-middle text-slate-400"
-                            draggable
-                            onDragStart={() => setDragRowId(r.id)}
-                            onDragEnd={() => setDragRowId(null)}
+                        <Fragment key={r.id}>
+                          <tr
+                            key={r.id}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={() => void onDropRow(r.id)}
+                            className={`hover:bg-slate-50 ${dragRowId === r.id ? 'opacity-70' : ''} ${rowDataPick === r.id ? 'bg-amber-50' : ''}`}
                           >
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className="cursor-grab" title="Drag to swap order">
-                                ⠿
-                              </span>
+                            <td
+                              className="px-1 py-2 border border-slate-200 text-center align-middle text-slate-400"
+                              draggable
+                              onDragStart={() => setDragRowId(r.id)}
+                              onDragEnd={() => setDragRowId(null)}
+                            >
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="cursor-grab">⠿</span>
+                                <button
+                                  type="button"
+                                  onClick={() => void onRowDataSwapClick(r.id)}
+                                  className={`rounded border px-1 py-0 text-[10px] font-semibold leading-tight ${
+                                    rowDataPick === r.id
+                                      ? 'border-amber-500 bg-amber-100 text-amber-900'
+                                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                                  }`}
+                                  title="Swap all zone amounts and customer name with another row"
+                                >
+                                  ⇄
+                                </button>
+                              </div>
+                            </td>
+                            {!paidOnly && (
+                              <td className="px-2 py-2 border border-slate-200 text-center align-middle">
+                                <button
+                                  type="button"
+                                  disabled={payingId === r.id}
+                                  onClick={() => void markPaid(r.id)}
+                                  className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 whitespace-nowrap"
+                                >
+                                  {payingId === r.id ? '…' : 'Paid'}
+                                </button>
+                              </td>
+                            )}
+                            {paidOnly && (
+                              <td className="px-2 py-2 border border-slate-200 text-center align-middle">
+                                <button
+                                  type="button"
+                                  onClick={() => void markUnpaid(r.id)}
+                                  className="rounded-full border border-slate-400 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-800 hover:bg-slate-50 whitespace-nowrap"
+                                >
+                                  Unpaid
+                                </button>
+                              </td>
+                            )}
+                            <td className="px-2 py-1.5 border border-slate-200 align-middle min-w-[120px]">
+                              <input
+                                defaultValue={r.particulars}
+                                key={`${r.id}-p-${r.particulars}`}
+                                onBlur={(e) => {
+                                  const v = e.target.value.trim();
+                                  if (v === r.particulars) return;
+                                  void patchRow(r.id, { particulars: v }).then(() => load());
+                                }}
+                                className="w-full min-w-[8rem] rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] hover:border-slate-200 focus:border-indigo-400 focus:outline-none"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5 border border-slate-200 text-center">
                               <button
                                 type="button"
-                                onClick={() => void onRowDataSwapClick(r.id)}
-                                className={`rounded border px-1 py-0 text-[10px] font-semibold leading-tight ${
-                                  rowDataPick === r.id
-                                    ? 'border-amber-500 bg-amber-100 text-amber-900'
-                                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                                }`}
-                                title="Swap all zone amounts and particulars with another row"
+                                onClick={() => void toggleHistory(r.id)}
+                                className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
                               >
-                                ⇄
-                              </button>
-                            </div>
-                          </td>
-                          {!paidOnly && (
-                            <td className="px-2 py-2 border border-slate-200 text-center align-middle">
-                              <button
-                                type="button"
-                                disabled={payingId === r.id}
-                                onClick={() => void markPaid(r.id)}
-                                className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 whitespace-nowrap"
-                              >
-                                {payingId === r.id ? '…' : 'Paid'}
+                                {historyForRow === r.id ? 'Hide' : 'Show'}
                               </button>
                             </td>
+                            {visibleBuckets.map((bk) => renderAmountCell(r, bk))}
+                            <td className="px-2 py-1.5 border border-slate-200 text-right tabular-nums font-medium text-[11px]">{fmt(r.total)}</td>
+                          </tr>
+                          {historyForRow === r.id && (
+                            <tr>
+                              <td colSpan={5 + visibleBuckets.length + 1} className="border border-slate-200 bg-slate-50 px-3 py-2">
+                                {(historyMap[r.id] ?? []).length === 0 ? (
+                                  <div className="text-[11px] text-slate-500">No history yet.</div>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    {(historyMap[r.id] ?? []).slice(0, 20).map((h) => (
+                                      <div key={h.id} className="text-[11px] text-slate-700">
+                                        <span className="font-semibold capitalize">{h.zone}</span>{' '}
+                                        <span className="uppercase text-[10px]">{h.action}</span>{' '}
+                                        <span className={`${h.delta >= 0 ? 'text-emerald-700' : 'text-red-700'} font-semibold`}>
+                                          {h.delta >= 0 ? '+' : ''}{fmt(h.delta)}
+                                        </span>{' '}
+                                        ({fmt(h.value_before)} → {fmt(h.value_after)}){' '}
+                                        <span className="text-slate-500">{new Date(h.created_at).toLocaleString('en-GB')}</span>
+                                        {h.note ? <span className="text-slate-600"> — {h.note}</span> : null}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
                           )}
-                          {paidOnly && (
-                            <td className="px-2 py-2 border border-slate-200 text-center align-middle">
-                              <button
-                                type="button"
-                                onClick={() => void markUnpaid(r.id)}
-                                className="rounded-full border border-slate-400 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-800 hover:bg-slate-50 whitespace-nowrap"
-                              >
-                                Unpaid
-                              </button>
-                            </td>
-                          )}
-                          <td className="px-2 py-1.5 border border-slate-200 align-middle min-w-[120px]">
-                            <input
-                              defaultValue={r.particulars}
-                              key={`${r.id}-p-${r.particulars}`}
-                              onBlur={(e) => {
-                                const v = e.target.value.trim();
-                                if (v === r.particulars) return;
-                                void patchRow(r.id, { particulars: v }).then(() => load());
-                              }}
-                              className="w-full min-w-[8rem] rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] hover:border-slate-200 focus:border-indigo-400 focus:outline-none"
-                            />
-                          </td>
-                          {bucketOrder.map((bk) => renderAmountCell(r, bk))}
-                          <td className="px-2 py-1.5 border border-slate-200 text-right tabular-nums font-medium text-[11px]">
-                            {fmt(r.total)}
-                          </td>
-                        </tr>
+                        </Fragment>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr className="bg-slate-100 font-semibold text-gray-900">
-                        <td
-                          colSpan={3}
-                          className="px-2 py-2 border border-slate-200 text-right text-[11px]"
-                        >
-                          Block total
-                        </td>
-                        {bucketOrder.map((bk) => (
-                          <td key={bk} className="px-2 py-2 border border-slate-200 text-right tabular-nums text-[11px]">
-                            {fmt(bt[bk])}
-                          </td>
+                        <td colSpan={5} className="px-2 py-2 border border-slate-200 text-right text-[11px]">Block total</td>
+                        {visibleBuckets.map((bk) => (
+                          <td key={bk} className="px-2 py-2 border border-slate-200 text-right tabular-nums text-[11px]">{fmt(bt[bk])}</td>
                         ))}
-                        <td className="px-2 py-2 border border-slate-200 text-right tabular-nums text-[11px]">
-                          {fmt(bt.total)}
-                        </td>
+                        <td className="px-2 py-2 border border-slate-200 text-right tabular-nums text-[11px]">{fmt(bt.total)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -608,3 +750,4 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     </div>
   );
 }
+

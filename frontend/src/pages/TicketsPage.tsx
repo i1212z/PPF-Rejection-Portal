@@ -1480,7 +1480,7 @@ export default function TicketsPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
-                <input name="quantity" type="number" min={0} defaultValue={editingTicket.quantity} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
+                <input name="quantity" type="number" min={0} step="0.001" defaultValue={editingTicket.quantity} className="w-full rounded border border-gray-200 px-3 py-2 text-sm" required />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Customer</label>

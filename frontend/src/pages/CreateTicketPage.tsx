@@ -197,6 +197,7 @@ export default function CreateTicketPage() {
                   <input
                     type="number"
                     min={0}
+                    step="0.001"
                     className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
@@ -268,6 +269,7 @@ export default function CreateTicketPage() {
                         <input
                           type="number"
                           min={0}
+                          step="0.001"
                           className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900"
                           value={item.quantity}
                           onChange={(e) =>

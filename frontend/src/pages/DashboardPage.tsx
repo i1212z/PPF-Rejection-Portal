@@ -48,6 +48,26 @@ function truncate(s: string, len: number) {
   return s.length <= len ? s : `${s.slice(0, len)}…`;
 }
 
+function toKg(quantity: number, uomRaw?: string | null): number {
+  const q = Number(quantity || 0);
+  const u = (uomRaw || 'EA').toUpperCase();
+  if (u === 'KG' || u === 'KGS') return q;
+  if (u === 'EA') return q * 0.2; // 1 EA = 200g = 0.2kg
+  if (u === 'G' || u === 'GM' || u === 'GRAM' || u === 'GRAMS') return q / 1000;
+  if (u === 'ML') return q / 1000; // fallback density approximation
+  if (u === 'L') return q; // fallback density approximation
+  return q;
+}
+
+function fmtNoRound(value: number, decimals = 3): string {
+  const n = Number(value || 0);
+  const factor = 10 ** decimals;
+  const truncated = Math.trunc(n * factor) / factor;
+  const s = truncated.toString();
+  if (!s.includes('.')) return s;
+  return s.replace(/\.?0+$/, '');
+}
+
 function groupTickets(list: Ticket[]): TicketGroup[] {
   const groups: Record<string, TicketGroup> = {};
   list.forEach((t) => {
@@ -207,6 +227,8 @@ export default function DashboardPage() {
   const [tallyPostedIds, setTallyPostedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showB2BUnits, setShowB2BUnits] = useState(false);
+  const [showB2CUnits, setShowB2CUnits] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -242,10 +264,10 @@ export default function DashboardPage() {
     useMemo(() => {
       const total = tickets.length;
       let pending = 0;
-      let confirmedQtyB2B = 0;
-      let confirmedQtyB2C = 0;
-      let dismissedQtyB2B = 0;
-      let dismissedQtyB2C = 0;
+      let confirmedKgB2B = 0;
+      let confirmedKgB2C = 0;
+      let dismissedKgB2B = 0;
+      let dismissedKgB2C = 0;
 
       const rejectedByUnit: Record<'B2B' | 'B2C', Record<string, number>> = {
         B2B: {},
@@ -253,53 +275,54 @@ export default function DashboardPage() {
       };
 
       tickets.forEach((t) => {
+        const qty = Number(t.quantity || 0);
+        const u = (t.uom || 'EA').toUpperCase();
+        const qtyKg = toKg(qty, u);
         if (t.channel === 'B2B') {
           if (t.status === 'approved') {
-            confirmedQtyB2B += Number(t.quantity || 0);
-            const u = (t.uom || 'EA').toUpperCase();
-            rejectedByUnit.B2B[u] = (rejectedByUnit.B2B[u] ?? 0) + Number(t.quantity || 0);
+            confirmedKgB2B += qtyKg;
+            rejectedByUnit.B2B[u] = (rejectedByUnit.B2B[u] ?? 0) + qty;
           } else if (t.status === 'rejected') {
-            dismissedQtyB2B += Number(t.quantity || 0);
+            dismissedKgB2B += qtyKg;
           }
         } else if (t.channel === 'B2C') {
           if (t.status === 'approved') {
-            confirmedQtyB2C += Number(t.quantity || 0);
-            const u = (t.uom || 'EA').toUpperCase();
-            rejectedByUnit.B2C[u] = (rejectedByUnit.B2C[u] ?? 0) + Number(t.quantity || 0);
+            confirmedKgB2C += qtyKg;
+            rejectedByUnit.B2C[u] = (rejectedByUnit.B2C[u] ?? 0) + qty;
           } else if (t.status === 'rejected') {
-            dismissedQtyB2C += Number(t.quantity || 0);
+            dismissedKgB2C += qtyKg;
           }
         }
         if (t.status === 'pending') pending += 1;
       });
 
       const chart = [
-        { channel: 'B2B', value: confirmedQtyB2B },
-        { channel: 'B2C', value: confirmedQtyB2C },
+        { channel: 'B2B', value: confirmedKgB2B },
+        { channel: 'B2C', value: confirmedKgB2C },
       ];
 
       const pie = [
-        { channel: 'B2B', value: confirmedQtyB2B },
-        { channel: 'B2C', value: confirmedQtyB2C },
+        { channel: 'B2B', value: confirmedKgB2B },
+        { channel: 'B2C', value: confirmedKgB2C },
       ];
 
       const approvedVsRejected: ApprovedRejectedPoint[] = [];
       if (channelFilter === 'B2B') {
         approvedVsRejected.push(
-          { name: 'Confirmed', value: confirmedQtyB2B },
-          { name: 'Dismissed', value: dismissedQtyB2B },
+          { name: 'Confirmed', value: confirmedKgB2B },
+          { name: 'Dismissed', value: dismissedKgB2B },
         );
       } else if (channelFilter === 'B2C') {
         approvedVsRejected.push(
-          { name: 'Confirmed', value: confirmedQtyB2C },
-          { name: 'Dismissed', value: dismissedQtyB2C },
+          { name: 'Confirmed', value: confirmedKgB2C },
+          { name: 'Dismissed', value: dismissedKgB2C },
         );
       } else {
         approvedVsRejected.push(
-          { name: 'B2B Confirmed', value: confirmedQtyB2B },
-          { name: 'B2B Dismissed', value: dismissedQtyB2B },
-          { name: 'B2C Confirmed', value: confirmedQtyB2C },
-          { name: 'B2C Dismissed', value: dismissedQtyB2C },
+          { name: 'B2B Confirmed', value: confirmedKgB2B },
+          { name: 'B2B Dismissed', value: dismissedKgB2B },
+          { name: 'B2C Confirmed', value: confirmedKgB2C },
+          { name: 'B2C Dismissed', value: dismissedKgB2C },
         );
       }
 
@@ -348,8 +371,8 @@ export default function DashboardPage() {
 
   const totalB2BUnits = useMemo(
     () =>
-      Object.values(rejectedByUnit.B2B || {}).reduce(
-        (acc, v) => acc + Number(v || 0),
+      Object.entries(rejectedByUnit.B2B || {}).reduce(
+        (acc, [u, v]) => acc + toKg(Number(v || 0), u),
         0,
       ),
     [rejectedByUnit.B2B],
@@ -357,8 +380,8 @@ export default function DashboardPage() {
 
   const totalB2CUnits = useMemo(
     () =>
-      Object.values(rejectedByUnit.B2C || {}).reduce(
-        (acc, v) => acc + Number(v || 0),
+      Object.entries(rejectedByUnit.B2C || {}).reduce(
+        (acc, [u, v]) => acc + toKg(Number(v || 0), u),
         0,
       ),
     [rejectedByUnit.B2C],
@@ -423,13 +446,14 @@ export default function DashboardPage() {
         >
           <button
             type="button"
+            onClick={() => setShowB2BUnits((v) => !v)}
             className="w-full text-left min-h-[44px]"
           >
             <div className="text-2xl font-bold text-gray-900">
-              {loading ? '…' : totalB2BUnits || 0}
+              {loading ? '…' : fmtNoRound(totalB2BUnits)} <span className="text-base font-semibold">kg</span>
             </div>
-            <p className="mt-1 text-xs text-gray-500">By unit</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <p className="mt-1 text-xs text-gray-500">{showB2BUnits ? 'Hide unit breakdown' : 'Click for unit breakdown'}</p>
+            {showB2BUnits && <div className="mt-2 flex flex-wrap gap-1.5">
               {Object.entries(rejectedByUnit?.B2B ?? {})
                 .sort(([a], [b]) => a.localeCompare(b))
                 .map(([u, v]) => (
@@ -437,13 +461,13 @@ export default function DashboardPage() {
                     key={u}
                     className="inline-flex items-center rounded-full bg-sky-50 border border-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-800"
                   >
-                    {v} {u}
+                    {fmtNoRound(Number(v), 6)} {u} → {fmtNoRound(toKg(Number(v), u), 6)} kg
                   </span>
                 ))}
               {Object.keys(rejectedByUnit?.B2B ?? {}).length === 0 && (
                 <span className="text-[11px] text-gray-500">No confirmed rejections yet.</span>
               )}
-            </div>
+            </div>}
           </button>
         </Card>
         <Card
@@ -453,16 +477,17 @@ export default function DashboardPage() {
         >
           <button
             type="button"
+            onClick={() => setShowB2CUnits((v) => !v)}
             className="w-full text-left min-h-[44px]"
           >
             <div className="flex items-baseline justify-between gap-2">
               <div className="text-2xl font-bold text-gray-900">
-                {loading ? '…' : totalB2CUnits || 0}
+                {loading ? '…' : fmtNoRound(totalB2CUnits)} <span className="text-base font-semibold">kg</span>
               </div>
               <span className="text-xs text-gray-400">→</span>
             </div>
-            <p className="mt-1 text-xs text-gray-500">By unit</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <p className="mt-1 text-xs text-gray-500">{showB2CUnits ? 'Hide unit breakdown' : 'Click for unit breakdown'}</p>
+            {showB2CUnits && <div className="mt-2 flex flex-wrap gap-1.5">
               {Object.entries(rejectedByUnit?.B2C ?? {})
                 .sort(([a], [b]) => a.localeCompare(b))
                 .map(([u, v]) => (
@@ -470,13 +495,13 @@ export default function DashboardPage() {
                     key={u}
                     className="inline-flex items-center rounded-full bg-rose-50 border border-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-800"
                   >
-                    {v} {u}
+                    {fmtNoRound(Number(v), 6)} {u} → {fmtNoRound(toKg(Number(v), u), 6)} kg
                   </span>
                 ))}
               {Object.keys(rejectedByUnit?.B2C ?? {}).length === 0 && (
                 <span className="text-[11px] text-gray-500">No confirmed rejections yet.</span>
               )}
-            </div>
+            </div>}
           </button>
         </Card>
         <Card
@@ -523,7 +548,7 @@ export default function DashboardPage() {
       {/* Current delivery window by channel – summary (overall ticket value) */}
       <Card
         title="Current delivery window by channel"
-        subtitle="This week — rejected quantity per channel"
+        subtitle="This week — rejected quantity in kg per channel"
         className="border-l-4 border-l-indigo-400"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -531,13 +556,13 @@ export default function DashboardPage() {
             <div className="rounded-lg bg-sky-50 border border-sky-100 px-4 py-3">
               <div className="text-xs font-medium text-sky-700 uppercase tracking-wide">B2B</div>
               <div className="mt-1 flex gap-4 text-sm">
-                <span><strong>Quantity:</strong> {chartData?.find((c) => c.channel === 'B2B')?.value ?? 0}</span>
+                <span><strong>Quantity:</strong> {fmtNoRound(chartData?.find((c) => c.channel === 'B2B')?.value ?? 0)} kg</span>
               </div>
               <div className="mt-1 text-[11px] text-sky-700">
                 <strong>By unit:</strong>{' '}
                 {Object.entries((rejectedByUnit as any)?.B2B ?? {})
                   .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([u, v]) => `${v} ${u}`)
+                  .map(([u, v]) => `${fmtNoRound(Number(v), 6)} ${u} → ${fmtNoRound(toKg(Number(v), u), 6)} kg`)
                   .join(' • ') || '–'}
               </div>
             </div>
@@ -546,13 +571,13 @@ export default function DashboardPage() {
             <div className="rounded-lg bg-orange-50 border border-orange-100 px-4 py-3">
               <div className="text-xs font-medium text-orange-700 uppercase tracking-wide">B2C</div>
               <div className="mt-1 flex gap-4 text-sm">
-                <span><strong>Quantity:</strong> {chartData?.find((c) => c.channel === 'B2C')?.value ?? 0}</span>
+                <span><strong>Quantity:</strong> {fmtNoRound(chartData?.find((c) => c.channel === 'B2C')?.value ?? 0)} kg</span>
               </div>
               <div className="mt-1 text-[11px] text-orange-700">
                 <strong>By unit:</strong>{' '}
                 {Object.entries((rejectedByUnit as any)?.B2C ?? {})
                   .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([u, v]) => `${v} ${u}`)
+                  .map(([u, v]) => `${fmtNoRound(Number(v), 6)} ${u} → ${fmtNoRound(toKg(Number(v), u), 6)} kg`)
                   .join(' • ') || '–'}
               </div>
             </div>
@@ -563,8 +588,8 @@ export default function DashboardPage() {
       {/* Overall ticket value chart */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 xl:gap-6 min-w-0">
         <Card
-        title="Confirmed rejected quantity"
-        subtitle="This week — confirmed (approved) quantity by channel"
+        title="Confirmed rejected quantity (kg)"
+        subtitle="This week — confirmed (approved) quantity by channel in kg"
           rightSlot={
             <span className="rounded-full border border-gray-200 px-3 py-1 text-[11px] text-gray-600 bg-gray-50 inline-block w-full sm:w-auto text-center">
               This week

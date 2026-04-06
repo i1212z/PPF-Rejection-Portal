@@ -18,8 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth.deps import require_roles
 from ..database import get_db
 from ..due_aging_parse import parse_due_aging_xlsx
-from ..models import DueAgingMeta, DueAgingRow, User, UserRole
+from ..models import DueAgingAdjustment, DueAgingMeta, DueAgingRow, User, UserRole
 from ..schemas import (
+    DueAgingAdjustmentRead,
     DueAgingBucketOrderBody,
     DueAgingLocationBlock,
     DueAgingMetaRead,
@@ -31,6 +32,8 @@ from ..schemas import (
     DueAgingSwapZoneCellsBody,
     DueAgingSwapZonesGlobalBody,
     DueAgingTotals,
+    DueAgingZoneAdjustBody,
+    DueAgingZonePaidBody,
 )
 
 router = APIRouter(prefix="/due/aging", tags=["due-aging"])
@@ -42,6 +45,13 @@ ZONE_TO_ATTR = {
     "warning": "amount_warning",
     "danger": "amount_danger",
     "doubtful": "amount_doubtful",
+}
+
+ZONE_COLOR = {
+    "safe": "green",
+    "warning": "yellow",
+    "danger": "orange",
+    "doubtful": "red",
 }
 
 
@@ -140,6 +150,35 @@ def _recalc_total(row: DueAgingRow) -> None:
         + float(row.amount_warning or 0)
         + float(row.amount_danger or 0)
         + float(row.amount_doubtful or 0)
+    )
+
+
+def _recalc_paid_flag(row: DueAgingRow) -> None:
+    rem = (
+        float(row.amount_safe or 0)
+        + float(row.amount_warning or 0)
+        + float(row.amount_danger or 0)
+        + float(row.amount_doubtful or 0)
+    )
+    if rem <= 0.000001:
+        if row.paid_at is None:
+            row.paid_at = datetime.now(timezone.utc)
+    else:
+        row.paid_at = None
+
+
+def _adj_to_read(a: DueAgingAdjustment) -> DueAgingAdjustmentRead:
+    return DueAgingAdjustmentRead(
+        id=a.id,
+        row_id=a.row_id,
+        zone=a.zone,
+        action=a.action,
+        delta=float(a.delta or 0),
+        value_before=float(a.value_before or 0),
+        value_after=float(a.value_after or 0),
+        note=a.note,
+        created_by=a.created_by,
+        created_at=a.created_at,
     )
 
 
@@ -248,6 +287,11 @@ async def upload_workbook(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not read workbook: {e!s}") from e
 
+    open_ids = (
+        await db.execute(select(DueAgingRow.id).where(DueAgingRow.paid_at.is_(None)))
+    ).scalars().all()
+    if open_ids:
+        await db.execute(sql_delete(DueAgingAdjustment).where(DueAgingAdjustment.row_id.in_(open_ids)))
     await db.execute(sql_delete(DueAgingRow).where(DueAgingRow.paid_at.is_(None)))
 
     m = await _ensure_meta(db)
@@ -313,6 +357,121 @@ async def patch_row(
         ):
             _recalc_total(row)
 
+    m = await _ensure_meta(db)
+    m.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(row)
+    idx = await _register_index_in_location(db, row)
+    return _row_to_read(row, register_row_index=idx)
+
+
+@router.get("/rows/{row_id}/history", response_model=list[DueAgingAdjustmentRead])
+async def row_adjustment_history(
+    row_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    row = await _get_row(db, row_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Row not found")
+    q = (
+        select(DueAgingAdjustment)
+        .where(DueAgingAdjustment.row_id == row_id)
+        .order_by(DueAgingAdjustment.created_at.desc(), DueAgingAdjustment.id.desc())
+    )
+    items = (await db.execute(q)).scalars().all()
+    return [_adj_to_read(x) for x in items]
+
+
+@router.post("/rows/{row_id}/adjust-zone", response_model=DueAgingRowRead)
+async def adjust_zone_amount(
+    row_id: UUID,
+    body: DueAgingZoneAdjustBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    zone = body.zone.strip().lower()
+    if zone not in ZONE_TO_ATTR:
+        raise HTTPException(status_code=400, detail="zone must be safe, warning, danger, or doubtful")
+    row = await _get_row(db, row_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Row not found")
+    attr = ZONE_TO_ATTR[zone]
+    before = float(getattr(row, attr) or 0)
+    delta = float(body.delta or 0)
+    if abs(delta) < 0.000001:
+        idx = await _register_index_in_location(db, row)
+        return _row_to_read(row, register_row_index=idx)
+    after = before + delta
+    if after < -0.000001:
+        raise HTTPException(status_code=400, detail=f"{zone} would go below zero")
+    if after < 0:
+        after = 0.0
+    setattr(row, attr, after)
+    _recalc_total(row)
+    _recalc_paid_flag(row)
+    db.add(
+        DueAgingAdjustment(
+            row_id=row.id,
+            zone=zone,
+            action="add" if delta > 0 else "subtract",
+            delta=delta,
+            value_before=before,
+            value_after=after,
+            note=(body.note or "").strip() or None,
+            created_by=current_user.id,
+        ),
+    )
+    m = await _ensure_meta(db)
+    m.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(row)
+    idx = await _register_index_in_location(db, row)
+    return _row_to_read(row, register_row_index=idx)
+
+
+@router.post("/rows/{row_id}/pay-zone", response_model=DueAgingRowRead)
+async def pay_zone_amount(
+    row_id: UUID,
+    body: DueAgingZonePaidBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    zone = body.zone.strip().lower()
+    if zone not in ZONE_TO_ATTR:
+        raise HTTPException(status_code=400, detail="zone must be safe, warning, danger, or doubtful")
+    row = await _get_row(db, row_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Row not found")
+    attr = ZONE_TO_ATTR[zone]
+    before = float(getattr(row, attr) or 0)
+    if before <= 0.000001:
+        idx = await _register_index_in_location(db, row)
+        return _row_to_read(row, register_row_index=idx)
+    pay_amount = before if body.amount is None else float(body.amount)
+    if pay_amount <= 0:
+        raise HTTPException(status_code=400, detail="amount must be greater than zero")
+    if pay_amount - before > 0.000001:
+        raise HTTPException(status_code=400, detail=f"amount exceeds current {zone}")
+    after = before - pay_amount
+    if after < 0:
+        after = 0.0
+    setattr(row, attr, after)
+    _recalc_total(row)
+    _recalc_paid_flag(row)
+    note = (body.note or "").strip() or f"Paid from {ZONE_COLOR[zone]} zone"
+    db.add(
+        DueAgingAdjustment(
+            row_id=row.id,
+            zone=zone,
+            action="paid",
+            delta=-pay_amount,
+            value_before=before,
+            value_after=after,
+            note=note,
+            created_by=current_user.id,
+        ),
+    )
     m = await _ensure_meta(db)
     m.updated_at = datetime.now(timezone.utc)
     await db.commit()
@@ -684,6 +843,11 @@ async def clear_open_rows(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.DUE)),
 ):
+    open_ids = (
+        await db.execute(select(DueAgingRow.id).where(DueAgingRow.paid_at.is_(None)))
+    ).scalars().all()
+    if open_ids:
+        await db.execute(sql_delete(DueAgingAdjustment).where(DueAgingAdjustment.row_id.in_(open_ids)))
     await db.execute(sql_delete(DueAgingRow).where(DueAgingRow.paid_at.is_(None)))
     m = await _get_meta_row(db)
     if m:

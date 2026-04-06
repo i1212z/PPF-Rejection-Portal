@@ -52,7 +52,7 @@ class TokenData(BaseModel):
 
 class TicketBase(BaseModel):
     product_name: str
-    quantity: int
+    quantity: float = Field(gt=0)
     uom: str = "EA"
     cost: float = 0
     reason: str
@@ -301,6 +301,31 @@ class DueAgingSwapZonesGlobalBody(BaseModel):
 
     zone_a: str
     zone_b: str
+
+
+class DueAgingZoneAdjustBody(BaseModel):
+    zone: str  # safe | warning | danger | doubtful
+    delta: float
+    note: Optional[str] = None
+
+
+class DueAgingZonePaidBody(BaseModel):
+    zone: str  # safe | warning | danger | doubtful
+    amount: Optional[float] = None  # if omitted, pay full remaining in zone
+    note: Optional[str] = None
+
+
+class DueAgingAdjustmentRead(BaseModel):
+    id: UUID
+    row_id: UUID
+    zone: str
+    action: str
+    delta: float
+    value_before: float
+    value_after: float
+    note: Optional[str] = None
+    created_by: Optional[UUID] = None
+    created_at: datetime
 
 
 class PaginatedCreditNotes(BaseModel):

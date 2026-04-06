@@ -24,6 +24,7 @@ from .models import (
     DueCustomColumn,
     CreditNoteDueTracking,
     DueAgingMeta,
+    DueAgingAdjustment,
     DueAgingRow,
 )
 from .auth.deps import require_roles
@@ -92,6 +93,7 @@ async def on_startup():
             # SQLAlchemy persists enum member names (DUE, TALLY), not .value strings.
             "ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'DUE'",
             "ALTER TABLE rejection_tickets ADD COLUMN IF NOT EXISTS uom VARCHAR(16) NOT NULL DEFAULT 'EA'",
+            "ALTER TABLE rejection_tickets ALTER COLUMN quantity TYPE NUMERIC(14,3) USING quantity::numeric",
             "ALTER TABLE tally_pending ADD COLUMN IF NOT EXISTS posted_at TIMESTAMP WITH TIME ZONE",
         ):
             try:
@@ -202,6 +204,7 @@ async def reset_database(
     await db.execute(delete(CreditNoteTallyPending))
     await db.execute(delete(DueCustomCell))
     await db.execute(delete(CreditNoteDueTracking))
+    await db.execute(delete(DueAgingAdjustment))
     await db.execute(delete(DueAgingRow))
     await db.execute(delete(DueAgingMeta))
     await db.execute(delete(DueCustomColumn))
