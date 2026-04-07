@@ -17,6 +17,7 @@ import CreditNoteApprovalsPage from './pages/CreditNoteApprovalsPage';
 import CreditNoteTallyPendingPage from './pages/CreditNoteTallyPendingPage';
 import CreditNoteTallyPostedPage from './pages/CreditNoteTallyPostedPage';
 import DueAgingRegisterPage from './pages/DueAgingRegisterPage';
+import DueSettingsPage from './pages/DueSettingsPage';
 import DueReportPage from './pages/DueReportPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import MobileMorePage from './pages/MobileMorePage';
@@ -123,6 +124,14 @@ function App() {
               element={
                 <RequireRoles roles={['due']}>
                   <DueReportPage />
+                </RequireRoles>
+              }
+            />
+            <Route
+              path="due/settings"
+              element={
+                <RequireRoles roles={['due']}>
+                  <DueSettingsPage />
                 </RequireRoles>
               }
             />

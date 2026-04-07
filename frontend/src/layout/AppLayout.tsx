@@ -50,6 +50,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/credit-note-approvals')) return 'Credit note approvals';
     if (location.pathname.startsWith('/due/paid')) return 'Due — paid sheet';
     if (location.pathname.startsWith('/due/report')) return 'Due — reports';
+    if (location.pathname.startsWith('/due/settings')) return 'Due — settings';
     if (location.pathname.startsWith('/due/')) return 'Due — open sheet';
     if (location.pathname.startsWith('/analytics')) return 'Analytics';
     if (location.pathname.startsWith('/approvals')) return 'Approvals';
@@ -139,6 +140,7 @@ export default function AppLayout() {
                 icon={<BarChart3 className="w-4 h-4" />}
                 label="Reports"
               />
+              <SidebarLink to="/due/settings" icon={<Settings className="w-4 h-4" />} label="Settings" />
             </>
           ) : isTally ? (
             <>
@@ -324,6 +326,18 @@ export default function AppLayout() {
                   }
                 >
                   Reports
+                </NavLink>
+                <NavLink
+                  to="/due/settings"
+                  className={({ isActive }) =>
+                    `inline-flex items-center rounded-full border px-3 py-1 whitespace-nowrap ${
+                      isActive
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 bg-gray-50 text-gray-600'
+                    }`
+                  }
+                >
+                  Settings
                 </NavLink>
               </>
             ) : isTally ? (

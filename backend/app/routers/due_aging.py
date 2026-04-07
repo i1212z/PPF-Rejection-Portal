@@ -24,6 +24,7 @@ from ..models import DueAgingAdjustment, DueAgingMeta, DueAgingRow, DueAgingScan
 from ..schemas import (
     DueAgingAdjustmentRead,
     DueAgingBucketOrderBody,
+    DueAgingCreateRowBody,
     DueAgingLocationBlock,
     DueAgingMetaRead,
     DueAgingPatchRowBody,
@@ -43,6 +44,14 @@ from ..schemas import (
 router = APIRouter(prefix="/due/aging", tags=["due-aging"])
 
 DEFAULT_BUCKETS = ["safe", "warning", "danger", "doubtful"]
+
+LOC_GROUP_SORT: dict[str, int] = {"CLT": 0, "KOCHI": 1, "TN": 2, "OTHER": 9}
+LOC_GROUP_DEFAULT_LABEL: dict[str, str] = {
+    "CLT": "CLT / Calicut",
+    "KOCHI": "Kochi",
+    "TN": "Tamil Nadu",
+    "OTHER": "Other",
+}
 
 ZONE_TO_ATTR = {
     "safe": "amount_safe",
@@ -461,6 +470,59 @@ async def upload_workbook(
 
     await db.commit()
     return await _build_sheet(db, paid_only=False, scan_id=scan.id)
+
+
+@router.post("/rows", response_model=DueAgingRowRead)
+async def create_manual_row(
+    body: DueAgingCreateRowBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    latest = await _get_latest_scan(db)
+    if not latest:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No report scan yet. Upload an Excel workbook first.",
+        )
+    lg = (body.location_group or "OTHER").strip().upper()
+    if lg not in LOC_GROUP_SORT:
+        lg = "OTHER"
+    ls = LOC_GROUP_SORT[lg]
+    label_raw = (body.location_label or "").strip()
+    label = (label_raw or LOC_GROUP_DEFAULT_LABEL[lg])[:255]
+
+    mx = (
+        await db.execute(
+            select(func.coalesce(func.max(DueAgingRow.sort_order), 0))
+            .where(DueAgingRow.scan_id == latest.id)
+            .where(DueAgingRow.location_group == lg),
+        )
+    ).scalar_one()
+    sort_order = int(mx or 0) + 10
+
+    row = DueAgingRow(
+        scan_id=latest.id,
+        location_group=lg,
+        location_sort=ls,
+        location_label=label,
+        particulars=body.particulars.strip()[:4000],
+        amount_safe=body.safe,
+        amount_warning=body.warning,
+        amount_danger=body.danger,
+        amount_doubtful=body.doubtful,
+        amount_total=0,
+        sort_order=sort_order,
+        source_excel_row=None,
+        source_particulars_col=None,
+    )
+    _recalc_total(row)
+    db.add(row)
+    m = await _ensure_meta(db)
+    m.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(row)
+    idx = await _register_index_in_location(db, row)
+    return _row_to_read(row, register_row_index=idx)
 
 
 @router.patch("/rows/{row_id}", response_model=DueAgingRowRead)
@@ -1056,6 +1118,25 @@ async def aging_workbook_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.delete("/reset-scans", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_all_report_scans(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    """Remove every report scan, all lines, and zone history; clear workbook header. Irreversible."""
+    await db.execute(sql_delete(DueAgingAdjustment))
+    await db.execute(sql_delete(DueAgingRow))
+    await db.execute(sql_delete(DueAgingScan))
+    m = await _get_meta_row(db)
+    if m:
+        m.company_title = ""
+        m.date_range_label = ""
+        m.bucket_order_json = json.dumps(DEFAULT_BUCKETS)
+        m.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return None
 
 
 @router.delete("/clear-open", status_code=status.HTTP_204_NO_CONTENT)

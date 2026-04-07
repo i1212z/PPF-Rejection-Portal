@@ -300,6 +300,18 @@ class DueAgingPatchRowBody(BaseModel):
     total: Optional[float] = None
 
 
+class DueAgingCreateRowBody(BaseModel):
+    """Manual row on the latest report scan (open register)."""
+
+    particulars: str = Field(..., min_length=1, max_length=4000)
+    location_group: str = Field(default="OTHER", max_length=32)
+    location_label: Optional[str] = Field(default=None, max_length=255)
+    safe: float = 0
+    warning: float = 0
+    danger: float = 0
+    doubtful: float = 0
+
+
 class DueAgingReorderBody(BaseModel):
     location_group: str
     ordered_row_ids: List[UUID]

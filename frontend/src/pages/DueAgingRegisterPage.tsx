@@ -103,6 +103,13 @@ const ZONE_CELL_CLASSES: Record<BucketKey, string> = {
   doubtful: 'bg-red-50',
 };
 
+const MANUAL_LOC_OPTIONS = [
+  { value: 'CLT', label: 'CLT / Calicut' },
+  { value: 'KOCHI', label: 'Kochi' },
+  { value: 'TN', label: 'Tamil Nadu' },
+  { value: 'OTHER', label: 'Other' },
+] as const;
+
 function fmt(n: number) {
   return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -133,6 +140,11 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   const [zoneFilter, setZoneFilter] = useState<'all' | BucketKey>('all');
   const [historyForRow, setHistoryForRow] = useState<string | null>(null);
   const [historyMap, setHistoryMap] = useState<Record<string, DueAgingHistoryItem[]>>({});
+  const [addRowOpen, setAddRowOpen] = useState(false);
+  const [addRowBusy, setAddRowBusy] = useState(false);
+  const [addParticulars, setAddParticulars] = useState('');
+  const [addLoc, setAddLoc] = useState<string>('OTHER');
+  const [addLocLabel, setAddLocLabel] = useState('');
 
   const endpoint = paidOnly ? '/due/aging/paid' : '/due/aging/open';
 
@@ -169,6 +181,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   }, [endpoint, scanIdParam]);
 
   const readOnly = Boolean(sheet && sheet.is_latest_scan === false);
+  const canManualAddRow = Boolean(!paidOnly && !readOnly && sheet?.scan && sheet.is_latest_scan);
 
   const scanQuerySuffix = scanIdParam ? `?scan=${encodeURIComponent(scanIdParam)}` : '';
 
@@ -352,6 +365,44 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
       await load();
     } catch {
       setError('Could not restore to open register.');
+    }
+  };
+
+  const submitAddRow = async () => {
+    const p = addParticulars.trim();
+    if (!p) {
+      setError('Enter a customer name.');
+      return;
+    }
+    setAddRowBusy(true);
+    setError(null);
+    try {
+      await apiClient.post('/due/aging/rows', {
+        particulars: p,
+        location_group: addLoc,
+        location_label: addLocLabel.trim() || null,
+        safe: 0,
+        warning: 0,
+        danger: 0,
+        doubtful: 0,
+      });
+      setAddRowOpen(false);
+      setAddParticulars('');
+      setAddLoc('OTHER');
+      setAddLocLabel('');
+      await load();
+      void loadScans();
+    } catch (err: unknown) {
+      const msg =
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          ? String((err as { response: { data: { detail: string } } }).response.data.detail)
+          : 'Could not add row.';
+      setError(msg);
+    } finally {
+      setAddRowBusy(false);
     }
   };
 
@@ -605,6 +656,29 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
           >
             Reports
           </button>
+          {!paidOnly && (
+            <button
+              type="button"
+              onClick={() => void navigate('/due/settings')}
+              className="w-full sm:w-auto rounded-md border border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+            >
+              Settings
+            </button>
+          )}
+          {!paidOnly && (
+            <button
+              type="button"
+              disabled={!canManualAddRow || addRowBusy}
+              onClick={() => {
+                setAddRowOpen(true);
+                setError(null);
+              }}
+              className="w-full sm:w-auto rounded-md border border-slate-700 bg-white px-3 py-2.5 sm:py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+              title={!canManualAddRow ? 'Upload a workbook first (latest scan only)' : 'Add a manual line to the open register'}
+            >
+              Add row
+            </button>
+          )}
         </div>
       </div>
 
@@ -904,6 +978,73 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
           })
         )}
       </Card>
+
+      {addRowOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+          <div
+            className="w-full sm:max-w-md rounded-t-xl sm:rounded-xl bg-white shadow-lg border border-slate-200 p-4 space-y-3"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-row-title"
+          >
+            <h3 id="add-row-title" className="text-sm font-semibold text-gray-900">
+              Add row manually
+            </h3>
+            <p className="text-xs text-gray-500">Adds an open line to the latest report scan. Zone amounts can be edited in the grid.</p>
+            <div>
+              <label className="block text-[11px] font-medium text-gray-600 mb-1">Customer</label>
+              <input
+                value={addParticulars}
+                onChange={(e) => setAddParticulars(e.target.value)}
+                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
+                placeholder="Customer name"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-gray-600 mb-1">Location block</label>
+              <select
+                value={addLoc}
+                onChange={(e) => setAddLoc(e.target.value)}
+                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white"
+              >
+                {MANUAL_LOC_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-gray-600 mb-1">Location label (optional)</label>
+              <input
+                value={addLocLabel}
+                onChange={(e) => setAddLocLabel(e.target.value)}
+                className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
+                placeholder="Override display label for this block"
+              />
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2">
+              <button
+                type="button"
+                disabled={addRowBusy}
+                onClick={() => setAddRowOpen(false)}
+                className="w-full sm:w-auto rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={addRowBusy}
+                onClick={() => void submitAddRow()}
+                className="w-full sm:w-auto rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {addRowBusy ? 'Adding…' : 'Add row'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

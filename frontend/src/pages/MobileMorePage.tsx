@@ -48,6 +48,11 @@ export default function MobileMorePage() {
               label: 'Reports',
               icon: <BarChart3 className="w-4 h-4" />,
             },
+            {
+              to: '/due/settings',
+              label: 'Due settings',
+              icon: <Settings className="w-4 h-4" />,
+            },
           ],
         },
       ];
