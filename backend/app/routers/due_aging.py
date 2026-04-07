@@ -3,6 +3,8 @@ Due desk aging workbook: static zone balances per row (no automatic phase/timer 
 
 Open rows can be replaced on upload; paid rows are kept. All bucket changes are explicit
 (edit, swap endpoints, or import)—the server never shifts Safe → Warning over time.
+
+Each Excel upload creates a new DueAgingScan (Scan 1, 2, …) and new rows; older scans are kept.
 """
 import csv
 import json
@@ -10,15 +12,15 @@ from datetime import datetime, timezone
 from io import BytesIO, StringIO
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import case, delete as sql_delete, select
+from sqlalchemy import case, delete as sql_delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.deps import require_roles
 from ..database import get_db
 from ..due_aging_parse import parse_due_aging_xlsx
-from ..models import DueAgingAdjustment, DueAgingMeta, DueAgingRow, User, UserRole
+from ..models import DueAgingAdjustment, DueAgingMeta, DueAgingRow, DueAgingScan, User, UserRole
 from ..schemas import (
     DueAgingAdjustmentRead,
     DueAgingBucketOrderBody,
@@ -27,6 +29,8 @@ from ..schemas import (
     DueAgingPatchRowBody,
     DueAgingReorderBody,
     DueAgingRowRead,
+    DueAgingScanBrief,
+    DueAgingScanListItem,
     DueAgingSheetResponse,
     DueAgingSwapRowsBody,
     DueAgingSwapZoneCellsBody,
@@ -95,6 +99,45 @@ async def _ensure_meta(db: AsyncSession) -> DueAgingMeta:
     return m
 
 
+async def _get_latest_scan(db: AsyncSession) -> DueAgingScan | None:
+    r = await db.execute(select(DueAgingScan).order_by(DueAgingScan.scan_number.desc()).limit(1))
+    return r.scalars().first()
+
+
+async def _get_scan(db: AsyncSession, scan_id: UUID) -> DueAgingScan | None:
+    r = await db.execute(select(DueAgingScan).where(DueAgingScan.id == scan_id))
+    return r.scalars().first()
+
+
+async def _resolve_target_scan(db: AsyncSession, scan_id: UUID | None) -> DueAgingScan | None:
+    if scan_id is not None:
+        return await _get_scan(db, scan_id)
+    return await _get_latest_scan(db)
+
+
+def _scan_to_brief(s: DueAgingScan) -> DueAgingScanBrief:
+    return DueAgingScanBrief(
+        id=s.id,
+        scan_number=s.scan_number,
+        company_title=s.company_title or "",
+        date_range_label=s.date_range_label or "",
+        bucket_order=_parse_meta_buckets(s.bucket_order_json),
+        uploaded_at=s.uploaded_at,
+        source_filename=s.source_filename,
+    )
+
+
+async def _assert_latest_scan_row(db: AsyncSession, row: DueAgingRow) -> None:
+    latest = await _get_latest_scan(db)
+    if latest is None:
+        raise HTTPException(status_code=400, detail="No report scan exists yet.")
+    if row.scan_id is None or row.scan_id != latest.id:
+        raise HTTPException(
+            status_code=400,
+            detail="This line belongs to an older report scan (read-only). Open the latest scan to edit.",
+        )
+
+
 def _imported_at_aware(r: DueAgingRow) -> datetime:
     ca = r.created_at
     if ca is None:
@@ -109,12 +152,10 @@ async def _register_index_in_location(db: AsyncSession, row: DueAgingRow) -> int
         cond = DueAgingRow.paid_at.is_not(None)
     else:
         cond = DueAgingRow.paid_at.is_(None)
-    q = (
-        select(DueAgingRow.id)
-        .where(DueAgingRow.location_group == row.location_group)
-        .where(cond)
-        .order_by(DueAgingRow.sort_order.asc(), DueAgingRow.id.asc())
-    )
+    q = select(DueAgingRow.id).where(DueAgingRow.location_group == row.location_group).where(cond)
+    if row.scan_id is not None:
+        q = q.where(DueAgingRow.scan_id == row.scan_id)
+    q = q.order_by(DueAgingRow.sort_order.asc(), DueAgingRow.id.asc())
     ids = (await db.execute(q)).scalars().all()
     for i, rid in enumerate(ids, start=1):
         if rid == row.id:
@@ -187,16 +228,42 @@ async def _get_row(db: AsyncSession, row_id: UUID) -> DueAgingRow | None:
     return r.scalars().first()
 
 
-async def _build_sheet(db: AsyncSession, *, paid_only: bool) -> DueAgingSheetResponse:
+async def _build_sheet(db: AsyncSession, *, paid_only: bool, scan_id: UUID | None = None) -> DueAgingSheetResponse:
+    scan = await _resolve_target_scan(db, scan_id)
+    latest = await _get_latest_scan(db)
     m = await _get_meta_row(db)
-    bucket_order = _parse_meta_buckets(m.bucket_order_json if m else None)
+
+    if scan is None:
+        bucket_order = _parse_meta_buckets(m.bucket_order_json if m else None)
+        meta_read = DueAgingMetaRead(
+            company_title=(m.company_title if m else "") or "",
+            date_range_label=(m.date_range_label if m else "") or "",
+            bucket_order=bucket_order,
+        )
+        return DueAgingSheetResponse(
+            scan=None,
+            is_latest_scan=False,
+            meta=meta_read,
+            locations=[],
+            grand_totals=DueAgingTotals(
+                safe=0.0,
+                warning=0.0,
+                danger=0.0,
+                doubtful=0.0,
+                total=0.0,
+                row_count=0,
+            ),
+        )
+
+    is_latest = latest is not None and scan.id == latest.id
+    bucket_order = _parse_meta_buckets(scan.bucket_order_json)
     meta_read = DueAgingMetaRead(
-        company_title=(m.company_title if m else "") or "",
-        date_range_label=(m.date_range_label if m else "") or "",
+        company_title=scan.company_title or "",
+        date_range_label=scan.date_range_label or "",
         bucket_order=bucket_order,
     )
 
-    q = select(DueAgingRow)
+    q = select(DueAgingRow).where(DueAgingRow.scan_id == scan.id)
     if paid_only:
         q = q.where(DueAgingRow.paid_at.is_not(None)).order_by(
             DueAgingRow.paid_at.desc(),
@@ -250,23 +317,79 @@ async def _build_sheet(db: AsyncSession, *, paid_only: bool) -> DueAgingSheetRes
             gt.total += x.total
             gt.row_count += 1
 
-    return DueAgingSheetResponse(meta=meta_read, locations=blocks, grand_totals=gt)
+    return DueAgingSheetResponse(
+        scan=_scan_to_brief(scan),
+        is_latest_scan=is_latest,
+        meta=meta_read,
+        locations=blocks,
+        grand_totals=gt,
+    )
+
+
+@router.get("/scans", response_model=list[DueAgingScanListItem])
+async def list_scans(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    r = await db.execute(select(DueAgingScan).order_by(DueAgingScan.scan_number.asc()))
+    scans = r.scalars().all()
+    if not scans:
+        return []
+    latest_id = scans[-1].id
+    out: list[DueAgingScanListItem] = []
+    for s in scans:
+        n_open = (
+            await db.execute(
+                select(func.count())
+                .select_from(DueAgingRow)
+                .where(DueAgingRow.scan_id == s.id)
+                .where(DueAgingRow.paid_at.is_(None)),
+            )
+        ).scalar_one()
+        n_paid = (
+            await db.execute(
+                select(func.count())
+                .select_from(DueAgingRow)
+                .where(DueAgingRow.scan_id == s.id)
+                .where(DueAgingRow.paid_at.is_not(None)),
+            )
+        ).scalar_one()
+        out.append(
+            DueAgingScanListItem(
+                id=s.id,
+                scan_number=s.scan_number,
+                company_title=s.company_title or "",
+                date_range_label=s.date_range_label or "",
+                uploaded_at=s.uploaded_at,
+                source_filename=s.source_filename,
+                open_lines=int(n_open or 0),
+                paid_lines=int(n_paid or 0),
+                is_latest=s.id == latest_id,
+            ),
+        )
+    return out
 
 
 @router.get("/open", response_model=DueAgingSheetResponse)
 async def get_open_sheet(
+    scan_id: UUID | None = Query(default=None, description="Report scan id; omit for latest"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.DUE)),
 ):
-    return await _build_sheet(db, paid_only=False)
+    if scan_id is not None and await _get_scan(db, scan_id) is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return await _build_sheet(db, paid_only=False, scan_id=scan_id)
 
 
 @router.get("/paid", response_model=DueAgingSheetResponse)
 async def get_paid_sheet(
+    scan_id: UUID | None = Query(default=None, description="Report scan id; omit for latest"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.DUE)),
 ):
-    return await _build_sheet(db, paid_only=True)
+    if scan_id is not None and await _get_scan(db, scan_id) is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return await _build_sheet(db, paid_only=True, scan_id=scan_id)
 
 
 @router.post("/upload", response_model=DueAgingSheetResponse)
@@ -287,19 +410,31 @@ async def upload_workbook(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not read workbook: {e!s}") from e
 
-    open_ids = (
-        await db.execute(select(DueAgingRow.id).where(DueAgingRow.paid_at.is_(None)))
-    ).scalars().all()
-    if open_ids:
-        await db.execute(sql_delete(DueAgingAdjustment).where(DueAgingAdjustment.row_id.in_(open_ids)))
-    await db.execute(sql_delete(DueAgingRow).where(DueAgingRow.paid_at.is_(None)))
-
     m = await _ensure_meta(db)
     if parsed.company_title:
         m.company_title = parsed.company_title[:512]
     if parsed.date_range_label:
         m.date_range_label = parsed.date_range_label[:255]
     m.updated_at = datetime.now(timezone.utc)
+
+    next_num = int(
+        (
+            await db.execute(select(func.coalesce(func.max(DueAgingScan.scan_number), 0)))
+        ).scalar_one()
+        or 0,
+    ) + 1
+    order_json = m.bucket_order_json or json.dumps(DEFAULT_BUCKETS)
+    scan = DueAgingScan(
+        scan_number=next_num,
+        company_title=(parsed.company_title[:512] if parsed.company_title else (m.company_title or "")),
+        date_range_label=(
+            parsed.date_range_label[:255] if parsed.date_range_label else (m.date_range_label or "")
+        ),
+        bucket_order_json=order_json,
+        source_filename=((file.filename or "")[:512] or None),
+    )
+    db.add(scan)
+    await db.flush()
 
     per_loc: dict[str, int] = {}
     for pr in parsed.rows:
@@ -308,6 +443,7 @@ async def upload_workbook(
         col = (pr.source_particulars_col or "")[:8] or None
         db.add(
             DueAgingRow(
+                scan_id=scan.id,
                 location_group=pr.location_group,
                 location_sort=pr.location_sort,
                 location_label=pr.location_label[:255],
@@ -324,7 +460,7 @@ async def upload_workbook(
         )
 
     await db.commit()
-    return await _build_sheet(db, paid_only=False)
+    return await _build_sheet(db, paid_only=False, scan_id=scan.id)
 
 
 @router.patch("/rows/{row_id}", response_model=DueAgingRowRead)
@@ -337,6 +473,7 @@ async def patch_row(
     row = await _get_row(db, row_id)
     if not row:
         raise HTTPException(status_code=404, detail="Row not found")
+    await _assert_latest_scan_row(db, row)
 
     if body.particulars is not None:
         row.particulars = body.particulars.strip()
@@ -402,6 +539,7 @@ async def undo_adjustment(
     row = await _get_row(db, a.row_id)
     if not row:
         raise HTTPException(status_code=404, detail="Row not found")
+    await _assert_latest_scan_row(db, row)
 
     attr = ZONE_TO_ATTR[a.zone]
     current = float(getattr(row, attr) or 0)
@@ -452,6 +590,7 @@ async def adjust_zone_amount(
     row = await _get_row(db, row_id)
     if not row:
         raise HTTPException(status_code=404, detail="Row not found")
+    await _assert_latest_scan_row(db, row)
     attr = ZONE_TO_ATTR[zone]
     before = float(getattr(row, attr) or 0)
     delta = float(body.delta or 0)
@@ -499,6 +638,7 @@ async def pay_zone_amount(
     row = await _get_row(db, row_id)
     if not row:
         raise HTTPException(status_code=404, detail="Row not found")
+    await _assert_latest_scan_row(db, row)
     attr = ZONE_TO_ATTR[zone]
     before = float(getattr(row, attr) or 0)
     if before <= 0.000001:
@@ -545,6 +685,7 @@ async def mark_row_paid(
     row = await _get_row(db, row_id)
     if not row:
         raise HTTPException(status_code=404, detail="Row not found")
+    await _assert_latest_scan_row(db, row)
     row.paid_at = datetime.now(timezone.utc)
     m = await _ensure_meta(db)
     m.updated_at = datetime.now(timezone.utc)
@@ -561,6 +702,7 @@ async def mark_row_unpaid(
     row = await _get_row(db, row_id)
     if not row:
         raise HTTPException(status_code=404, detail="Row not found")
+    await _assert_latest_scan_row(db, row)
     row.paid_at = None
     m = await _ensure_meta(db)
     m.updated_at = datetime.now(timezone.utc)
@@ -584,6 +726,7 @@ async def reorder_open_rows(
             raise HTTPException(status_code=400, detail="Invalid or paid row in reorder list")
         if r.location_group != body.location_group:
             raise HTTPException(status_code=400, detail="Row location does not match reorder group")
+        await _assert_latest_scan_row(db, r)
         rows.append(r)
 
     for i, r in enumerate(rows):
@@ -607,6 +750,8 @@ async def swap_rows_order(
     rb = await _get_row(db, body.row_id_b)
     if not ra or not rb:
         raise HTTPException(status_code=404, detail="Row not found")
+    await _assert_latest_scan_row(db, ra)
+    await _assert_latest_scan_row(db, rb)
     if (ra.paid_at is None) != (rb.paid_at is None):
         raise HTTPException(status_code=400, detail="Cannot mix open and paid rows")
     if ra.location_group != rb.location_group:
@@ -630,6 +775,8 @@ async def swap_rows_data(
     rb = await _get_row(db, body.row_id_b)
     if not ra or not rb:
         raise HTTPException(status_code=404, detail="Row not found")
+    await _assert_latest_scan_row(db, ra)
+    await _assert_latest_scan_row(db, rb)
     if (ra.paid_at is None) != (rb.paid_at is None):
         raise HTTPException(status_code=400, detail="Rows must both be open or both paid")
     fields = [
@@ -667,6 +814,8 @@ async def swap_zone_cells(
     rb = await _get_row(db, body.row_id_b)
     if not ra or not rb:
         raise HTTPException(status_code=404, detail="Row not found")
+    await _assert_latest_scan_row(db, ra)
+    await _assert_latest_scan_row(db, rb)
     if (ra.paid_at is None) != (rb.paid_at is None):
         raise HTTPException(status_code=400, detail="Rows must both be open or both paid")
     attr = ZONE_TO_ATTR[z]
@@ -691,6 +840,9 @@ async def put_bucket_order(
     m = await _ensure_meta(db)
     m.bucket_order_json = json.dumps(order)
     m.updated_at = datetime.now(timezone.utc)
+    latest = await _get_latest_scan(db)
+    if latest:
+        latest.bucket_order_json = json.dumps(order)
     await db.commit()
     await db.refresh(m)
     return DueAgingMetaRead(
@@ -712,7 +864,12 @@ async def swap_zones_global(
         raise HTTPException(status_code=400, detail="zone_a and zone_b must be two distinct zone keys")
     attr_a = ZONE_TO_ATTR[a]
     attr_b = ZONE_TO_ATTR[b]
-    r = await db.execute(select(DueAgingRow).where(DueAgingRow.paid_at.is_(None)))
+    latest = await _get_latest_scan(db)
+    if not latest:
+        return None
+    r = await db.execute(
+        select(DueAgingRow).where(DueAgingRow.paid_at.is_(None)).where(DueAgingRow.scan_id == latest.id),
+    )
     for row in r.scalars().all():
         va = getattr(row, attr_a)
         setattr(row, attr_a, getattr(row, attr_b))
@@ -730,6 +887,7 @@ def _fmt_csv_money(n: float) -> str:
 
 @router.get("/report.csv")
 async def aging_workbook_csv(
+    scan_id: UUID | None = Query(default=None, description="Report scan id; omit for latest"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.DUE)),
 ):
@@ -737,12 +895,17 @@ async def aging_workbook_csv(
     Full aging workbook snapshot: all open and paid rows, UTF-8 BOM for Excel,
     plus workbook title/date range and a grand total row.
     """
-    m = await _get_meta_row(db)
-    title = (m.company_title if m else "") or ""
-    dr = (m.date_range_label if m else "") or ""
+    scan = await _resolve_target_scan(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="No report scan to export.")
+
+    title = scan.company_title or ""
+    dr = scan.date_range_label or ""
+    scan_no = str(scan.scan_number)
 
     q = (
         select(DueAgingRow)
+        .where(DueAgingRow.scan_id == scan.id)
         .order_by(
             DueAgingRow.location_sort.asc(),
             DueAgingRow.location_group.asc(),
@@ -756,6 +919,7 @@ async def aging_workbook_csv(
     buf = StringIO()
     writer = csv.writer(buf)
     writer.writerow(["Due aging workbook export"])
+    writer.writerow(["Report scan", scan_no])
     writer.writerow(["Workbook title", title])
     writer.writerow(["Sheet date range", dr])
     writer.writerow([])
@@ -899,12 +1063,20 @@ async def clear_open_rows(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.DUE)),
 ):
+    latest = await _get_latest_scan(db)
+    if not latest:
+        await db.commit()
+        return None
     open_ids = (
-        await db.execute(select(DueAgingRow.id).where(DueAgingRow.paid_at.is_(None)))
+        await db.execute(
+            select(DueAgingRow.id)
+            .where(DueAgingRow.scan_id == latest.id)
+            .where(DueAgingRow.paid_at.is_(None)),
+        )
     ).scalars().all()
     if open_ids:
         await db.execute(sql_delete(DueAgingAdjustment).where(DueAgingAdjustment.row_id.in_(open_ids)))
-    await db.execute(sql_delete(DueAgingRow).where(DueAgingRow.paid_at.is_(None)))
+        await db.execute(sql_delete(DueAgingRow).where(DueAgingRow.id.in_(open_ids)))
     m = await _get_meta_row(db)
     if m:
         m.updated_at = datetime.now(timezone.utc)

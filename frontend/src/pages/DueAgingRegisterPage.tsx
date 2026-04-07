@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
 
@@ -33,7 +33,19 @@ interface DueAgingMeta {
   bucket_order: string[];
 }
 
+interface DueAgingScanBrief {
+  id: string;
+  scan_number: number;
+  company_title: string;
+  date_range_label: string;
+  bucket_order: string[];
+  uploaded_at: string;
+  source_filename?: string | null;
+}
+
 interface DueAgingSheetResponse {
+  scan: DueAgingScanBrief | null;
+  is_latest_scan: boolean;
   meta: DueAgingMeta;
   locations: DueAgingLocationBlock[];
   grand_totals: {
@@ -44,6 +56,18 @@ interface DueAgingSheetResponse {
     total: number;
     row_count: number;
   };
+}
+
+interface DueAgingScanListItem {
+  id: string;
+  scan_number: number;
+  company_title: string;
+  date_range_label: string;
+  uploaded_at: string;
+  source_filename?: string | null;
+  open_lines: number;
+  paid_lines: number;
+  is_latest: boolean;
 }
 
 interface DueAgingHistoryItem {
@@ -93,6 +117,9 @@ function parseMoneyInput(raw: string): number | null {
 export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }) {
   const paidOnly = mode === 'paid';
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const scanIdParam = searchParams.get('scan');
+  const [scans, setScans] = useState<DueAgingScanListItem[]>([]);
   const [sheet, setSheet] = useState<DueAgingSheetResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -109,11 +136,22 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
 
   const endpoint = paidOnly ? '/due/aging/paid' : '/due/aging/open';
 
+  const loadScans = useCallback(async () => {
+    try {
+      const res = await apiClient.get<DueAgingScanListItem[]>('/due/aging/scans');
+      setScans(res.data ?? []);
+    } catch {
+      setScans([]);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiClient.get<DueAgingSheetResponse>(endpoint);
+      const res = await apiClient.get<DueAgingSheetResponse>(endpoint, {
+        params: scanIdParam ? { scan_id: scanIdParam } : {},
+      });
       setSheet(res.data ?? null);
     } catch (err: unknown) {
       setSheet(null);
@@ -128,7 +166,15 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     } finally {
       setLoading(false);
     }
-  }, [endpoint]);
+  }, [endpoint, scanIdParam]);
+
+  const readOnly = Boolean(sheet && sheet.is_latest_scan === false);
+
+  const scanQuerySuffix = scanIdParam ? `?scan=${encodeURIComponent(scanIdParam)}` : '';
+
+  useEffect(() => {
+    void loadScans();
+  }, [loadScans]);
 
   useEffect(() => {
     void load();
@@ -154,7 +200,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   );
 
   const onUpload = async (file: File | null) => {
-    if (!file) return;
+    if (!file || readOnly) return;
     setUploading(true);
     setError(null);
     try {
@@ -162,6 +208,8 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
       fd.append('file', file);
       const res = await apiClient.post<DueAgingSheetResponse>('/due/aging/upload', fd);
       setSheet(res.data ?? null);
+      setSearchParams({});
+      void loadScans();
     } catch (err: unknown) {
       const msg =
         err &&
@@ -177,6 +225,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   };
 
   const persistBucketOrder = async (next: BucketKey[]) => {
+    if (readOnly) return;
     try {
       const res = await apiClient.put<{ bucket_order: string[] }>('/due/aging/bucket-order', { bucket_order: next });
       setSheet((prev) =>
@@ -223,6 +272,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   };
 
   const onZoneCellClick = async (rowId: string, zone: BucketKey) => {
+    if (readOnly) return;
     if (!zonePick) {
       setZonePick({ rowId, zone });
       return;
@@ -249,6 +299,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   };
 
   const onRowDataSwapClick = async (rowId: string) => {
+    if (readOnly) return;
     if (!rowDataPick) {
       setRowDataPick(rowId);
       return;
@@ -267,6 +318,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   };
 
   const onDropRow = async (targetId: string) => {
+    if (readOnly) return;
     if (!dragRowId || dragRowId === targetId) {
       setDragRowId(null);
       return;
@@ -281,6 +333,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   };
 
   const markPaid = async (id: string) => {
+    if (readOnly) return;
     setPayingId(id);
     try {
       await apiClient.post(`/due/aging/rows/${id}/mark-paid`);
@@ -293,6 +346,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   };
 
   const markUnpaid = async (id: string) => {
+    if (readOnly) return;
     try {
       await apiClient.post(`/due/aging/rows/${id}/mark-unpaid`);
       await load();
@@ -302,12 +356,14 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   };
 
   const resetOpenSheet = async () => {
+    if (readOnly) return;
     if (!window.confirm('Clear all open rows? Paid rows are not removed.')) return;
     setResetting(true);
     setError(null);
     try {
       await apiClient.delete('/due/aging/clear-open');
       await load();
+      void loadScans();
     } catch {
       setError('Could not reset open sheet.');
     } finally {
@@ -316,6 +372,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   };
 
   const runAdjust = async (row: DueAgingRow, zone: BucketKey, sign: 1 | -1) => {
+    if (readOnly) return;
     const label = sign > 0 ? 'Add amount' : 'Subtract amount';
     const raw = window.prompt(`${label} in ${BUCKET_LABELS[zone]} for ${row.particulars}`, '');
     if (!raw) return;
@@ -343,6 +400,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   };
 
   const runPayZone = async (row: DueAgingRow, zone: BucketKey) => {
+    if (readOnly) return;
     const remaining = row[zone];
     if (remaining <= 0) return;
     const raw = window.prompt(
@@ -391,6 +449,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
   };
 
   const undoHistoryItem = async (rowId: string, historyId: string) => {
+    if (readOnly) return;
     try {
       await apiClient.post(`/due/aging/adjustments/${historyId}/undo`);
       await load();
@@ -432,6 +491,8 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
           defaultValue={val === 0 ? '' : fmt(val)}
           key={`${r.id}-${zone}-${val}`}
           onClick={(e) => e.stopPropagation()}
+          readOnly={readOnly}
+          disabled={readOnly}
           onBlur={(e) => {
             const n = parseMoneyInput(e.target.value);
             if (n === null) return;
@@ -439,9 +500,9 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
             void patchRow(r.id, { [zone]: n }).then(() => load());
           }}
           inputMode="decimal"
-          className="w-full min-w-[4.6rem] max-w-[7rem] ml-auto rounded border border-transparent bg-transparent px-1 py-0.5 text-right tabular-nums text-[11px] hover:border-slate-300 focus:border-indigo-400 focus:outline-none"
+          className="w-full min-w-[4.6rem] max-w-[7rem] ml-auto rounded border border-transparent bg-transparent px-1 py-0.5 text-right tabular-nums text-[11px] hover:border-slate-300 focus:border-indigo-400 focus:outline-none disabled:opacity-80 disabled:cursor-default"
         />
-        {!paidOnly && (
+        {!paidOnly && !readOnly && (
           <div className="mt-1 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
@@ -490,12 +551,16 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
         </div>
         <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto shrink-0">
           {!paidOnly && (
-            <label className="w-full sm:w-auto inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2.5 sm:py-2 text-sm font-semibold text-white hover:bg-indigo-500 cursor-pointer">
+            <label
+              className={`w-full sm:w-auto inline-flex items-center justify-center rounded-md px-3 py-2.5 sm:py-2 text-sm font-semibold text-white ${
+                readOnly ? 'bg-slate-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 cursor-pointer'
+              }`}
+            >
               <input
                 type="file"
                 accept=".xlsx,.xlsm"
                 className="hidden"
-                disabled={uploading}
+                disabled={uploading || readOnly}
                 onChange={(e) => {
                   const f = e.target.files?.[0] ?? null;
                   e.target.value = '';
@@ -508,7 +573,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
           {!paidOnly && (
             <button
               type="button"
-              onClick={() => void navigate('/due/paid-credit-notes')}
+              onClick={() => void navigate(`/due/paid-credit-notes${scanQuerySuffix}`)}
               className="w-full sm:w-auto rounded-md bg-emerald-700 px-3 py-2.5 sm:py-2 text-sm font-semibold text-white hover:bg-emerald-600"
             >
               Paid sheet
@@ -517,7 +582,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
           {!paidOnly && (
             <button
               type="button"
-              disabled={resetting}
+              disabled={resetting || readOnly}
               onClick={() => void resetOpenSheet()}
               className="w-full sm:w-auto rounded-md border border-red-300 bg-white px-3 py-2.5 sm:py-2 text-sm font-medium text-red-800 hover:bg-red-50 disabled:opacity-60"
             >
@@ -527,7 +592,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
           {paidOnly && (
             <button
               type="button"
-              onClick={() => void navigate('/due/credit-notes')}
+              onClick={() => void navigate(`/due/credit-notes${scanQuerySuffix}`)}
               className="w-full sm:w-auto rounded-md border border-slate-300 bg-white px-3 py-2.5 sm:py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
             >
               Open sheet
@@ -542,6 +607,60 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
           </button>
         </div>
       </div>
+
+      {scans.length > 0 && (
+        <Card
+          title="Report scans (timeline)"
+          subtitle="Each Excel upload adds Scan 1, Scan 2, … as a new snapshot. Older scans are not changed."
+          className="text-sm"
+        >
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-[11px] text-slate-500 w-full sm:w-auto sm:mr-1">View:</span>
+            <button
+              type="button"
+              onClick={() => setSearchParams({})}
+              className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+                !scanIdParam
+                  ? 'border-indigo-600 bg-indigo-600 text-white'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              Latest (working)
+            </button>
+            {scans.map((s) => {
+              const active = scanIdParam === s.id;
+              const label = `Scan ${s.scan_number}`;
+              const uploaded = new Date(s.uploaded_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setSearchParams({ scan: s.id })}
+                  title={s.source_filename || undefined}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold border max-w-full truncate ${
+                    active
+                      ? 'border-amber-600 bg-amber-50 text-amber-900'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {label}
+                  <span className="font-normal text-slate-500">
+                    {' '}
+                    · {s.open_lines} open / {s.paid_lines} paid
+                  </span>
+                  {uploaded ? <span className="hidden sm:inline font-normal text-slate-400"> · {uploaded}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+          {readOnly ? (
+            <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-3">
+              You are viewing a past snapshot (read-only). Upload, reset, edits, Paid, and zone tools apply only to the{' '}
+              <strong>latest</strong> report.
+            </p>
+          ) : null}
+        </Card>
+      )}
 
       <Card title="Zone visibility" className="text-sm">
         <div className="flex flex-wrap gap-2">
@@ -575,6 +694,12 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
         <div className="text-center space-y-1 px-2">
           <div className="text-sm sm:text-base font-bold text-gray-900 tracking-tight">{sheet.meta.company_title}</div>
           {sheet.meta.date_range_label ? <div className="text-xs text-gray-600">{sheet.meta.date_range_label}</div> : null}
+          {sheet.scan ? (
+            <div className="text-[11px] font-semibold text-indigo-800">
+              Report scan #{sheet.scan.scan_number}
+              {sheet.is_latest_scan ? ' (latest)' : ' (snapshot)'}
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -630,12 +755,12 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                         {visibleBuckets.map((bk) => (
                           <th
                             key={bk}
-                            draggable={zoneFilter === 'all'}
-                            onDragStart={() => zoneFilter === 'all' && setDragBucket(bk)}
-                            onDragOver={(e) => zoneFilter === 'all' && e.preventDefault()}
-                            onDrop={() => zoneFilter === 'all' && onDropBucket(bk)}
+                            draggable={!readOnly && zoneFilter === 'all'}
+                            onDragStart={() => !readOnly && zoneFilter === 'all' && setDragBucket(bk)}
+                            onDragOver={(e) => !readOnly && zoneFilter === 'all' && e.preventDefault()}
+                            onDrop={() => !readOnly && zoneFilter === 'all' && onDropBucket(bk)}
                             className={`px-2 py-2 border text-right text-[10px] font-semibold whitespace-nowrap ${ZONE_HEADER_CLASSES[bk]}`}
-                            title={zoneFilter === 'all' ? 'Drag to reorder zone columns' : undefined}
+                            title={!readOnly && zoneFilter === 'all' ? 'Drag to reorder zone columns' : undefined}
                           >
                             {BUCKET_LABELS[bk].toUpperCase()}
                           </th>
@@ -654,14 +779,15 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                           >
                             <td
                               className="px-1 py-2 border border-slate-200 text-center align-middle text-slate-400"
-                              draggable
-                              onDragStart={() => setDragRowId(r.id)}
+                              draggable={!readOnly}
+                              onDragStart={() => !readOnly && setDragRowId(r.id)}
                               onDragEnd={() => setDragRowId(null)}
                             >
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="cursor-grab">⠿</span>
+                                <span className={readOnly ? 'cursor-default opacity-50' : 'cursor-grab'}>⠿</span>
                                 <button
                                   type="button"
+                                  disabled={readOnly}
                                   onClick={() => void onRowDataSwapClick(r.id)}
                                   className={`rounded border px-1 py-0 text-[10px] font-semibold leading-tight ${
                                     rowDataPick === r.id
@@ -678,7 +804,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                               <td className="px-2 py-2 border border-slate-200 text-center align-middle">
                                 <button
                                   type="button"
-                                  disabled={payingId === r.id}
+                                  disabled={payingId === r.id || readOnly}
                                   onClick={() => void markPaid(r.id)}
                                   className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 whitespace-nowrap"
                                 >
@@ -690,8 +816,9 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                               <td className="px-2 py-2 border border-slate-200 text-center align-middle">
                                 <button
                                   type="button"
+                                  disabled={readOnly}
                                   onClick={() => void markUnpaid(r.id)}
-                                  className="rounded-full border border-slate-400 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-800 hover:bg-slate-50 whitespace-nowrap"
+                                  className="rounded-full border border-slate-400 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-800 hover:bg-slate-50 whitespace-nowrap disabled:opacity-50"
                                 >
                                   Unpaid
                                 </button>
@@ -701,12 +828,14 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                               <input
                                 defaultValue={r.particulars}
                                 key={`${r.id}-p-${r.particulars}`}
+                                readOnly={readOnly}
+                                disabled={readOnly}
                                 onBlur={(e) => {
                                   const v = e.target.value.trim();
                                   if (v === r.particulars) return;
                                   void patchRow(r.id, { particulars: v }).then(() => load());
                                 }}
-                                className="w-full min-w-[8rem] rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] hover:border-slate-200 focus:border-indigo-400 focus:outline-none"
+                                className="w-full min-w-[8rem] rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] hover:border-slate-200 focus:border-indigo-400 focus:outline-none disabled:opacity-80"
                               />
                             </td>
                             <td className="px-2 py-1.5 border border-slate-200 text-center">
@@ -740,7 +869,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                                           <span className="text-slate-500">{new Date(h.created_at).toLocaleString('en-GB')}</span>
                                           {h.note ? <span className="text-slate-600"> — {h.note}</span> : null}
                                         </div>
-                                        {h.action !== 'undo' && !paidOnly && (
+                                        {h.action !== 'undo' && !paidOnly && !readOnly && (
                                           <button
                                             type="button"
                                             onClick={() => void undoHistoryItem(r.id, h.id)}

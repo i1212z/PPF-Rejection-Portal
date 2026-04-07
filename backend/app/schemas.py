@@ -226,6 +226,28 @@ class DueAgingMetaRead(BaseModel):
     bucket_order: List[str]
 
 
+class DueAgingScanBrief(BaseModel):
+    id: UUID
+    scan_number: int
+    company_title: str
+    date_range_label: str
+    bucket_order: List[str]
+    uploaded_at: datetime
+    source_filename: Optional[str] = None
+
+
+class DueAgingScanListItem(BaseModel):
+    id: UUID
+    scan_number: int
+    company_title: str
+    date_range_label: str
+    uploaded_at: datetime
+    source_filename: Optional[str] = None
+    open_lines: int
+    paid_lines: int
+    is_latest: bool
+
+
 class DueAgingRowRead(BaseModel):
     id: UUID
     location_group: str
@@ -262,6 +284,8 @@ class DueAgingTotals(BaseModel):
 
 
 class DueAgingSheetResponse(BaseModel):
+    scan: Optional[DueAgingScanBrief] = None
+    is_latest_scan: bool = True
     meta: DueAgingMetaRead
     locations: List[DueAgingLocationBlock]
     grand_totals: DueAgingTotals

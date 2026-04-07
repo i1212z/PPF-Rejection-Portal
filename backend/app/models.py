@@ -205,6 +205,25 @@ class DueAgingMeta(Base):
     )
 
 
+class DueAgingScan(Base):
+    """Immutable snapshot header per Excel upload (Scan 1, Scan 2, …). Rows link here; never overwritten."""
+
+    __tablename__ = "due_aging_scans"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    scan_number = Column(Integer, nullable=False, unique=True, index=True)
+    company_title = Column(String(512), nullable=False, default="")
+    date_range_label = Column(String(255), nullable=False, default="")
+    bucket_order_json = Column(Text, nullable=False, default='["safe","warning","danger","doubtful"]')
+    source_filename = Column(String(512), nullable=True)
+    uploaded_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
+
+
 class DueAgingRow(Base):
     """One customer line from an imported aging sheet (zones + particulars), with paid tracking.
 
@@ -215,6 +234,12 @@ class DueAgingRow(Base):
     __tablename__ = "due_aging_rows"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    scan_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("due_aging_scans.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     location_group = Column(String(32), nullable=False, index=True)
     location_sort = Column(Integer, nullable=False, default=9)
     location_label = Column(String(255), nullable=False, default="")

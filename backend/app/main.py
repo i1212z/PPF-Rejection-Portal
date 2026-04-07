@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
@@ -24,6 +24,7 @@ from .models import (
     DueCustomColumn,
     CreditNoteDueTracking,
     DueAgingMeta,
+    DueAgingScan,
     DueAgingAdjustment,
     DueAgingRow,
 )
@@ -136,11 +137,13 @@ async def on_startup():
             due_aging_alters = [
                 "ALTER TABLE due_aging_rows ADD COLUMN source_excel_row INTEGER",
                 "ALTER TABLE due_aging_rows ADD COLUMN source_particulars_col VARCHAR(8)",
+                "ALTER TABLE due_aging_rows ADD COLUMN scan_id VARCHAR(36)",
             ]
         elif dialect == "postgresql":
             due_aging_alters = [
                 "ALTER TABLE due_aging_rows ADD COLUMN IF NOT EXISTS source_excel_row INTEGER",
                 "ALTER TABLE due_aging_rows ADD COLUMN IF NOT EXISTS source_particulars_col VARCHAR(8)",
+                "ALTER TABLE due_aging_rows ADD COLUMN IF NOT EXISTS scan_id UUID",
             ]
         for stmt in due_aging_alters:
             try:
@@ -149,9 +152,46 @@ async def on_startup():
             except Exception:
                 pass
 
+    await _backfill_due_aging_scans_if_needed()
     await _ensure_due_user_bootstrap()
 
     print("PPF Backend started. POST /tickets (create) is allowed for any authenticated user.")
+
+
+async def _backfill_due_aging_scans_if_needed() -> None:
+    """If rows exist but no scan records yet, create Scan 1 and attach all rows (one-time migration)."""
+    try:
+        async with AsyncSessionLocal() as session:
+            n_scans = (
+                await session.execute(select(func.count()).select_from(DueAgingScan))
+            ).scalar_one()
+            n_rows = (
+                await session.execute(select(func.count()).select_from(DueAgingRow))
+            ).scalar_one()
+            if (n_scans or 0) > 0 or not n_rows:
+                return
+            m = (
+                await session.execute(select(DueAgingMeta).order_by(DueAgingMeta.updated_at.desc()).limit(1))
+            ).scalars().first()
+            bo = (
+                m.bucket_order_json
+                if m and m.bucket_order_json
+                else '["safe","warning","danger","doubtful"]'
+            )
+            scan = DueAgingScan(
+                scan_number=1,
+                company_title=(m.company_title if m else "") or "",
+                date_range_label=(m.date_range_label if m else "") or "",
+                bucket_order_json=bo,
+                source_filename=None,
+            )
+            session.add(scan)
+            await session.flush()
+            await session.execute(update(DueAgingRow).values(scan_id=scan.id))
+            await session.commit()
+            print("PPF: due aging — created Scan 1 and linked existing rows.")
+    except Exception as e:
+        print(f"PPF: due aging scan backfill skipped or failed: {e}")
 
 
 async def _ensure_due_user_bootstrap() -> None:
@@ -206,6 +246,7 @@ async def reset_database(
     await db.execute(delete(CreditNoteDueTracking))
     await db.execute(delete(DueAgingAdjustment))
     await db.execute(delete(DueAgingRow))
+    await db.execute(delete(DueAgingScan))
     await db.execute(delete(DueAgingMeta))
     await db.execute(delete(DueCustomColumn))
     await db.execute(delete(CreditNoteApproval))
