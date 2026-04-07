@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -10,6 +11,8 @@ interface Ticket {
   id: string;
   product_name: string;
   quantity: number;
+  uom?: string | null;
+  cost?: number;
   delivery_batch: string;
   channel: Channel;
   status: TicketStatus;
@@ -27,8 +30,29 @@ interface TopRow {
   value: number;
 }
 
-function fmt(n: number): string {
+interface UnitBucketRow {
+  unit: string;
+  rawQty: number;
+  kgEquivalent: number;
+}
+
+function fmtQty(n: number): string {
+  return Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+}
+
+function fmtMoney(n: number): string {
   return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function toKg(quantity: number, uomRaw?: string | null): number {
+  const q = Number(quantity || 0);
+  const u = (uomRaw || 'EA').toUpperCase();
+  if (u === 'KG' || u === 'KGS') return q;
+  if (u === 'EA' || u === 'BOX') return q * 0.2; // treat BOX same as EA unless specified otherwise
+  if (u === 'G' || u === 'GM' || u === 'GRAM' || u === 'GRAMS') return q / 1000;
+  if (u === 'ML') return q / 1000;
+  if (u === 'L') return q;
+  return q;
 }
 
 function topN(map: Record<string, number>, n = 8): TopRow[] {
@@ -40,24 +64,48 @@ function topN(map: Record<string, number>, n = 8): TopRow[] {
 
 function channelAnalytics(tickets: Ticket[], channel: Channel) {
   const approved = tickets.filter((t) => t.channel === channel && t.status === 'approved');
-  const byCustomer: Record<string, number> = {};
-  const byProduct: Record<string, number> = {};
+  const byCustomerKg: Record<string, number> = {};
+  const byProductKg: Record<string, number> = {};
+  const byCustomerRupees: Record<string, number> = {};
+  const byProductRupees: Record<string, number> = {};
+  const byUnitQty: Record<string, number> = {};
 
   approved.forEach((t) => {
     const c = (t.delivery_batch || '').trim() || 'Unknown customer';
     const p = (t.product_name || '').trim() || 'Unknown product';
     const q = Number(t.quantity || 0);
-    byCustomer[c] = (byCustomer[c] ?? 0) + q;
-    byProduct[p] = (byProduct[p] ?? 0) + q;
+    const u = (t.uom || 'EA').toUpperCase();
+    const qKg = toKg(q, u);
+    const rs = Number(t.cost || 0);
+    byCustomerKg[c] = (byCustomerKg[c] ?? 0) + qKg;
+    byProductKg[p] = (byProductKg[p] ?? 0) + qKg;
+    byCustomerRupees[c] = (byCustomerRupees[c] ?? 0) + rs;
+    byProductRupees[p] = (byProductRupees[p] ?? 0) + rs;
+    byUnitQty[u] = (byUnitQty[u] ?? 0) + q;
   });
 
-  const topCustomers = topN(byCustomer, 10);
-  const topProducts = topN(byProduct, 10);
+  const topCustomersKg = topN(byCustomerKg, 10);
+  const topProductsKg = topN(byProductKg, 10);
+  const topCustomersRupees = topN(byCustomerRupees, 10);
+  const topProductsRupees = topN(byProductRupees, 10);
+  const unitBreakdown = topN(byUnitQty, 12);
+  const unitBuckets: UnitBucketRow[] = Object.entries(byUnitQty)
+    .map(([unit, rawQty]) => {
+      const u = (unit || 'EA').toUpperCase();
+      return { unit: u, rawQty, kgEquivalent: toKg(rawQty, u) };
+    })
+    .sort((a, b) => Math.abs(b.kgEquivalent) - Math.abs(a.kgEquivalent) || a.unit.localeCompare(b.unit));
   return {
-    totalConfirmedQty: approved.reduce((a, t) => a + Number(t.quantity || 0), 0),
-    topCustomers,
-    topProducts,
-    highestCustomer: topCustomers[0] ?? null,
+    totalConfirmedQtyKg: approved.reduce((a, t) => a + toKg(Number(t.quantity || 0), t.uom), 0),
+    totalConfirmedRupees: approved.reduce((a, t) => a + Number(t.cost || 0), 0),
+    topCustomersKg,
+    topProductsKg,
+    topCustomersRupees,
+    topProductsRupees,
+    unitBreakdown,
+    unitBuckets,
+    highestCustomerKg: topCustomersKg[0] ?? null,
+    highestCustomerRupees: topCustomersRupees[0] ?? null,
   };
 }
 
@@ -130,16 +178,28 @@ export default function AnalyticsPage() {
       {showB2B && (
         <Card title="B2B analytics" subtitle="Confirmed returns only (approved tickets)" className="text-sm">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-            <Metric label="Confirmed qty" value={fmt(b2b.totalConfirmedQty)} />
+            <Metric label="Confirmed qty (kg)" value={fmtQty(b2b.totalConfirmedQtyKg)} />
+            <Metric label="Confirmed value (INR)" value={fmtMoney(b2b.totalConfirmedRupees)} />
             <Metric
               label="Highest customer returning"
-              value={b2b.highestCustomer ? `${b2b.highestCustomer.key} (${fmt(b2b.highestCustomer.value)})` : '—'}
+              value={b2b.highestCustomerKg ? `${b2b.highestCustomerKg.key} (${fmtQty(b2b.highestCustomerKg.value)} kg)` : '—'}
             />
-            <Metric label="Distinct returned products" value={String(b2b.topProducts.length)} />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <TopList title="Who is returning the most (customer)" rows={b2b.topCustomers} />
-            <TopList title="Which products are getting return" rows={b2b.topProducts} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+            <TopList title="Who is returning the most (kg)" rows={b2b.topCustomersKg} valueFormatter={fmtQty} suffix=" kg" />
+            <TopList title="Which products are getting return (kg)" rows={b2b.topProductsKg} valueFormatter={fmtQty} suffix=" kg" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+            <TopList title="Top customers by value (INR)" rows={b2b.topCustomersRupees} valueFormatter={fmtMoney} />
+            <TopList title="Top products by value (INR)" rows={b2b.topProductsRupees} valueFormatter={fmtMoney} />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+            <ChartCard title="Top customers (kg)" data={b2b.topCustomersKg.slice(0, 6)} color="#0284c7" />
+            <ChartCard title="Top products (kg)" data={b2b.topProductsKg.slice(0, 6)} color="#0369a1" />
+            <ChartCard title="Unit distribution (raw qty)" data={b2b.unitBreakdown.slice(0, 6)} color="#0ea5e9" />
+          </div>
+          <div className="mt-3">
+            <UnitBucketTable title="Unit breakdown (raw qty + kg equivalent)" rows={b2b.unitBuckets} />
           </div>
         </Card>
       )}
@@ -147,16 +207,28 @@ export default function AnalyticsPage() {
       {showB2C && (
         <Card title="B2C analytics" subtitle="Confirmed returns only (approved tickets)" className="text-sm">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-            <Metric label="Confirmed qty" value={fmt(b2c.totalConfirmedQty)} />
+            <Metric label="Confirmed qty (kg)" value={fmtQty(b2c.totalConfirmedQtyKg)} />
+            <Metric label="Confirmed value (INR)" value={fmtMoney(b2c.totalConfirmedRupees)} />
             <Metric
               label="Highest customer returning"
-              value={b2c.highestCustomer ? `${b2c.highestCustomer.key} (${fmt(b2c.highestCustomer.value)})` : '—'}
+              value={b2c.highestCustomerKg ? `${b2c.highestCustomerKg.key} (${fmtQty(b2c.highestCustomerKg.value)} kg)` : '—'}
             />
-            <Metric label="Distinct returned products" value={String(b2c.topProducts.length)} />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <TopList title="Who is returning the most (customer)" rows={b2c.topCustomers} />
-            <TopList title="Which products are getting return" rows={b2c.topProducts} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+            <TopList title="Who is returning the most (kg)" rows={b2c.topCustomersKg} valueFormatter={fmtQty} suffix=" kg" />
+            <TopList title="Which products are getting return (kg)" rows={b2c.topProductsKg} valueFormatter={fmtQty} suffix=" kg" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+            <TopList title="Top customers by value (INR)" rows={b2c.topCustomersRupees} valueFormatter={fmtMoney} />
+            <TopList title="Top products by value (INR)" rows={b2c.topProductsRupees} valueFormatter={fmtMoney} />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+            <ChartCard title="Top customers (kg)" data={b2c.topCustomersKg.slice(0, 6)} color="#ea580c" />
+            <ChartCard title="Top products (kg)" data={b2c.topProductsKg.slice(0, 6)} color="#f97316" />
+            <ChartCard title="Unit distribution (raw qty)" data={b2c.unitBreakdown.slice(0, 6)} color="#fb923c" />
+          </div>
+          <div className="mt-3">
+            <UnitBucketTable title="Unit breakdown (raw qty + kg equivalent)" rows={b2c.unitBuckets} />
           </div>
         </Card>
       )}
@@ -165,17 +237,20 @@ export default function AnalyticsPage() {
         <Card title="CN analytics (approved only)" subtitle="Approved credit notes analytics" className="text-sm">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
             <Metric label="Approved CN count" value={String(approvedCN.count)} />
-            <Metric label="Approved CN amount" value={fmt(approvedCN.totalApprovedAmount)} />
+            <Metric label="Approved CN amount (INR)" value={fmtMoney(approvedCN.totalApprovedAmount)} />
             <Metric
               label="Highest customer (CN)"
               value={
                 approvedCN.highestCustomer
-                  ? `${approvedCN.highestCustomer.key} (${fmt(approvedCN.highestCustomer.value)})`
+                  ? `${approvedCN.highestCustomer.key} (${fmtMoney(approvedCN.highestCustomer.value)})`
                   : '—'
               }
             />
           </div>
-          <TopList title="Top customers by approved CN amount" rows={approvedCN.topCustomers} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <TopList title="Top customers by approved CN amount" rows={approvedCN.topCustomers} valueFormatter={fmtMoney} />
+            <ChartCard title="Top customers (CN INR)" data={approvedCN.topCustomers.slice(0, 8)} color="#7c3aed" valueFormatter={fmtMoney} />
+          </div>
         </Card>
       )}
     </div>
@@ -191,7 +266,17 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TopList({ title, rows }: { title: string; rows: TopRow[] }) {
+function TopList({
+  title,
+  rows,
+  valueFormatter = fmtQty,
+  suffix = '',
+}: {
+  title: string;
+  rows: TopRow[];
+  valueFormatter?: (n: number) => string;
+  suffix?: string;
+}) {
   return (
     <div className="rounded-lg border border-slate-200 overflow-hidden">
       <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-700">{title}</div>
@@ -200,7 +285,65 @@ function TopList({ title, rows }: { title: string; rows: TopRow[] }) {
         {rows.map((r, i) => (
           <div key={`${r.key}-${i}`} className="px-3 py-2 text-xs flex items-start justify-between gap-3">
             <div className="min-w-0 text-slate-700 truncate">{r.key}</div>
-            <div className="shrink-0 font-semibold text-slate-900 tabular-nums">{fmt(r.value)}</div>
+            <div className="shrink-0 font-semibold text-slate-900 tabular-nums">
+              {valueFormatter(r.value)}{suffix}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChartCard({
+  title,
+  data,
+  color,
+  valueFormatter = fmtQty,
+}: {
+  title: string;
+  data: TopRow[];
+  color: string;
+  valueFormatter?: (n: number) => string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 p-2">
+      <div className="text-xs font-semibold text-slate-700 mb-1">{title}</div>
+      <div style={{ width: '100%', height: 220 }}>
+        <ResponsiveContainer>
+          <BarChart data={data.map((d) => ({ name: d.key, value: d.value }))} margin={{ left: 8, right: 8, top: 8, bottom: 36 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" angle={-20} textAnchor="end" interval={0} height={50} tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(t) => valueFormatter(Number(t))} />
+            <Tooltip
+              formatter={(v) => {
+                const n = Number(v ?? 0);
+                return [valueFormatter(n), ''];
+              }}
+            />
+            <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function UnitBucketTable({ title, rows }: { title: string; rows: UnitBucketRow[] }) {
+  return (
+    <div className="rounded-lg border border-slate-200 overflow-hidden">
+      <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-700">{title}</div>
+      <div className="divide-y divide-slate-100">
+        {rows.length === 0 && <div className="px-3 py-2 text-xs text-slate-500">No unit data.</div>}
+        {rows.map((r) => (
+          <div key={r.unit} className="px-3 py-2 text-xs flex items-start justify-between gap-3">
+            <div className="min-w-0 text-slate-700 truncate">{r.unit}</div>
+            <div className="shrink-0 text-right tabular-nums">
+              <div className="font-semibold text-slate-900">
+                {fmtQty(r.rawQty)} <span className="text-slate-500 font-medium">{r.unit}</span>
+              </div>
+              <div className="text-[11px] text-slate-500">~ {fmtQty(r.kgEquivalent)} kg</div>
+            </div>
           </div>
         ))}
       </div>
