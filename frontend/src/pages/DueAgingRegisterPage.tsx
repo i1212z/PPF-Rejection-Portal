@@ -345,14 +345,45 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     setDragRowId(null);
   };
 
-  const markPaid = async (id: string) => {
+  const payRow = async (row: DueAgingRow) => {
     if (readOnly) return;
-    setPayingId(id);
+    if (row.total <= 0.000001) return;
+
+    const raw = window.prompt(
+      `Pay amount for ${row.particulars}\n(blank = full ${fmt(row.total)}; deduction happens from right-most zone first)`,
+      '',
+    );
+    if (raw === null) return;
+
+    let amountToPay: number;
+    if (!raw.trim()) {
+      amountToPay = row.total;
+    } else {
+      const n = parseMoneyInput(raw);
+      if (n === null || n <= 0) {
+        setError('Invalid amount.');
+        return;
+      }
+      amountToPay = n;
+    }
+
+    if (amountToPay - row.total > 0.000001) {
+      setError('Amount exceeds outstanding total.');
+      return;
+    }
+
+    const note = (window.prompt('Optional note for history', 'Paid') ?? '').trim();
+    setPayingId(row.id);
+    setError(null);
     try {
-      await apiClient.post(`/due/aging/rows/${id}/mark-paid`);
+      await apiClient.post(`/due/aging/rows/${row.id}/pay`, {
+        amount: amountToPay,
+        ...(note ? { note } : {}),
+      });
       await load();
+      if (historyForRow === row.id) await toggleHistory(row.id, true);
     } catch {
-      setError('Could not mark paid.');
+      setError('Could not apply payment.');
     } finally {
       setPayingId(null);
     }
@@ -450,41 +481,6 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     }
   };
 
-  const runPayZone = async (row: DueAgingRow, zone: BucketKey) => {
-    if (readOnly) return;
-    const remaining = row[zone];
-    if (remaining <= 0) return;
-    const raw = window.prompt(
-      `Pay amount in ${BUCKET_LABELS[zone]} for ${row.particulars} (blank = full ${fmt(remaining)})`,
-      '',
-    );
-    let amount: number | undefined;
-    if (raw && raw.trim()) {
-      const n = parseMoneyInput(raw);
-      if (n === null || n <= 0) return;
-      amount = n;
-    }
-    const note = window.prompt('Optional note for history', 'Paid') ?? '';
-    try {
-      await apiClient.post(`/due/aging/rows/${row.id}/pay-zone`, {
-        zone,
-        ...(amount ? { amount } : {}),
-        note,
-      });
-      await load();
-      if (historyForRow === row.id) await toggleHistory(row.id, true);
-    } catch (err: unknown) {
-      const msg =
-        err &&
-        typeof err === 'object' &&
-        'response' in err &&
-        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-          ? String((err as { response: { data: { detail: string } } }).response.data.detail)
-          : 'Could not mark zone paid.';
-      setError(msg);
-    }
-  };
-
   const toggleHistory = async (rowId: string, forceOpen = false) => {
     if (!forceOpen && historyForRow === rowId) {
       setHistoryForRow(null);
@@ -571,15 +567,6 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
             >
               +
             </button>
-            <button
-              type="button"
-              disabled={val <= 0}
-              onClick={() => void runPayZone(r, zone)}
-              className="rounded border border-emerald-300 bg-emerald-50 px-1.5 text-[10px] font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-              title="Mark this zone amount paid and log history"
-            >
-              Paid
-            </button>
           </div>
         )}
       </td>
@@ -594,7 +581,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
           <p className="text-sm text-gray-500">
             {paidOnly
               ? 'Paid rows. You can send a row back to open.'
-              : 'Customer-wise due sheet with zone colors, per-zone Paid, add/subtract with history, drag row swap, and zone filter.'}
+              : 'Customer-wise due sheet with zone colors, add/subtract with history, drag row swap, and zone filter. Use row-level Paid to deduct from the right-most zones first.'}
           </p>
           {zonePick && (
             <p className="text-xs text-indigo-700 font-medium mt-1">Select another cell in the same zone to swap amounts.</p>
@@ -879,7 +866,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
                                 <button
                                   type="button"
                                   disabled={payingId === r.id || readOnly}
-                                  onClick={() => void markPaid(r.id)}
+                                  onClick={() => void payRow(r)}
                                   className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 whitespace-nowrap"
                                 >
                                   {payingId === r.id ? '…' : 'Paid'}

@@ -351,6 +351,13 @@ class DueAgingZonePaidBody(BaseModel):
     note: Optional[str] = None
 
 
+class DueAgingPayRowBody(BaseModel):
+    """Pay from the right-most bucket first (doubtful → safe), across zones as needed."""
+
+    amount: Optional[float] = None  # if omitted, pay full remaining total for the row
+    note: Optional[str] = None
+
+
 class DueAgingAdjustmentRead(BaseModel):
     id: UUID
     row_id: UUID

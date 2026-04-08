@@ -39,6 +39,7 @@ from ..schemas import (
     DueAgingTotals,
     DueAgingZoneAdjustBody,
     DueAgingZonePaidBody,
+    DueAgingPayRowBody,
 )
 
 router = APIRouter(prefix="/due/aging", tags=["due-aging"])
@@ -215,6 +216,79 @@ def _recalc_paid_flag(row: DueAgingRow) -> None:
             row.paid_at = datetime.now(timezone.utc)
     else:
         row.paid_at = None
+
+
+async def _pay_row_right_to_left(
+    db: AsyncSession,
+    row: DueAgingRow,
+    *,
+    amount: float | None,
+    note: str | None,
+    current_user: User,
+) -> DueAgingRowRead:
+    if row.paid_at is not None:
+        raise HTTPException(status_code=400, detail="Only open rows can be paid.")
+
+    latest = await _get_latest_scan(db)
+    if latest is None:
+        raise HTTPException(status_code=400, detail="No report scan exists yet.")
+
+    bucket_order = _parse_meta_buckets(latest.bucket_order_json)
+    # Right-most visible bucket should be deducted first.
+    pay_order = list(reversed(bucket_order))
+
+    zone_total = (
+        float(row.amount_safe or 0)
+        + float(row.amount_warning or 0)
+        + float(row.amount_danger or 0)
+        + float(row.amount_doubtful or 0)
+    )
+
+    pay_amount = zone_total if amount is None else float(amount)
+    if pay_amount <= 0:
+        idx = await _register_index_in_location(db, row)
+        return _row_to_read(row, register_row_index=idx)
+
+    remaining = pay_amount
+    for zone in pay_order:
+        if remaining <= 0:
+            break
+        attr = ZONE_TO_ATTR[zone]
+        before = float(getattr(row, attr) or 0)
+        if before <= 0.000001:
+            continue
+        chunk = before if before <= remaining else remaining
+        if chunk <= 0:
+            continue
+        after = before - chunk
+        if after < 0:
+            after = 0.0
+        setattr(row, attr, after)
+
+        default_note = f"Paid from {ZONE_COLOR[zone]} zone"
+        db.add(
+            DueAgingAdjustment(
+                row_id=row.id,
+                zone=zone,
+                action="paid",
+                delta=-chunk,
+                value_before=before,
+                value_after=after,
+                note=(note or "").strip() or default_note,
+                created_by=current_user.id,
+            ),
+        )
+        remaining -= chunk
+
+    _recalc_total(row)
+    _recalc_paid_flag(row)
+
+    m = await _ensure_meta(db)
+    m.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(row)
+    idx = await _register_index_in_location(db, row)
+    return _row_to_read(row, register_row_index=idx)
 
 
 def _adj_to_read(a: DueAgingAdjustment) -> DueAgingAdjustmentRead:
@@ -738,6 +812,26 @@ async def pay_zone_amount(
     return _row_to_read(row, register_row_index=idx)
 
 
+@router.post("/rows/{row_id}/pay", response_model=DueAgingRowRead)
+async def pay_row_amount(
+    row_id: UUID,
+    body: DueAgingPayRowBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.DUE)),
+):
+    row = await _get_row(db, row_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Row not found")
+    await _assert_latest_scan_row(db, row)
+    return await _pay_row_right_to_left(
+        db,
+        row,
+        amount=body.amount,
+        note=body.note,
+        current_user=current_user,
+    )
+
+
 @router.post("/rows/{row_id}/mark-paid", status_code=status.HTTP_204_NO_CONTENT)
 async def mark_row_paid(
     row_id: UUID,
@@ -748,10 +842,15 @@ async def mark_row_paid(
     if not row:
         raise HTTPException(status_code=404, detail="Row not found")
     await _assert_latest_scan_row(db, row)
-    row.paid_at = datetime.now(timezone.utc)
-    m = await _ensure_meta(db)
-    m.updated_at = datetime.now(timezone.utc)
-    await db.commit()
+    # For backward compatibility: mark-paid now behaves like "pay full remaining"
+    # using the same right-to-left bucket allocation + audit trail.
+    await _pay_row_right_to_left(
+        db,
+        row,
+        amount=None,
+        note=None,
+        current_user=current_user,
+    )
     return None
 
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Line, LineChart } from 'recharts';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -14,6 +14,7 @@ interface Ticket {
   uom?: string | null;
   cost?: number;
   delivery_batch: string;
+  delivery_date: string;
   channel: Channel;
   status: TicketStatus;
 }
@@ -34,6 +35,11 @@ interface UnitBucketRow {
   unit: string;
   rawQty: number;
   kgEquivalent: number;
+}
+
+interface TrendPoint {
+  day: string;
+  value: number;
 }
 
 function fmtQty(n: number): string {
@@ -109,6 +115,48 @@ function channelAnalytics(tickets: Ticket[], channel: Channel) {
   };
 }
 
+function rejectionAnalytics(tickets: Ticket[], channel: Channel) {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const monthStart = new Date(Date.UTC(year, month, 1));
+  const monthEnd = new Date(Date.UTC(year, month + 1, 0));
+  const daysInMonth = monthEnd.getUTCDate();
+
+  const rejected = tickets.filter((t) => t.channel === channel && t.status === 'rejected');
+  const dayTotals: Record<number, number> = {};
+  const productTotals: Record<string, number> = {};
+
+  rejected.forEach((t) => {
+    if (!t.delivery_date) return;
+    const d = new Date(`${t.delivery_date}T00:00:00Z`);
+    if (Number.isNaN(d.getTime())) return;
+    if (d < monthStart || d > monthEnd) return;
+
+    const day = d.getUTCDate();
+    const qKg = toKg(Number(t.quantity || 0), t.uom);
+    const product = (t.product_name || '').trim() || 'Unknown product';
+
+    dayTotals[day] = (dayTotals[day] ?? 0) + qKg;
+    productTotals[product] = (productTotals[product] ?? 0) + qKg;
+  });
+
+  const trend: TrendPoint[] = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    trend.push({ day: String(day), value: dayTotals[day] ?? 0 });
+  }
+
+  const topProducts = topN(productTotals, 8);
+  const totalRejectedQtyKg = trend.reduce((a, p) => a + p.value, 0);
+
+  return {
+    totalRejectedQtyKg,
+    trend,
+    topProducts,
+    highestProduct: topProducts[0] ?? null,
+  };
+}
+
 export default function AnalyticsPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -144,6 +192,8 @@ export default function AnalyticsPage() {
 
   const b2b = useMemo(() => channelAnalytics(tickets, 'B2B'), [tickets]);
   const b2c = useMemo(() => channelAnalytics(tickets, 'B2C'), [tickets]);
+  const b2bRejected = useMemo(() => rejectionAnalytics(tickets, 'B2B'), [tickets]);
+  const b2cRejected = useMemo(() => rejectionAnalytics(tickets, 'B2C'), [tickets]);
 
   const approvedCN = useMemo(() => {
     const rows = creditNotes.filter((c) => c.status === 'approved');
@@ -201,6 +251,30 @@ export default function AnalyticsPage() {
           <div className="mt-3">
             <UnitBucketTable title="Unit breakdown (raw qty + kg equivalent)" rows={b2b.unitBuckets} />
           </div>
+
+          <div className="mt-4 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Metric label="Rejected this month (kg)" value={fmtQty(b2bRejected.totalRejectedQtyKg)} />
+              <Metric
+                label="Most rejected product"
+                value={
+                  b2bRejected.highestProduct
+                    ? `${b2bRejected.highestProduct.key} (${fmtQty(b2bRejected.highestProduct.value)} kg)`
+                    : '—'
+                }
+              />
+              <Metric label="Top rejected products" value={String(b2bRejected.topProducts.length)} />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <LineTrendCard title="Rejections trend (kg)" data={b2bRejected.trend} color="#0ea5e9" />
+              <TopList
+                title="Top rejected products (kg)"
+                rows={b2bRejected.topProducts}
+                valueFormatter={fmtQty}
+                suffix=" kg"
+              />
+            </div>
+          </div>
         </Card>
       )}
 
@@ -229,6 +303,30 @@ export default function AnalyticsPage() {
           </div>
           <div className="mt-3">
             <UnitBucketTable title="Unit breakdown (raw qty + kg equivalent)" rows={b2c.unitBuckets} />
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Metric label="Rejected this month (kg)" value={fmtQty(b2cRejected.totalRejectedQtyKg)} />
+              <Metric
+                label="Most rejected product"
+                value={
+                  b2cRejected.highestProduct
+                    ? `${b2cRejected.highestProduct.key} (${fmtQty(b2cRejected.highestProduct.value)} kg)`
+                    : '—'
+                }
+              />
+              <Metric label="Top rejected products" value={String(b2cRejected.topProducts.length)} />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <LineTrendCard title="Rejections trend (kg)" data={b2cRejected.trend} color="#fb923c" />
+              <TopList
+                title="Top rejected products (kg)"
+                rows={b2cRejected.topProducts}
+                valueFormatter={fmtQty}
+                suffix=" kg"
+              />
+            </div>
           </div>
         </Card>
       )}
@@ -323,6 +421,40 @@ function ChartCard({
             />
             <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
           </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function LineTrendCard({
+  title,
+  data,
+  color,
+  valueFormatter = fmtQty,
+}: {
+  title: string;
+  data: TrendPoint[];
+  color: string;
+  valueFormatter?: (n: number) => string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 p-2">
+      <div className="text-xs font-semibold text-slate-700 mb-1">{title}</div>
+      <div style={{ width: '100%', height: 220 }}>
+        <ResponsiveContainer>
+          <LineChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 16 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="day" tick={{ fontSize: 10 }} interval={0} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(t) => valueFormatter(Number(t))} />
+            <Tooltip
+              formatter={(v) => {
+                const n = Number(v ?? 0);
+                return [valueFormatter(n), ''];
+              }}
+            />
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={false} />
+          </LineChart>
         </ResponsiveContainer>
       </div>
     </div>
