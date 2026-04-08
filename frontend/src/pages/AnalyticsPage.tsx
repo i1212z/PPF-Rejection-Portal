@@ -31,6 +31,15 @@ interface TopRow {
   value: number;
 }
 
+interface DetailRow {
+  id: string;
+  primary: string;
+  secondary?: string;
+  kg?: number;
+  inr?: number;
+  date?: string;
+}
+
 interface MonthOption {
   key: string; // YYYY-MM
   label: string;
@@ -42,6 +51,13 @@ function fmtQty(n: number): string {
 
 function fmtMoney(n: number): string {
   return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(iso: string | undefined): string {
+  if (!iso) return '';
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function toKg(quantity: number, uomRaw?: string | null): number {
@@ -68,6 +84,10 @@ function channelAnalytics(tickets: Ticket[], channel: Channel) {
   const byProductKg: Record<string, number> = {};
   const byCustomerRupees: Record<string, number> = {};
   const byProductRupees: Record<string, number> = {};
+  const customerDetailsByKg: Record<string, DetailRow[]> = {};
+  const productDetailsByKg: Record<string, DetailRow[]> = {};
+  const customerDetailsByRupees: Record<string, DetailRow[]> = {};
+  const productDetailsByRupees: Record<string, DetailRow[]> = {};
 
   approved.forEach((t) => {
     const c = (t.delivery_batch || '').trim() || 'Unknown customer';
@@ -80,6 +100,19 @@ function channelAnalytics(tickets: Ticket[], channel: Channel) {
     byProductKg[p] = (byProductKg[p] ?? 0) + qKg;
     byCustomerRupees[c] = (byCustomerRupees[c] ?? 0) + rs;
     byProductRupees[p] = (byProductRupees[p] ?? 0) + rs;
+
+    const row: DetailRow = {
+      id: t.id,
+      primary: p,
+      secondary: c,
+      kg: qKg,
+      inr: rs,
+      date: t.delivery_date,
+    };
+    (customerDetailsByKg[c] ??= []).push(row);
+    (productDetailsByKg[p] ??= []).push(row);
+    (customerDetailsByRupees[c] ??= []).push(row);
+    (productDetailsByRupees[p] ??= []).push(row);
   });
 
   const topCustomersKg = topN(byCustomerKg, 10);
@@ -93,6 +126,10 @@ function channelAnalytics(tickets: Ticket[], channel: Channel) {
     topProductsKg,
     topCustomersRupees,
     topProductsRupees,
+    customerDetailsByKg,
+    productDetailsByKg,
+    customerDetailsByRupees,
+    productDetailsByRupees,
     highestCustomerKg: topCustomersKg[0] ?? null,
     highestCustomerRupees: topCustomersRupees[0] ?? null,
   };
@@ -206,6 +243,20 @@ export default function AnalyticsPage() {
     () => monthScopedAnalytics(tickets, 'B2C', 'rejected', selectedMonth),
     [tickets, selectedMonth],
   );
+  const hasB2BMonthData =
+    b2bApprovedMonth.totalKg > 0 ||
+    b2bRejectedMonth.totalKg > 0 ||
+    b2bApprovedMonth.topCustomersKg.length > 0 ||
+    b2bApprovedMonth.topProductsKg.length > 0 ||
+    b2bRejectedMonth.topProductsKg.length > 0 ||
+    b2bRejectedMonth.topCustomersKg.length > 0;
+  const hasB2CMonthData =
+    b2cApprovedMonth.totalKg > 0 ||
+    b2cRejectedMonth.totalKg > 0 ||
+    b2cApprovedMonth.topCustomersKg.length > 0 ||
+    b2cApprovedMonth.topProductsKg.length > 0 ||
+    b2cRejectedMonth.topProductsKg.length > 0 ||
+    b2cRejectedMonth.topCustomersKg.length > 0;
 
   const approvedCN = useMemo(() => {
     const rows = creditNotes.filter((c) => c.status === 'approved');
@@ -284,19 +335,77 @@ export default function AnalyticsPage() {
             />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-            <TopList title="Who is returning the most (kg)" rows={b2b.topCustomersKg} valueFormatter={fmtQty} suffix=" kg" />
-            <TopList title="Which products are getting return (kg)" rows={b2b.topProductsKg} valueFormatter={fmtQty} suffix=" kg" />
+            <ExpandableTopList
+              title="Who is returning the most (kg)"
+              rows={b2b.topCustomersKg}
+              valueFormatter={fmtQty}
+              suffix=" kg"
+              detailBuilder={(customer) =>
+                (b2b.customerDetailsByKg[customer] ?? [])
+                  .slice()
+                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                  .map((d) => ({
+                    id: d.id,
+                    line1: d.primary,
+                    line2: `${fmtDate(d.date)}${d.kg !== undefined ? ` · ${fmtQty(d.kg)} kg` : ''}`,
+                  }))
+              }
+            />
+            <ExpandableTopList
+              title="Which products are getting return (kg)"
+              rows={b2b.topProductsKg}
+              valueFormatter={fmtQty}
+              suffix=" kg"
+              detailBuilder={(product) =>
+                (b2b.productDetailsByKg[product] ?? [])
+                  .slice()
+                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                  .map((d) => ({
+                    id: d.id,
+                    line1: d.secondary || 'Unknown customer',
+                    line2: `${fmtDate(d.date)}${d.kg !== undefined ? ` · ${fmtQty(d.kg)} kg` : ''}`,
+                  }))
+              }
+            />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-            <TopList title="Top customers by value (INR)" rows={b2b.topCustomersRupees} valueFormatter={fmtMoney} />
-            <TopList title="Top products by value (INR)" rows={b2b.topProductsRupees} valueFormatter={fmtMoney} />
+            <ExpandableTopList
+              title="Top customers by value (INR)"
+              rows={b2b.topCustomersRupees}
+              valueFormatter={fmtMoney}
+              detailBuilder={(customer) =>
+                (b2b.customerDetailsByRupees[customer] ?? [])
+                  .slice()
+                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                  .map((d) => ({
+                    id: d.id,
+                    line1: d.primary,
+                    line2: `${fmtDate(d.date)}${d.inr !== undefined ? ` · INR ${fmtMoney(d.inr)}` : ''}`,
+                  }))
+              }
+            />
+            <ExpandableTopList
+              title="Top products by value (INR)"
+              rows={b2b.topProductsRupees}
+              valueFormatter={fmtMoney}
+              detailBuilder={(product) =>
+                (b2b.productDetailsByRupees[product] ?? [])
+                  .slice()
+                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                  .map((d) => ({
+                    id: d.id,
+                    line1: d.secondary || 'Unknown customer',
+                    line2: `${fmtDate(d.date)}${d.inr !== undefined ? ` · INR ${fmtMoney(d.inr)}` : ''}`,
+                  }))
+              }
+            />
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             <ChartCard title="Top customers (kg)" data={b2b.topCustomersKg.slice(0, 6)} color="#0284c7" />
             <ChartCard title="Top products (kg)" data={b2b.topProductsKg.slice(0, 6)} color="#0369a1" />
           </div>
 
-          <div className="mt-4 space-y-3">
+          {hasB2BMonthData && <div className="mt-4 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <Metric label="Approved returns in month (kg)" value={fmtQty(b2bApprovedMonth.totalKg)} />
               <Metric label="Rejected in month (kg)" value={fmtQty(b2bRejectedMonth.totalKg)} />
@@ -323,7 +432,7 @@ export default function AnalyticsPage() {
               <TopList title="Top rejected products (kg)" rows={b2bRejectedMonth.topProductsKg.slice(0, topNSize)} valueFormatter={fmtQty} suffix=" kg" />
               <TopList title="Top rejected customers (kg)" rows={b2bRejectedMonth.topCustomersKg.slice(0, topNSize)} valueFormatter={fmtQty} suffix=" kg" />
             </div>
-          </div>
+          </div>}
         </Card>
       )}
 
@@ -338,19 +447,77 @@ export default function AnalyticsPage() {
             />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-            <TopList title="Who is returning the most (kg)" rows={b2c.topCustomersKg} valueFormatter={fmtQty} suffix=" kg" />
-            <TopList title="Which products are getting return (kg)" rows={b2c.topProductsKg} valueFormatter={fmtQty} suffix=" kg" />
+            <ExpandableTopList
+              title="Who is returning the most (kg)"
+              rows={b2c.topCustomersKg}
+              valueFormatter={fmtQty}
+              suffix=" kg"
+              detailBuilder={(customer) =>
+                (b2c.customerDetailsByKg[customer] ?? [])
+                  .slice()
+                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                  .map((d) => ({
+                    id: d.id,
+                    line1: d.primary,
+                    line2: `${fmtDate(d.date)}${d.kg !== undefined ? ` · ${fmtQty(d.kg)} kg` : ''}`,
+                  }))
+              }
+            />
+            <ExpandableTopList
+              title="Which products are getting return (kg)"
+              rows={b2c.topProductsKg}
+              valueFormatter={fmtQty}
+              suffix=" kg"
+              detailBuilder={(product) =>
+                (b2c.productDetailsByKg[product] ?? [])
+                  .slice()
+                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                  .map((d) => ({
+                    id: d.id,
+                    line1: d.secondary || 'Unknown customer',
+                    line2: `${fmtDate(d.date)}${d.kg !== undefined ? ` · ${fmtQty(d.kg)} kg` : ''}`,
+                  }))
+              }
+            />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-            <TopList title="Top customers by value (INR)" rows={b2c.topCustomersRupees} valueFormatter={fmtMoney} />
-            <TopList title="Top products by value (INR)" rows={b2c.topProductsRupees} valueFormatter={fmtMoney} />
+            <ExpandableTopList
+              title="Top customers by value (INR)"
+              rows={b2c.topCustomersRupees}
+              valueFormatter={fmtMoney}
+              detailBuilder={(customer) =>
+                (b2c.customerDetailsByRupees[customer] ?? [])
+                  .slice()
+                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                  .map((d) => ({
+                    id: d.id,
+                    line1: d.primary,
+                    line2: `${fmtDate(d.date)}${d.inr !== undefined ? ` · INR ${fmtMoney(d.inr)}` : ''}`,
+                  }))
+              }
+            />
+            <ExpandableTopList
+              title="Top products by value (INR)"
+              rows={b2c.topProductsRupees}
+              valueFormatter={fmtMoney}
+              detailBuilder={(product) =>
+                (b2c.productDetailsByRupees[product] ?? [])
+                  .slice()
+                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                  .map((d) => ({
+                    id: d.id,
+                    line1: d.secondary || 'Unknown customer',
+                    line2: `${fmtDate(d.date)}${d.inr !== undefined ? ` · INR ${fmtMoney(d.inr)}` : ''}`,
+                  }))
+              }
+            />
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             <ChartCard title="Top customers (kg)" data={b2c.topCustomersKg.slice(0, 6)} color="#ea580c" />
             <ChartCard title="Top products (kg)" data={b2c.topProductsKg.slice(0, 6)} color="#f97316" />
           </div>
 
-          <div className="mt-4 space-y-3">
+          {hasB2CMonthData && <div className="mt-4 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <Metric label="Approved returns in month (kg)" value={fmtQty(b2cApprovedMonth.totalKg)} />
               <Metric label="Rejected in month (kg)" value={fmtQty(b2cRejectedMonth.totalKg)} />
@@ -377,7 +544,7 @@ export default function AnalyticsPage() {
               <TopList title="Top rejected products (kg)" rows={b2cRejectedMonth.topProductsKg.slice(0, topNSize)} valueFormatter={fmtQty} suffix=" kg" />
               <TopList title="Top rejected customers (kg)" rows={b2cRejectedMonth.topCustomersKg.slice(0, topNSize)} valueFormatter={fmtQty} suffix=" kg" />
             </div>
-          </div>
+          </div>}
         </Card>
       )}
 
@@ -438,6 +605,65 @@ function TopList({
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ExpandableTopList({
+  title,
+  rows,
+  valueFormatter = fmtQty,
+  suffix = '',
+  detailBuilder,
+}: {
+  title: string;
+  rows: TopRow[];
+  valueFormatter?: (n: number) => string;
+  suffix?: string;
+  detailBuilder: (key: string) => { id: string; line1: string; line2?: string }[];
+}) {
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  return (
+    <div className="rounded-lg border border-slate-200 overflow-hidden">
+      <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-700">{title}</div>
+      <div className="divide-y divide-slate-100">
+        {rows.length === 0 && <div className="px-3 py-2 text-xs text-slate-500">No data.</div>}
+        {rows.map((r, i) => {
+          const isOpen = openKey === r.key;
+          const details = isOpen ? detailBuilder(r.key).slice(0, 30) : [];
+          return (
+            <div key={`${r.key}-${i}`} className="px-3 py-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setOpenKey((prev) => (prev === r.key ? null : r.key))}
+                className="w-full flex items-start justify-between gap-3 text-left"
+              >
+                <div className="min-w-0 text-slate-700 truncate">
+                  <span className="font-semibold">{r.key}</span>
+                  <span className="ml-2 text-[10px] text-slate-500">{isOpen ? 'Hide details' : 'Show details'}</span>
+                </div>
+                <div className="shrink-0 font-semibold text-slate-900 tabular-nums">
+                  {valueFormatter(r.value)}{suffix}
+                </div>
+              </button>
+              {isOpen && (
+                <div className="mt-2 rounded-md border border-slate-200 bg-white divide-y divide-slate-100">
+                  {details.length === 0 ? (
+                    <div className="px-2 py-1.5 text-[11px] text-slate-500">No details.</div>
+                  ) : (
+                    details.map((d) => (
+                      <div key={d.id} className="px-2 py-1.5 text-[11px]">
+                        <div className="text-slate-800 font-medium truncate">{d.line1}</div>
+                        {d.line2 ? <div className="text-slate-500 truncate">{d.line2}</div> : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
