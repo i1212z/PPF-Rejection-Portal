@@ -180,7 +180,9 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     }
   }, [endpoint, scanIdParam]);
 
-  const readOnly = Boolean(sheet && sheet.is_latest_scan === false);
+  // When there are no scans yet (after full reset), backend returns scan=null and is_latest_scan=false.
+  // That state must still allow upload / creation.
+  const readOnly = Boolean(sheet && sheet.scan && sheet.is_latest_scan === false);
   const canManualAddRow = Boolean(!paidOnly && !readOnly && sheet?.scan && sheet.is_latest_scan);
 
   const scanQuerySuffix = scanIdParam ? `?scan=${encodeURIComponent(scanIdParam)}` : '';
@@ -453,34 +455,6 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
     }
   };
 
-  const runAdjust = async (row: DueAgingRow, zone: BucketKey, sign: 1 | -1) => {
-    if (readOnly) return;
-    const label = sign > 0 ? 'Add amount' : 'Subtract amount';
-    const raw = window.prompt(`${label} in ${BUCKET_LABELS[zone]} for ${row.particulars}`, '');
-    if (!raw) return;
-    const amount = parseMoneyInput(raw);
-    if (amount === null || amount <= 0) return;
-    const note = window.prompt('Optional note for history', '') ?? '';
-    try {
-      await apiClient.post(`/due/aging/rows/${row.id}/adjust-zone`, {
-        zone,
-        delta: sign * amount,
-        note,
-      });
-      await load();
-      if (historyForRow === row.id) await toggleHistory(row.id, true);
-    } catch (err: unknown) {
-      const msg =
-        err &&
-        typeof err === 'object' &&
-        'response' in err &&
-        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-          ? String((err as { response: { data: { detail: string } } }).response.data.detail)
-          : 'Could not adjust zone.';
-      setError(msg);
-    }
-  };
-
   const toggleHistory = async (rowId: string, forceOpen = false) => {
     if (!forceOpen && historyForRow === rowId) {
       setHistoryForRow(null);
@@ -549,26 +523,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
           inputMode="decimal"
           className="w-full min-w-[4.6rem] max-w-[7rem] ml-auto rounded border border-transparent bg-transparent px-1 py-0.5 text-right tabular-nums text-[11px] hover:border-slate-300 focus:border-indigo-400 focus:outline-none disabled:opacity-80 disabled:cursor-default"
         />
-        {!paidOnly && !readOnly && (
-          <div className="mt-1 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => void runAdjust(r, zone, -1)}
-              className="rounded border border-slate-300 bg-white px-1 text-[10px] text-slate-700 hover:bg-slate-50"
-              title="Subtract and log history"
-            >
-              -
-            </button>
-            <button
-              type="button"
-              onClick={() => void runAdjust(r, zone, 1)}
-              className="rounded border border-slate-300 bg-white px-1 text-[10px] text-slate-700 hover:bg-slate-50"
-              title="Add and log history"
-            >
-              +
-            </button>
-          </div>
-        )}
+        {/* Zone adjustments are now done via direct edit in the cell (on blur). */}
       </td>
     );
   };
@@ -581,7 +536,7 @@ export default function DueAgingRegisterPage({ mode }: { mode: 'open' | 'paid' }
           <p className="text-sm text-gray-500">
             {paidOnly
               ? 'Paid rows. You can send a row back to open.'
-              : 'Customer-wise due sheet with zone colors, add/subtract with history, drag row swap, and zone filter. Use row-level Paid to deduct from the right-most zones first.'}
+              : 'Customer-wise due sheet with zone colors, drag row swap, and zone filter. Use row-level Paid to deduct from the right-most zones first.'}
           </p>
           {zonePick && (
             <p className="text-xs text-indigo-700 font-medium mt-1">Select another cell in the same zone to swap amounts.</p>

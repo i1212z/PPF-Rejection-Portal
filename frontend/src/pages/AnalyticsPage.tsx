@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Line, LineChart } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
@@ -31,15 +31,9 @@ interface TopRow {
   value: number;
 }
 
-interface UnitBucketRow {
-  unit: string;
-  rawQty: number;
-  kgEquivalent: number;
-}
-
-interface TrendPoint {
-  day: string;
-  value: number;
+interface MonthOption {
+  key: string; // YYYY-MM
+  label: string;
 }
 
 function fmtQty(n: number): string {
@@ -74,7 +68,6 @@ function channelAnalytics(tickets: Ticket[], channel: Channel) {
   const byProductKg: Record<string, number> = {};
   const byCustomerRupees: Record<string, number> = {};
   const byProductRupees: Record<string, number> = {};
-  const byUnitQty: Record<string, number> = {};
 
   approved.forEach((t) => {
     const c = (t.delivery_batch || '').trim() || 'Unknown customer';
@@ -87,20 +80,12 @@ function channelAnalytics(tickets: Ticket[], channel: Channel) {
     byProductKg[p] = (byProductKg[p] ?? 0) + qKg;
     byCustomerRupees[c] = (byCustomerRupees[c] ?? 0) + rs;
     byProductRupees[p] = (byProductRupees[p] ?? 0) + rs;
-    byUnitQty[u] = (byUnitQty[u] ?? 0) + q;
   });
 
   const topCustomersKg = topN(byCustomerKg, 10);
   const topProductsKg = topN(byProductKg, 10);
   const topCustomersRupees = topN(byCustomerRupees, 10);
   const topProductsRupees = topN(byProductRupees, 10);
-  const unitBreakdown = topN(byUnitQty, 12);
-  const unitBuckets: UnitBucketRow[] = Object.entries(byUnitQty)
-    .map(([unit, rawQty]) => {
-      const u = (unit || 'EA').toUpperCase();
-      return { unit: u, rawQty, kgEquivalent: toKg(rawQty, u) };
-    })
-    .sort((a, b) => Math.abs(b.kgEquivalent) - Math.abs(a.kgEquivalent) || a.unit.localeCompare(b.unit));
   return {
     totalConfirmedQtyKg: approved.reduce((a, t) => a + toKg(Number(t.quantity || 0), t.uom), 0),
     totalConfirmedRupees: approved.reduce((a, t) => a + Number(t.cost || 0), 0),
@@ -108,53 +93,58 @@ function channelAnalytics(tickets: Ticket[], channel: Channel) {
     topProductsKg,
     topCustomersRupees,
     topProductsRupees,
-    unitBreakdown,
-    unitBuckets,
     highestCustomerKg: topCustomersKg[0] ?? null,
     highestCustomerRupees: topCustomersRupees[0] ?? null,
   };
 }
 
-function rejectionAnalytics(tickets: Ticket[], channel: Channel) {
-  const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
-  const monthStart = new Date(Date.UTC(year, month, 1));
-  const monthEnd = new Date(Date.UTC(year, month + 1, 0));
-  const daysInMonth = monthEnd.getUTCDate();
+function monthKeyFromISODate(iso: string): string | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(iso.trim());
+  if (!m) return null;
+  return `${m[1]}-${m[2]}`;
+}
 
-  const rejected = tickets.filter((t) => t.channel === channel && t.status === 'rejected');
-  const dayTotals: Record<number, number> = {};
-  const productTotals: Record<string, number> = {};
-
-  rejected.forEach((t) => {
-    if (!t.delivery_date) return;
-    const d = new Date(`${t.delivery_date}T00:00:00Z`);
-    if (Number.isNaN(d.getTime())) return;
-    if (d < monthStart || d > monthEnd) return;
-
-    const day = d.getUTCDate();
-    const qKg = toKg(Number(t.quantity || 0), t.uom);
-    const product = (t.product_name || '').trim() || 'Unknown product';
-
-    dayTotals[day] = (dayTotals[day] ?? 0) + qKg;
-    productTotals[product] = (productTotals[product] ?? 0) + qKg;
-  });
-
-  const trend: TrendPoint[] = [];
-  for (let day = 1; day <= daysInMonth; day++) {
-    trend.push({ day: String(day), value: dayTotals[day] ?? 0 });
+function buildMonthOptions(tickets: Ticket[]): MonthOption[] {
+  const keys = new Set<string>();
+  for (const t of tickets) {
+    const k = monthKeyFromISODate(t.delivery_date);
+    if (k) keys.add(k);
   }
+  const arr = Array.from(keys).sort().reverse();
+  return arr.map((k) => {
+    const [y, m] = k.split('-').map((x) => Number(x));
+    const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-IN', { month: 'short', year: 'numeric' });
+    return { key: k, label };
+  });
+}
 
-  const topProducts = topN(productTotals, 8);
-  const totalRejectedQtyKg = trend.reduce((a, p) => a + p.value, 0);
+function monthScopedAnalytics(tickets: Ticket[], channel: Channel, status: TicketStatus, monthKey: string | null) {
+  const byCustomerKg: Record<string, number> = {};
+  const byProductKg: Record<string, number> = {};
+  const byCustomerProductsKg: Record<string, Record<string, number>> = {};
 
-  return {
-    totalRejectedQtyKg,
-    trend,
-    topProducts,
-    highestProduct: topProducts[0] ?? null,
-  };
+  tickets
+    .filter((t) => t.channel === channel && t.status === status)
+    .forEach((t) => {
+      if (monthKey) {
+        const mk = monthKeyFromISODate(t.delivery_date);
+        if (mk !== monthKey) return;
+      }
+      const customer = (t.delivery_batch || '').trim() || 'Unknown customer';
+      const product = (t.product_name || '').trim() || 'Unknown product';
+      const kg = toKg(Number(t.quantity || 0), t.uom);
+
+      byCustomerKg[customer] = (byCustomerKg[customer] ?? 0) + kg;
+      byProductKg[product] = (byProductKg[product] ?? 0) + kg;
+      if (!byCustomerProductsKg[customer]) byCustomerProductsKg[customer] = {};
+      byCustomerProductsKg[customer][product] = (byCustomerProductsKg[customer][product] ?? 0) + kg;
+    });
+
+  const topCustomersKg = topN(byCustomerKg, 50);
+  const topProductsKg = topN(byProductKg, 50);
+  const totalKg = Object.values(byCustomerKg).reduce((a, v) => a + v, 0);
+  return { totalKg, topCustomersKg, topProductsKg, byCustomerProductsKg };
 }
 
 export default function AnalyticsPage() {
@@ -162,6 +152,9 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
+  const [topNSize, setTopNSize] = useState<number>(10);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
 
   const isManager = user?.role === 'manager' || user?.role === 'admin';
   const isB2B = user?.role === 'b2b';
@@ -192,8 +185,27 @@ export default function AnalyticsPage() {
 
   const b2b = useMemo(() => channelAnalytics(tickets, 'B2B'), [tickets]);
   const b2c = useMemo(() => channelAnalytics(tickets, 'B2C'), [tickets]);
-  const b2bRejected = useMemo(() => rejectionAnalytics(tickets, 'B2B'), [tickets]);
-  const b2cRejected = useMemo(() => rejectionAnalytics(tickets, 'B2C'), [tickets]);
+  const monthOptions = useMemo(() => buildMonthOptions(tickets), [tickets]);
+  useEffect(() => {
+    if (!selectedMonth && monthOptions.length > 0) setSelectedMonth(monthOptions[0].key);
+  }, [monthOptions, selectedMonth]);
+
+  const b2bApprovedMonth = useMemo(
+    () => monthScopedAnalytics(tickets, 'B2B', 'approved', selectedMonth),
+    [tickets, selectedMonth],
+  );
+  const b2cApprovedMonth = useMemo(
+    () => monthScopedAnalytics(tickets, 'B2C', 'approved', selectedMonth),
+    [tickets, selectedMonth],
+  );
+  const b2bRejectedMonth = useMemo(
+    () => monthScopedAnalytics(tickets, 'B2B', 'rejected', selectedMonth),
+    [tickets, selectedMonth],
+  );
+  const b2cRejectedMonth = useMemo(
+    () => monthScopedAnalytics(tickets, 'B2C', 'rejected', selectedMonth),
+    [tickets, selectedMonth],
+  );
 
   const approvedCN = useMemo(() => {
     const rows = creditNotes.filter((c) => c.status === 'approved');
@@ -225,6 +237,42 @@ export default function AnalyticsPage() {
 
       {loading && <div className="text-sm text-gray-500">Loading analytics…</div>}
 
+      {monthOptions.length > 0 && (
+        <Card title="Timeline" subtitle="Pick a month to analyze returns/rejections" className="text-sm">
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <div className="text-xs text-slate-600 font-medium">Month</div>
+            <select
+              value={selectedMonth ?? ''}
+              onChange={(e) => {
+                setSelectedMonth(e.target.value || null);
+                setExpandedCustomer(null);
+              }}
+              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+            >
+              {monthOptions.map((m) => (
+                <option key={m.key} value={m.key}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <div className="sm:ml-auto flex items-center gap-2">
+              <div className="text-xs text-slate-600 font-medium">Show</div>
+              <select
+                value={topNSize}
+                onChange={(e) => setTopNSize(Number(e.target.value))}
+                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                {[10, 25, 50].map((n) => (
+                  <option key={n} value={n}>
+                    Top {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {showB2B && (
         <Card title="B2B analytics" subtitle="Confirmed returns only (approved tickets)" className="text-sm">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
@@ -243,36 +291,37 @@ export default function AnalyticsPage() {
             <TopList title="Top customers by value (INR)" rows={b2b.topCustomersRupees} valueFormatter={fmtMoney} />
             <TopList title="Top products by value (INR)" rows={b2b.topProductsRupees} valueFormatter={fmtMoney} />
           </div>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             <ChartCard title="Top customers (kg)" data={b2b.topCustomersKg.slice(0, 6)} color="#0284c7" />
             <ChartCard title="Top products (kg)" data={b2b.topProductsKg.slice(0, 6)} color="#0369a1" />
-            <ChartCard title="Unit distribution (raw qty)" data={b2b.unitBreakdown.slice(0, 6)} color="#0ea5e9" />
-          </div>
-          <div className="mt-3">
-            <UnitBucketTable title="Unit breakdown (raw qty + kg equivalent)" rows={b2b.unitBuckets} />
           </div>
 
           <div className="mt-4 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Metric label="Rejected this month (kg)" value={fmtQty(b2bRejected.totalRejectedQtyKg)} />
+              <Metric label="Approved returns in month (kg)" value={fmtQty(b2bApprovedMonth.totalKg)} />
+              <Metric label="Rejected in month (kg)" value={fmtQty(b2bRejectedMonth.totalKg)} />
               <Metric
-                label="Most rejected product"
+                label="Most rejected product (month)"
                 value={
-                  b2bRejected.highestProduct
-                    ? `${b2bRejected.highestProduct.key} (${fmtQty(b2bRejected.highestProduct.value)} kg)`
+                  b2bRejectedMonth.topProductsKg[0]
+                    ? `${b2bRejectedMonth.topProductsKg[0].key} (${fmtQty(b2bRejectedMonth.topProductsKg[0].value)} kg)`
                     : '—'
                 }
               />
-              <Metric label="Top rejected products" value={String(b2bRejected.topProducts.length)} />
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <LineTrendCard title="Rejections trend (kg)" data={b2bRejected.trend} color="#0ea5e9" />
-              <TopList
-                title="Top rejected products (kg)"
-                rows={b2bRejected.topProducts}
-                valueFormatter={fmtQty}
-                suffix=" kg"
+              <CustomerDrilldownList
+                title="Who is returning the most (kg)"
+                rows={b2bApprovedMonth.topCustomersKg.slice(0, topNSize)}
+                expandedKey={expandedCustomer}
+                onToggle={(k) => setExpandedCustomer((prev) => (prev === k ? null : k))}
+                byCustomerProductsKg={b2bApprovedMonth.byCustomerProductsKg}
               />
+              <TopList title="Which products are getting return (kg)" rows={b2bApprovedMonth.topProductsKg.slice(0, topNSize)} valueFormatter={fmtQty} suffix=" kg" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <TopList title="Top rejected products (kg)" rows={b2bRejectedMonth.topProductsKg.slice(0, topNSize)} valueFormatter={fmtQty} suffix=" kg" />
+              <TopList title="Top rejected customers (kg)" rows={b2bRejectedMonth.topCustomersKg.slice(0, topNSize)} valueFormatter={fmtQty} suffix=" kg" />
             </div>
           </div>
         </Card>
@@ -296,36 +345,37 @@ export default function AnalyticsPage() {
             <TopList title="Top customers by value (INR)" rows={b2c.topCustomersRupees} valueFormatter={fmtMoney} />
             <TopList title="Top products by value (INR)" rows={b2c.topProductsRupees} valueFormatter={fmtMoney} />
           </div>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             <ChartCard title="Top customers (kg)" data={b2c.topCustomersKg.slice(0, 6)} color="#ea580c" />
             <ChartCard title="Top products (kg)" data={b2c.topProductsKg.slice(0, 6)} color="#f97316" />
-            <ChartCard title="Unit distribution (raw qty)" data={b2c.unitBreakdown.slice(0, 6)} color="#fb923c" />
-          </div>
-          <div className="mt-3">
-            <UnitBucketTable title="Unit breakdown (raw qty + kg equivalent)" rows={b2c.unitBuckets} />
           </div>
 
           <div className="mt-4 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Metric label="Rejected this month (kg)" value={fmtQty(b2cRejected.totalRejectedQtyKg)} />
+              <Metric label="Approved returns in month (kg)" value={fmtQty(b2cApprovedMonth.totalKg)} />
+              <Metric label="Rejected in month (kg)" value={fmtQty(b2cRejectedMonth.totalKg)} />
               <Metric
-                label="Most rejected product"
+                label="Most rejected product (month)"
                 value={
-                  b2cRejected.highestProduct
-                    ? `${b2cRejected.highestProduct.key} (${fmtQty(b2cRejected.highestProduct.value)} kg)`
+                  b2cRejectedMonth.topProductsKg[0]
+                    ? `${b2cRejectedMonth.topProductsKg[0].key} (${fmtQty(b2cRejectedMonth.topProductsKg[0].value)} kg)`
                     : '—'
                 }
               />
-              <Metric label="Top rejected products" value={String(b2cRejected.topProducts.length)} />
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <LineTrendCard title="Rejections trend (kg)" data={b2cRejected.trend} color="#fb923c" />
-              <TopList
-                title="Top rejected products (kg)"
-                rows={b2cRejected.topProducts}
-                valueFormatter={fmtQty}
-                suffix=" kg"
+              <CustomerDrilldownList
+                title="Who is returning the most (kg)"
+                rows={b2cApprovedMonth.topCustomersKg.slice(0, topNSize)}
+                expandedKey={expandedCustomer}
+                onToggle={(k) => setExpandedCustomer((prev) => (prev === k ? null : k))}
+                byCustomerProductsKg={b2cApprovedMonth.byCustomerProductsKg}
               />
+              <TopList title="Which products are getting return (kg)" rows={b2cApprovedMonth.topProductsKg.slice(0, topNSize)} valueFormatter={fmtQty} suffix=" kg" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <TopList title="Top rejected products (kg)" rows={b2cRejectedMonth.topProductsKg.slice(0, topNSize)} valueFormatter={fmtQty} suffix=" kg" />
+              <TopList title="Top rejected customers (kg)" rows={b2cRejectedMonth.topCustomersKg.slice(0, topNSize)} valueFormatter={fmtQty} suffix=" kg" />
             </div>
           </div>
         </Card>
@@ -427,57 +477,63 @@ function ChartCard({
   );
 }
 
-function LineTrendCard({
+function CustomerDrilldownList({
   title,
-  data,
-  color,
-  valueFormatter = fmtQty,
+  rows,
+  expandedKey,
+  onToggle,
+  byCustomerProductsKg,
 }: {
   title: string;
-  data: TrendPoint[];
-  color: string;
-  valueFormatter?: (n: number) => string;
+  rows: TopRow[];
+  expandedKey: string | null;
+  onToggle: (key: string) => void;
+  byCustomerProductsKg: Record<string, Record<string, number>>;
 }) {
-  return (
-    <div className="rounded-lg border border-slate-200 p-2">
-      <div className="text-xs font-semibold text-slate-700 mb-1">{title}</div>
-      <div style={{ width: '100%', height: 220 }}>
-        <ResponsiveContainer>
-          <LineChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 16 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="day" tick={{ fontSize: 10 }} interval={0} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(t) => valueFormatter(Number(t))} />
-            <Tooltip
-              formatter={(v) => {
-                const n = Number(v ?? 0);
-                return [valueFormatter(n), ''];
-              }}
-            />
-            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-function UnitBucketTable({ title, rows }: { title: string; rows: UnitBucketRow[] }) {
   return (
     <div className="rounded-lg border border-slate-200 overflow-hidden">
       <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-700">{title}</div>
       <div className="divide-y divide-slate-100">
-        {rows.length === 0 && <div className="px-3 py-2 text-xs text-slate-500">No unit data.</div>}
-        {rows.map((r) => (
-          <div key={r.unit} className="px-3 py-2 text-xs flex items-start justify-between gap-3">
-            <div className="min-w-0 text-slate-700 truncate">{r.unit}</div>
-            <div className="shrink-0 text-right tabular-nums">
-              <div className="font-semibold text-slate-900">
-                {fmtQty(r.rawQty)} <span className="text-slate-500 font-medium">{r.unit}</span>
-              </div>
-              <div className="text-[11px] text-slate-500">~ {fmtQty(r.kgEquivalent)} kg</div>
+        {rows.length === 0 && <div className="px-3 py-2 text-xs text-slate-500">No data.</div>}
+        {rows.map((r, i) => {
+          const isOpen = expandedKey === r.key;
+          const prodMap = byCustomerProductsKg[r.key] ?? {};
+          const prodTop = topN(prodMap, 10);
+          return (
+            <div key={`${r.key}-${i}`} className="px-3 py-2 text-xs">
+              <button
+                type="button"
+                onClick={() => onToggle(r.key)}
+                className="w-full flex items-start justify-between gap-3 text-left"
+              >
+                <div className="min-w-0 text-slate-700 truncate">
+                  <span className="font-semibold">{r.key}</span>
+                  <span className="ml-2 text-[10px] text-slate-500">{isOpen ? 'Hide' : 'Show'} products</span>
+                </div>
+                <div className="shrink-0 font-semibold text-slate-900 tabular-nums">{fmtQty(r.value)} kg</div>
+              </button>
+              {isOpen && (
+                <div className="mt-2 rounded-md border border-slate-200 bg-white">
+                  <div className="px-2 py-1 text-[11px] font-semibold text-slate-700 bg-slate-50 border-b border-slate-200">
+                    Products (kg)
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {prodTop.length === 0 ? (
+                      <div className="px-2 py-1.5 text-[11px] text-slate-500">No product data.</div>
+                    ) : (
+                      prodTop.map((p) => (
+                        <div key={p.key} className="px-2 py-1.5 flex items-start justify-between gap-3 text-[11px]">
+                          <div className="min-w-0 truncate text-slate-700">{p.key}</div>
+                          <div className="shrink-0 tabular-nums font-semibold text-slate-900">{fmtQty(p.value)} kg</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
