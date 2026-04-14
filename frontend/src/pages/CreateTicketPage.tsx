@@ -9,6 +9,8 @@ import { CUSTOMER_SUGGESTIONS, PRODUCT_SUGGESTIONS } from '../data/rejectionTick
 import type { CustomerStorageKey } from '../lib/savedCustomerNames';
 import { rememberCustomerNameAfterSubmit } from '../lib/savedCustomerNames';
 
+type TicketUom = 'EA100' | 'EA150' | 'EA200' | 'EA250' | 'KG' | 'GM' | 'BOX';
+
 export default function CreateTicketPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -24,13 +26,13 @@ export default function CreateTicketPage() {
   const [productType, setProductType] = useState<'single' | 'multiple'>('single');
   const [productName, setProductName] = useState('');
   const [quantity, setQuantity] = useState<number | ''>('');
-  const [uom, setUom] = useState<'EA' | 'KG' | 'G' | 'GM' | 'L' | 'ML' | 'BOX'>('EA');
+  const [uom, setUom] = useState<TicketUom>('EA200');
   const [reason, setReason] = useState('');
   const [deliveryBatch, setDeliveryBatch] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [lineItems, setLineItems] = useState<
-    { productName: string; quantity: number | ''; uom: 'EA' | 'KG' | 'G' | 'GM' | 'L' | 'ML' | 'BOX'; reason: string }[]
-  >([{ productName: '', quantity: '', uom: 'EA', reason: '' }]);
+    { productName: string; quantity: number | ''; uom: TicketUom; reason: string }[]
+  >([{ productName: '', quantity: '', uom: 'EA200', reason: '' }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -213,12 +215,12 @@ export default function CreateTicketPage() {
                     value={uom}
                     onChange={(e) => setUom(e.target.value as typeof uom)}
                   >
-                    <option value="EA">EA</option>
+                    <option value="EA100">EA100</option>
+                    <option value="EA150">EA150</option>
+                    <option value="EA200">EA200</option>
+                    <option value="EA250">EA250</option>
                     <option value="KG">KG</option>
-                    <option value="G">G</option>
                     <option value="GM">GM</option>
-                    <option value="L">L</option>
-                    <option value="ML">ML</option>
                     <option value="BOX">BOX</option>
                   </select>
                 </div>
@@ -301,12 +303,12 @@ export default function CreateTicketPage() {
                             )
                           }
                         >
-                          <option value="EA">EA</option>
+                          <option value="EA100">EA100</option>
+                          <option value="EA150">EA150</option>
+                          <option value="EA200">EA200</option>
+                          <option value="EA250">EA250</option>
                           <option value="KG">KG</option>
-                          <option value="G">G</option>
                           <option value="GM">GM</option>
-                          <option value="L">L</option>
-                          <option value="ML">ML</option>
                           <option value="BOX">BOX</option>
                         </select>
                       </div>
@@ -348,7 +350,7 @@ export default function CreateTicketPage() {
                     onClick={() =>
                       setLineItems((prev) => [
                         ...prev,
-                        { productName: '', quantity: '', uom: 'EA', reason: '' },
+                        { productName: '', quantity: '', uom: 'EA200', reason: '' },
                       ])
                     }
                     className="w-full sm:w-auto rounded-md bg-indigo-50 px-3 py-2 sm:py-1.5 text-[11px] text-indigo-700 hover:bg-indigo-100"

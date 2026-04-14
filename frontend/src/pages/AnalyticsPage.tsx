@@ -65,7 +65,10 @@ function toKg(quantity: number, uomRaw?: string | null): number {
   const q = Number(quantity || 0);
   const u = (uomRaw || 'EA').toUpperCase();
   if (u === 'KG' || u === 'KGS') return q;
-  if (u === 'EA' || u === 'BOX') return q * 0.2; // treat BOX same as EA unless specified otherwise
+  if (u === 'EA100') return q * 0.1;
+  if (u === 'EA150') return q * 0.15;
+  if (u === 'EA200' || u === 'EA' || u === 'BOX') return q * 0.2; // default EA = EA200
+  if (u === 'EA250') return q * 0.25;
   if (u === 'G' || u === 'GM' || u === 'GRAM' || u === 'GRAMS') return q / 1000;
   if (u === 'ML') return q / 1000;
   if (u === 'L') return q;
