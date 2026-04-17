@@ -64,6 +64,7 @@ async def create_credit_note(
         amount_warning=Decimal(str(payload.amount_warning)),
         amount_danger=Decimal(str(payload.amount_danger)),
         amount_doubtful=Decimal(str(payload.amount_doubtful)),
+        remarks=(payload.remarks or "").strip() or None,
         status=TicketStatus.PENDING,
         created_by=current_user.id,
     )
@@ -191,6 +192,8 @@ async def update_credit_note(
     cn.amount_warning = Decimal(str(payload.amount_warning))
     cn.amount_danger = Decimal(str(payload.amount_danger))
     cn.amount_doubtful = Decimal(str(payload.amount_doubtful))
+    if payload.remarks is not None:
+        cn.remarks = (payload.remarks or "").strip() or None
     await db.commit()
     await db.refresh(cn)
     rem_row = (

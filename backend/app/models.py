@@ -115,6 +115,7 @@ class CreditNote(Base):
     amount_warning = Column(Numeric(12, 2), nullable=False, default=0)
     amount_danger = Column(Numeric(12, 2), nullable=False, default=0)
     amount_doubtful = Column(Numeric(12, 2), nullable=False, default=0)
+    remarks = Column(Text, nullable=True)
     amount = Column(Numeric(12, 2), nullable=False)
     status = Column(
         Enum(TicketStatus, name="ticket_status"),

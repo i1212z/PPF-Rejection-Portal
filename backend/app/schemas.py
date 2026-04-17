@@ -111,6 +111,7 @@ class CreditNoteCreate(BaseModel):
     amount_warning: float = Field(default=0, ge=0)
     amount_danger: float = Field(default=0, ge=0)
     amount_doubtful: float = Field(default=0, ge=0)
+    remarks: Optional[str] = None
 
     @field_validator("market_area")
     @classmethod
@@ -137,6 +138,7 @@ class CreditNoteRead(BaseModel):
     amount_warning: float
     amount_danger: float
     amount_doubtful: float
+    remarks: Optional[str] = None
     status: TicketStatus
     created_by: UUID
     created_at: datetime
@@ -158,6 +160,7 @@ def credit_note_to_read(cn: CreditNote, rem: Optional[str] = None) -> CreditNote
         amount_warning=float(cn.amount_warning or 0),
         amount_danger=float(cn.amount_danger or 0),
         amount_doubtful=float(cn.amount_doubtful or 0),
+        remarks=getattr(cn, "remarks", None),
         status=cn.status,
         created_by=cn.created_by,
         created_at=cn.created_at,

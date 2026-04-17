@@ -16,6 +16,7 @@ export default function CreateCreditNotePage() {
   const [customerName, setCustomerName] = useState('');
   const [marketArea, setMarketArea] = useState<string>(CREDIT_NOTE_MARKET_AREAS[0]);
   const [amount, setAmount] = useState('');
+  const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,6 +39,7 @@ export default function CreateCreditNotePage() {
         customer_name: customerName.trim(),
         market_area: marketArea,
         amount: num,
+        remarks: remarks.trim() || null,
       });
       rememberCustomerNameAfterSubmit('credit_note', customerName, CUSTOMER_SUGGESTIONS);
       navigate('/credit-notes');
@@ -124,6 +126,15 @@ export default function CreateCreditNotePage() {
               onChange={(e) => setAmount(e.target.value)}
               className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
               placeholder="0.00"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Remark (optional)</label>
+            <textarea
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm min-h-[72px]"
+              placeholder="Any note for this credit note"
             />
           </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap pt-2">

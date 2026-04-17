@@ -116,6 +116,7 @@ async def on_startup():
                 "ALTER TABLE credit_notes ADD COLUMN amount_warning REAL DEFAULT 0",
                 "ALTER TABLE credit_notes ADD COLUMN amount_danger REAL DEFAULT 0",
                 "ALTER TABLE credit_notes ADD COLUMN amount_doubtful REAL DEFAULT 0",
+                "ALTER TABLE credit_notes ADD COLUMN remarks TEXT",
             ]
         elif dialect == "postgresql":
             cn_alters = [
@@ -124,6 +125,7 @@ async def on_startup():
                 "ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS amount_warning NUMERIC(12,2) DEFAULT 0 NOT NULL",
                 "ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS amount_danger NUMERIC(12,2) DEFAULT 0 NOT NULL",
                 "ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS amount_doubtful NUMERIC(12,2) DEFAULT 0 NOT NULL",
+                "ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS remarks TEXT",
             ]
         for stmt in cn_alters:
             try:
