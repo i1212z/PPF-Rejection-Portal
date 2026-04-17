@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -21,6 +21,7 @@ interface CreditNote {
   amount_warning: number;
   amount_danger: number;
   amount_doubtful: number;
+  remarks?: string | null;
   status: CNStatus;
   created_at: string;
   created_by: string;
@@ -39,6 +40,7 @@ export default function CreditNotesPage() {
   const [editing, setEditing] = useState<CreditNote | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [revertId, setRevertId] = useState<string | null>(null);
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [editCustomerName, setEditCustomerName] = useState('');
   const [editDeliveryDate, setEditDeliveryDate] = useState('');
   const [editMarketArea, setEditMarketArea] = useState('');
@@ -236,6 +238,11 @@ export default function CreditNotesPage() {
                     <div className="mt-1 text-sm font-semibold text-gray-800">
                       Amount: {Number(n.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
+                    {n.remarks ? (
+                      <div className="mt-1 text-[11px] text-slate-700">
+                        Customer remark: <span className="font-medium">{n.remarks}</span>
+                      </div>
+                    ) : null}
                     <div className="mt-1">
                       <StatusBadge status={n.status} />
                     </div>
@@ -303,7 +310,19 @@ export default function CreditNotesPage() {
                     const did = displayIdByNoteId.get(n.id) ?? `${CHANNEL_PREFIX}-???`;
                     const remark = n.approval_remarks ?? n.rejection_remarks ?? '';
                     return (
-                      <tr key={n.id} className="hover:bg-gray-50">
+                      <Fragment key={n.id}>
+                        <tr
+                          role="button"
+                          tabIndex={0}
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => setExpandedNoteId((prev) => (prev === n.id ? null : n.id))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setExpandedNoteId((prev) => (prev === n.id ? null : n.id));
+                            }
+                          }}
+                        >
                         <td className="px-4 py-2 font-mono text-[11px]">{did}</td>
                         <td className="px-4 py-2">{new Date(n.delivery_date).toLocaleDateString('en-GB')}</td>
                         <td className="px-4 py-2 text-gray-700">{n.market_area}</td>
@@ -321,7 +340,7 @@ export default function CreditNotesPage() {
                           {remark || '–'}
                         </td>
                         <td className="px-4 py-2 text-gray-500">{new Date(n.created_at).toLocaleString('en-GB')}</td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex flex-wrap gap-1">
                             {canMutate(n) && (
                               <>
@@ -354,7 +373,35 @@ export default function CreditNotesPage() {
                             )}
                           </div>
                         </td>
-                      </tr>
+                        </tr>
+                        {expandedNoteId === n.id && (
+                          <tr className="bg-gray-50 border-l-4 border-l-indigo-300">
+                            <td colSpan={9} className="px-4 py-3 text-xs">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <div className="text-[11px] text-gray-500 uppercase font-semibold">Credit note details</div>
+                                  <div><span className="text-gray-500">ID:</span> <span className="font-mono">{did}</span></div>
+                                  <div><span className="text-gray-500">Date:</span> {new Date(n.delivery_date).toLocaleDateString('en-GB')}</div>
+                                  <div><span className="text-gray-500">Market:</span> {n.market_area}</div>
+                                  <div><span className="text-gray-500">Customer:</span> {n.customer_name}</div>
+                                  <div><span className="text-gray-500">Amount:</span> {Number(n.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="text-[11px] text-gray-500 uppercase font-semibold">Remarks</div>
+                                  <div>
+                                    <span className="text-gray-500">Customer remark:</span>{' '}
+                                    <span className="font-medium">{n.remarks || '—'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">Admin remark:</span>{' '}
+                                    <span className="font-medium">{remark || '—'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>

@@ -42,6 +42,11 @@ interface TicketGroup {
   }[];
 }
 
+function qtyWithUom(quantity: number, uom?: string | null): string {
+  const unit = (uom || '').trim();
+  return unit ? `${quantity} ${unit}` : String(quantity);
+}
+
 export default function TicketsPage() {
   const { user } = useAuth();
 
@@ -411,7 +416,7 @@ export default function TicketsPage() {
                                 <div>
                                   Qty:{' '}
                                   <span className="font-medium">
-                                    {item.quantity}
+                                    {qtyWithUom(item.quantity, item.uom)}
                                   </span>
                                 </div>
                                 <div className="mt-0.5">
@@ -632,7 +637,7 @@ export default function TicketsPage() {
                                               {item.product_name}
                                             </td>
                                             <td className="px-3 py-1">
-                                              {item.quantity}
+                                              {qtyWithUom(item.quantity, item.uom)}
                                             </td>
                                             <td className="px-3 py-1">
                                               <StatusBadge
@@ -802,7 +807,7 @@ export default function TicketsPage() {
                                 <div>
                                   Qty:{' '}
                                   <span className="font-medium">
-                                    {item.quantity}
+                                    {qtyWithUom(item.quantity, item.uom)}
                                   </span>
                                 </div>
                                 <div className="mt-0.5">
@@ -1011,7 +1016,7 @@ export default function TicketsPage() {
                                           <tr key={item.id}>
                                             <td className="px-3 py-1 font-medium text-gray-700">{getLineId(displayId, item.id)}</td>
                                             <td className="px-3 py-1">{item.product_name}</td>
-                                            <td className="px-3 py-1">{item.quantity}</td>
+                                            <td className="px-3 py-1">{qtyWithUom(item.quantity, item.uom)}</td>
                                             <td className="px-3 py-1">
                                               <StatusBadge status={item.status} />
                                             </td>
@@ -1162,7 +1167,7 @@ export default function TicketsPage() {
                               </div>
                               <div className="text-right">
                                 <div>
-                                  Qty: <span className="font-medium">{item.quantity}</span>
+                                  Qty: <span className="font-medium">{qtyWithUom(item.quantity, item.uom)}</span>
                                 </div>
                                 <div className="mt-0.5">
                                   <StatusBadge status={item.status} />
@@ -1370,7 +1375,7 @@ export default function TicketsPage() {
                                             <tr key={item.id}>
                                               <td className="px-3 py-1 font-medium text-gray-700">{getLineId(displayId, item.id)}</td>
                                               <td className="px-3 py-1">{item.product_name}</td>
-                                              <td className="px-3 py-1">{item.quantity}</td>
+                                              <td className="px-3 py-1">{qtyWithUom(item.quantity, item.uom)}</td>
                                               <td className="px-3 py-1">
                                                 <StatusBadge status={item.status} />
                                               </td>
