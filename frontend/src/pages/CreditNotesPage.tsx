@@ -8,6 +8,12 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { CUSTOMER_SUGGESTIONS } from '../data/rejectionTicketSuggestions';
 import { rememberCustomerNameAfterSubmit } from '../lib/savedCustomerNames';
 import { CREDIT_NOTE_MARKET_AREAS } from '../data/creditNoteMarketAreas';
+import {
+  matchesCreatedTimeRange,
+  TIME_RANGE_LABELS,
+  type TimeRangeFilter,
+  uniqueSortedStrings,
+} from '../lib/registerFilters';
 
 type CNStatus = 'pending' | 'approved' | 'rejected';
 
@@ -41,6 +47,8 @@ export default function CreditNotesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [revertId, setRevertId] = useState<string | null>(null);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  const [customerFilter, setCustomerFilter] = useState<string>('all');
+  const [timeRangeFilter, setTimeRangeFilter] = useState<TimeRangeFilter>('all');
   const [editCustomerName, setEditCustomerName] = useState('');
   const [editDeliveryDate, setEditDeliveryDate] = useState('');
   const [editMarketArea, setEditMarketArea] = useState('');
@@ -90,6 +98,23 @@ export default function CreditNotesPage() {
       setEditAmount('');
     }
   }, [editing]);
+
+  const customerOptions = useMemo(
+    () => uniqueSortedStrings(items.map((n) => n.customer_name)),
+    [items],
+  );
+
+  const filteredItems = useMemo(() => {
+    return items.filter((n) => {
+      if (customerFilter !== 'all' && n.customer_name.trim() !== customerFilter) return false;
+      if (!matchesCreatedTimeRange(n.created_at, timeRangeFilter)) return false;
+      return true;
+    });
+  }, [items, customerFilter, timeRangeFilter]);
+
+  useEffect(() => {
+    setExpandedNoteId(null);
+  }, [customerFilter, timeRangeFilter]);
 
   const displayIdByNoteId = useMemo(() => {
     const sorted = [...items].sort((a, b) => {
@@ -193,18 +218,49 @@ export default function CreditNotesPage() {
           <h2 className="text-lg font-semibold text-gray-900">Credit notes register</h2>
           <p className="text-sm text-gray-500">B2B credit notes (separate from rejection tickets).</p>
         </div>
-        <div className="flex flex-col gap-1 w-full sm:w-auto sm:flex-row sm:items-center text-xs shrink-0">
-          <label className="text-gray-500">Status</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as CNStatus | 'all')}
-            className="w-full sm:w-auto sm:min-w-[9rem] rounded-md border border-gray-200 bg-white px-2 py-2 sm:py-1 text-xs text-gray-800"
-          >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 w-full lg:max-w-3xl text-xs shrink-0">
+          <div className="flex flex-col gap-1">
+            <label className="text-gray-500">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as CNStatus | 'all')}
+              className="w-full rounded-md border border-gray-200 bg-white px-2 py-2 sm:py-1 text-xs text-gray-800"
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-gray-500">Customer</label>
+            <select
+              value={customerFilter}
+              onChange={(e) => setCustomerFilter(e.target.value)}
+              className="w-full rounded-md border border-gray-200 bg-white px-2 py-2 sm:py-1 text-xs text-gray-800"
+            >
+              <option value="all">All</option>
+              {customerOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-gray-500">Time</label>
+            <select
+              value={timeRangeFilter}
+              onChange={(e) => setTimeRangeFilter(e.target.value as TimeRangeFilter)}
+              className="w-full rounded-md border border-gray-200 bg-white px-2 py-2 sm:py-1 text-xs text-gray-800"
+            >
+              {(Object.keys(TIME_RANGE_LABELS) as TimeRangeFilter[]).map((k) => (
+                <option key={k} value={k}>
+                  {TIME_RANGE_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
       <div className="md:hidden">
@@ -223,10 +279,13 @@ export default function CreditNotesPage() {
       <Card title="All credit notes" className="text-sm">
         {loading && <div className="text-gray-500">Loading…</div>}
         {!loading && items.length === 0 && <div className="text-gray-500">No credit notes yet.</div>}
-        {!loading && items.length > 0 && (
+        {!loading && items.length > 0 && filteredItems.length === 0 && (
+          <div className="text-gray-500">No credit notes match the customer and time filters.</div>
+        )}
+        {!loading && items.length > 0 && filteredItems.length > 0 && (
           <>
             <div className="space-y-3 md:hidden">
-              {items.map((n) => {
+              {filteredItems.map((n) => {
                 const did = displayIdByNoteId.get(n.id) ?? `${CHANNEL_PREFIX}-???`;
                 const remark = n.approval_remarks ?? n.rejection_remarks ?? '';
                 return (
@@ -306,7 +365,7 @@ export default function CreditNotesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {items.map((n) => {
+                  {filteredItems.map((n) => {
                     const did = displayIdByNoteId.get(n.id) ?? `${CHANNEL_PREFIX}-???`;
                     const remark = n.approval_remarks ?? n.rejection_remarks ?? '';
                     return (

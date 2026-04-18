@@ -1,9 +1,15 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import {
+  matchesCreatedTimeRange,
+  TIME_RANGE_LABELS,
+  type TimeRangeFilter,
+  uniqueSortedStrings,
+} from '../lib/registerFilters';
 
 type TicketStatus = 'pending' | 'approved' | 'rejected';
 
@@ -67,6 +73,8 @@ export default function TicketsPage() {
   const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
   const [revertLoadingId, setRevertLoadingId] = useState<string | null>(null);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [customerFilter, setCustomerFilter] = useState<string>('all');
+  const [timeRangeFilter, setTimeRangeFilter] = useState<TimeRangeFilter>('all');
 
   const isManagerView =
     user?.role === 'manager' || user?.role === 'admin';
@@ -123,6 +131,37 @@ export default function TicketsPage() {
     [...tickets, ...ticketsB2B, ...ticketsB2C].forEach((t) => byId.set(t.id, t));
     return Array.from(byId.values());
   }, [tickets, ticketsB2B, ticketsB2C]);
+
+  const customerOptions = useMemo(
+    () => uniqueSortedStrings(mergedTickets.map((t) => t.delivery_batch)),
+    [mergedTickets],
+  );
+
+  const ticketPassesFilters = useCallback(
+    (t: Ticket) => {
+      if (customerFilter !== 'all' && t.delivery_batch.trim() !== customerFilter) return false;
+      if (!matchesCreatedTimeRange(t.created_at, timeRangeFilter)) return false;
+      return true;
+    },
+    [customerFilter, timeRangeFilter],
+  );
+
+  const ticketsFiltered = useMemo(
+    () => tickets.filter(ticketPassesFilters),
+    [tickets, ticketPassesFilters],
+  );
+  const ticketsB2BFiltered = useMemo(
+    () => ticketsB2B.filter(ticketPassesFilters),
+    [ticketsB2B, ticketPassesFilters],
+  );
+  const ticketsB2CFiltered = useMemo(
+    () => ticketsB2C.filter(ticketPassesFilters),
+    [ticketsB2C, ticketPassesFilters],
+  );
+
+  useEffect(() => {
+    setExpandedGroupId(null);
+  }, [customerFilter, timeRangeFilter]);
 
   const { getDisplayId, getLineId } = useMemo(() => {
     const allGroupsNewest = groupTickets(mergedTickets);
@@ -315,18 +354,49 @@ export default function TicketsPage() {
             Channel-filtered view of all rejection tickets you have access to.
           </p>
         </div>
-        <div className="flex flex-col gap-1 w-full md:w-auto md:flex-row md:items-center text-xs shrink-0">
-          <label className="text-gray-500 md:shrink-0">Status</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as TicketStatus | 'all')}
-            className="w-full md:w-auto md:min-w-[9rem] rounded-md border border-gray-200 bg-white px-2 py-2 md:py-1 text-xs text-gray-800"
-          >
-            <option value="all">All</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 w-full lg:max-w-3xl text-xs shrink-0">
+          <div className="flex flex-col gap-1">
+            <label className="text-gray-500">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as TicketStatus | 'all')}
+              className="w-full rounded-md border border-gray-200 bg-white px-2 py-2 md:py-1 text-xs text-gray-800"
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-gray-500">Customer</label>
+            <select
+              value={customerFilter}
+              onChange={(e) => setCustomerFilter(e.target.value)}
+              className="w-full rounded-md border border-gray-200 bg-white px-2 py-2 md:py-1 text-xs text-gray-800"
+            >
+              <option value="all">All</option>
+              {customerOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-gray-500">Time</label>
+            <select
+              value={timeRangeFilter}
+              onChange={(e) => setTimeRangeFilter(e.target.value as TimeRangeFilter)}
+              className="w-full rounded-md border border-gray-200 bg-white px-2 py-2 md:py-1 text-xs text-gray-800"
+            >
+              {(Object.keys(TIME_RANGE_LABELS) as TimeRangeFilter[]).map((k) => (
+                <option key={k} value={k}>
+                  {TIME_RANGE_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
       <div className="md:hidden">
@@ -355,11 +425,14 @@ export default function TicketsPage() {
           {!loading && !error && tickets.length === 0 && (
             <div className="text-gray-500 text-sm">No tickets yet.</div>
           )}
-          {!loading && tickets.length > 0 && (
+          {!loading && tickets.length > 0 && ticketsFiltered.length === 0 && (
+            <div className="text-gray-500 text-sm">No tickets match the customer and time filters.</div>
+          )}
+          {!loading && tickets.length > 0 && ticketsFiltered.length > 0 && (
             <>
               {/* Mobile-friendly card list */}
               <div className="space-y-3 md:hidden">
-                {groupTickets(tickets).map((g) => (
+                {groupTickets(ticketsFiltered).map((g) => (
                   <div
                     key={g.id}
                     className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
@@ -472,7 +545,7 @@ export default function TicketsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {groupTickets(tickets).map((g) => {
+                    {groupTickets(ticketsFiltered).map((g) => {
                       const displayId = getDisplayId(g);
                       const statuses = Array.from(
                         new Set(g.items.map((i) => i.status)),
@@ -749,7 +822,7 @@ export default function TicketsPage() {
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] text-gray-500">
-                {ticketsB2B.length} records
+                {ticketsB2BFiltered.length} records
               </span>
             </div>
             {loadingB2B && (
@@ -763,11 +836,14 @@ export default function TicketsPage() {
             {!loadingB2B && !errorB2B && ticketsB2B.length === 0 && (
               <div className="text-gray-500 text-sm">No B2B tickets.</div>
             )}
-            {!loadingB2B && ticketsB2B.length > 0 && (
+            {!loadingB2B && !errorB2B && ticketsB2B.length > 0 && ticketsB2BFiltered.length === 0 && (
+              <div className="text-gray-500 text-sm">No B2B tickets match the customer and time filters.</div>
+            )}
+            {!loadingB2B && ticketsB2B.length > 0 && ticketsB2BFiltered.length > 0 && (
               <>
                 {/* Mobile cards */}
                 <div className="space-y-3 md:hidden">
-                  {groupTickets(ticketsB2B).map((g) => {
+                  {groupTickets(ticketsB2BFiltered).map((g) => {
                     const statuses = Array.from(new Set(g.items.map((i) => i.status)));
                     const singleStatus = statuses.length === 1 ? statuses[0] : null;
                     const firstId = g.items[0]?.id;
@@ -873,7 +949,7 @@ export default function TicketsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {groupTickets(ticketsB2B).map((g) => {
+                      {groupTickets(ticketsB2BFiltered).map((g) => {
                         const displayId = getDisplayId(g);
                         const statuses = Array.from(
                           new Set(g.items.map((i) => i.status)),
@@ -1111,7 +1187,7 @@ export default function TicketsPage() {
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] text-gray-500">
-                {ticketsB2C.length} records
+                {ticketsB2CFiltered.length} records
               </span>
             </div>
             {loadingB2C && (
@@ -1125,11 +1201,14 @@ export default function TicketsPage() {
             {!loadingB2C && !errorB2C && ticketsB2C.length === 0 && (
               <div className="text-gray-500 text-sm">No B2C tickets.</div>
             )}
-            {!loadingB2C && ticketsB2C.length > 0 && (
+            {!loadingB2C && !errorB2C && ticketsB2C.length > 0 && ticketsB2CFiltered.length === 0 && (
+              <div className="text-gray-500 text-sm">No B2C tickets match the customer and time filters.</div>
+            )}
+            {!loadingB2C && ticketsB2C.length > 0 && ticketsB2CFiltered.length > 0 && (
               <>
                 {/* Mobile cards - grouped */}
                 <div className="space-y-3 md:hidden">
-                  {groupTickets(ticketsB2C).map((g) => {
+                  {groupTickets(ticketsB2CFiltered).map((g) => {
                     const statuses = Array.from(new Set(g.items.map((i) => i.status)));
                     const singleStatus = statuses.length === 1 ? statuses[0] : null;
                     const firstId = g.items[0]?.id;
@@ -1232,7 +1311,7 @@ export default function TicketsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {groupTickets(ticketsB2C).map((g) => {
+                      {groupTickets(ticketsB2CFiltered).map((g) => {
                         const displayId = getDisplayId(g);
                         const statuses = Array.from(
                           new Set(g.items.map((i) => i.status)),
