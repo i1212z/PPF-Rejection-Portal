@@ -80,9 +80,9 @@ Sage
 Salad Spinach
 Spring Onion
 STRAWBERRY PREMIUM
-strawverry a
-strawverry b
-strawverry c
+strawberry a grade
+strawberry b grade
+strawberry c grade
 Thyme
 Watercress lettuce
 Zuccchini green

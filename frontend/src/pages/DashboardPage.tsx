@@ -43,6 +43,11 @@ interface TicketGroup {
   }[];
 }
 
+interface CreditNote {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+}
+
 function truncate(s: string, len: number) {
   if (!s) return '–';
   return s.length <= len ? s : `${s.slice(0, len)}…`;
@@ -227,7 +232,9 @@ function TicketRow({
 export default function DashboardPage() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
   const [tallyPostedIds, setTallyPostedIds] = useState<Set<string>>(new Set());
+  const [cnTallyPostedIds, setCnTallyPostedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showB2BUnits, setShowB2BUnits] = useState(false);
@@ -237,21 +244,37 @@ export default function DashboardPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [res, tallyRes] = await Promise.all([
+        const canSeeTallyCounts =
+          user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
+        const canSeeCreditNotes =
+          user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
+        const [res, tallyRes, cnRes, cnTallyRes] = await Promise.all([
           apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
             params: { limit: 500 },
           }),
-          (user?.role === 'manager' || user?.role === 'admin')
+          canSeeTallyCounts
             ? apiClient.get<{ ticket_ids: string[] }>('/tally/posted')
             : Promise.resolve({ data: { ticket_ids: [] as string[] } }),
+          canSeeCreditNotes
+            ? apiClient.get<{ items: CreditNote[]; total: number }>('/credit-notes', {
+                params: { limit: 500 },
+              })
+            : Promise.resolve({ data: { items: [] as CreditNote[], total: 0 } }),
+          canSeeCreditNotes
+            ? apiClient.get<{ credit_note_ids: string[] }>('/credit-note-tally/posted')
+            : Promise.resolve({ data: { credit_note_ids: [] as string[] } }),
         ]);
         setTickets(res.data.items);
+        setCreditNotes(cnRes.data.items);
         setTallyPostedIds(new Set(tallyRes.data.ticket_ids || []));
+        setCnTallyPostedIds(new Set(cnTallyRes.data.credit_note_ids || []));
       } catch (err: unknown) {
         // If unauthorized, just show empty state instead of spamming errors.
         // Other errors also degrade gracefully to an empty dashboard.
         setTickets([]);
+        setCreditNotes([]);
         setTallyPostedIds(new Set());
+        setCnTallyPostedIds(new Set());
         // eslint-disable-next-line no-console
         console.warn('Dashboard tickets load failed', err);
       } finally {
@@ -263,7 +286,22 @@ export default function DashboardPage() {
 
   const channelFilter = user?.role === 'b2b' ? 'B2B' : user?.role === 'b2c' ? 'B2C' : null;
 
-  const { totalTickets, pendingCount, chartData, pieData, recentGroups, globalDisplayByKey, globalItemLineByItemId, approvedVsRejectedData, rejectedByUnit, tallyPostedCount, tallyPendingCount } =
+  const {
+    totalTickets,
+    pendingCount,
+    chartData,
+    pieData,
+    recentGroups,
+    globalDisplayByKey,
+    globalItemLineByItemId,
+    approvedVsRejectedData,
+    rejectedByUnit,
+    tallyPostedCount,
+    tallyPendingCount,
+    tallyPostedB2BCount,
+    tallyPostedB2CCount,
+    cnTallyPostedCount,
+  } =
     useMemo(() => {
       const total = tickets.length;
       let pending = 0;
@@ -356,6 +394,14 @@ export default function DashboardPage() {
       const decidedCount = tickets.filter((t) => t.status === 'approved' || t.status === 'rejected').length;
       const postedCount = tallyPostedIds.size;
       const pendingToPostCount = Math.max(0, decidedCount - postedCount);
+      const postedB2BCount = tickets.filter(
+        (t) => tallyPostedIds.has(t.id) && t.channel === 'B2B',
+      ).length;
+      const postedB2CCount = tickets.filter(
+        (t) => tallyPostedIds.has(t.id) && t.channel === 'B2C',
+      ).length;
+      const approvedCreditNotes = creditNotes.filter((n) => n.status === 'approved');
+      const postedCnCount = approvedCreditNotes.filter((n) => cnTallyPostedIds.has(n.id)).length;
 
       return {
         totalTickets: total,
@@ -369,8 +415,11 @@ export default function DashboardPage() {
         rejectedByUnit,
         tallyPostedCount: postedCount,
         tallyPendingCount: pendingToPostCount,
+        tallyPostedB2BCount: postedB2BCount,
+        tallyPostedB2CCount: postedB2CCount,
+        cnTallyPostedCount: postedCnCount,
       };
-    }, [tickets, channelFilter, tallyPostedIds]);
+    }, [tickets, channelFilter, tallyPostedIds, creditNotes, cnTallyPostedIds]);
 
   const totalB2BUnits = useMemo(
     () =>
@@ -538,6 +587,41 @@ export default function DashboardPage() {
           </p>
         </Card>
       </div>
+
+      {(user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b') && (
+        <Card
+          title="Tally posted view"
+          subtitle="Quick posted counts by channel and credit notes"
+          className="border-l-4 border-l-sky-300"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-lg bg-sky-50 border border-sky-100 px-4 py-3">
+              <div className="text-xs font-medium text-sky-700 uppercase tracking-wide">
+                B2B posted
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-gray-900">
+                {loading ? '…' : tallyPostedB2BCount}
+              </div>
+            </div>
+            <div className="rounded-lg bg-orange-50 border border-orange-100 px-4 py-3">
+              <div className="text-xs font-medium text-orange-700 uppercase tracking-wide">
+                B2C posted
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-gray-900">
+                {loading ? '…' : tallyPostedB2CCount}
+              </div>
+            </div>
+            <div className="rounded-lg bg-violet-50 border border-violet-100 px-4 py-3">
+              <div className="text-xs font-medium text-violet-700 uppercase tracking-wide">
+                CN posted
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-gray-900">
+                {loading ? '…' : cnTallyPostedCount}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {(user?.role === 'manager' || user?.role === 'admin') && (
         <Card

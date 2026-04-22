@@ -168,7 +168,7 @@ export default function AppLayout() {
               <div className="px-2 text-[11px] uppercase tracking-wide text-gray-500 mb-1">
                 Operations
               </div>
-              <SidebarLink to="/" icon={<LayoutDashboard className="w-4 h-4" />} label="Dashboard" />
+              <SidebarLink to="/dashboard" icon={<LayoutDashboard className="w-4 h-4" />} label="Dashboard" />
               <SidebarLink to="/analytics" icon={<BarChart3 className="w-4 h-4" />} label="Analytics" />
               <SidebarLink to="/tickets/new" icon={<PlusCircle className="w-4 h-4" />} label="Create Ticket" />
               <SidebarLink to="/tickets" icon={<Ticket className="w-4 h-4" />} label="Tickets" />

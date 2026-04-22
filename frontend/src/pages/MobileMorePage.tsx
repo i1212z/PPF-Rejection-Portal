@@ -94,7 +94,7 @@ export default function MobileMorePage() {
       title: 'Operations',
       items: [
         {
-          to: '/',
+          to: '/dashboard',
           label: 'Dashboard',
           icon: <LayoutDashboard className="w-4 h-4" />,
         },

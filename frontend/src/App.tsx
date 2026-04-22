@@ -68,6 +68,7 @@ function App() {
             }
           >
             <Route index element={<DefaultPage />} />
+            <Route path="dashboard" element={<DashboardPage />} />
             <Route path="tickets" element={<TicketsPage />} />
             <Route path="tickets/new" element={<CreateTicketPage />} />
             <Route
