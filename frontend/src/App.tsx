@@ -44,6 +44,9 @@ function DefaultPage() {
   if (user?.role === 'tally') {
     return <Navigate to="/tally/pending" replace />;
   }
+  if (user?.role === 'manager') {
+    return <Navigate to="/approvals" replace />;
+  }
   if (user?.role === 'due') {
     return <Navigate to="/due/credit-notes" replace />;
   }
