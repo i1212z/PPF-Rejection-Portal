@@ -247,11 +247,17 @@ export default function DashboardPage() {
     const load = async () => {
       setLoading(true);
       const canSeeTallyPostedEndpoints =
-        user?.role === 'manager' || user?.role === 'admin';
+        user?.role === 'manager' ||
+        user?.role === 'admin' ||
+        user?.role === 'b2b' ||
+        user?.role === 'b2c';
       const canSeeCreditNotes =
         user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
       const canSeeCreditNoteTallyPostedEndpoints =
-        user?.role === 'manager' || user?.role === 'admin';
+        user?.role === 'manager' ||
+        user?.role === 'admin' ||
+        user?.role === 'b2b' ||
+        user?.role === 'b2c';
 
       const [ticketsResult, tallyResult, creditNotesResult, cnTallyResult] =
         await Promise.allSettled([
