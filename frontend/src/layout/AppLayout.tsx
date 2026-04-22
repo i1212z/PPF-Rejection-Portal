@@ -473,7 +473,7 @@ export default function AppLayout() {
         <div className="mx-auto max-w-6xl flex justify-around px-2 py-1.5 text-[11px] text-gray-500">
           {/* Item 1: Due users land on open sheet; others use dashboard home */}
           <NavLink
-            to={isDue ? '/due/credit-notes' : '/'}
+            to={isDue ? '/due/credit-notes' : isManager ? '/dashboard' : '/'}
             className={({ isActive }) =>
               `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
                 isActive ? 'text-indigo-600' : 'text-gray-500'

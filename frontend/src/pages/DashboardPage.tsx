@@ -296,11 +296,12 @@ export default function DashboardPage() {
     globalItemLineByItemId,
     approvedVsRejectedData,
     rejectedByUnit,
-    tallyPostedCount,
-    tallyPendingCount,
     tallyPostedB2BCount,
     tallyPostedB2CCount,
+    tallyTotalB2BCount,
+    tallyTotalB2CCount,
     cnTallyPostedCount,
+    cnTallyTotalCount,
   } =
     useMemo(() => {
       const total = tickets.length;
@@ -391,14 +392,17 @@ export default function DashboardPage() {
         channelFilter ? arr.filter((x) => x.channel === channelFilter) : arr;
 
       // Tally: posted = in tally_pending; pending = decided but not posted
-      const decidedCount = tickets.filter((t) => t.status === 'approved' || t.status === 'rejected').length;
-      const postedCount = tallyPostedIds.size;
-      const pendingToPostCount = Math.max(0, decidedCount - postedCount);
       const postedB2BCount = tickets.filter(
         (t) => tallyPostedIds.has(t.id) && t.channel === 'B2B',
       ).length;
       const postedB2CCount = tickets.filter(
         (t) => tallyPostedIds.has(t.id) && t.channel === 'B2C',
+      ).length;
+      const decidedB2BCount = tickets.filter(
+        (t) => (t.status === 'approved' || t.status === 'rejected') && t.channel === 'B2B',
+      ).length;
+      const decidedB2CCount = tickets.filter(
+        (t) => (t.status === 'approved' || t.status === 'rejected') && t.channel === 'B2C',
       ).length;
       const approvedCreditNotes = creditNotes.filter((n) => n.status === 'approved');
       const postedCnCount = approvedCreditNotes.filter((n) => cnTallyPostedIds.has(n.id)).length;
@@ -413,11 +417,12 @@ export default function DashboardPage() {
         globalItemLineByItemId,
         approvedVsRejectedData: approvedVsRejected,
         rejectedByUnit,
-        tallyPostedCount: postedCount,
-        tallyPendingCount: pendingToPostCount,
         tallyPostedB2BCount: postedB2BCount,
         tallyPostedB2CCount: postedB2CCount,
+        tallyTotalB2BCount: decidedB2BCount,
+        tallyTotalB2CCount: decidedB2CCount,
         cnTallyPostedCount: postedCnCount,
+        cnTallyTotalCount: approvedCreditNotes.length,
       };
     }, [tickets, channelFilter, tallyPostedIds, creditNotes, cnTallyPostedIds]);
 
@@ -602,6 +607,9 @@ export default function DashboardPage() {
               <div className="mt-1 text-2xl font-semibold text-gray-900">
                 {loading ? '…' : tallyPostedB2BCount}
               </div>
+              <div className="mt-1 text-[11px] text-sky-800">
+                {loading ? 'Loading…' : `${tallyPostedB2BCount} posted out of ${tallyTotalB2BCount}`}
+              </div>
             </div>
             <div className="rounded-lg bg-orange-50 border border-orange-100 px-4 py-3">
               <div className="text-xs font-medium text-orange-700 uppercase tracking-wide">
@@ -609,6 +617,9 @@ export default function DashboardPage() {
               </div>
               <div className="mt-1 text-2xl font-semibold text-gray-900">
                 {loading ? '…' : tallyPostedB2CCount}
+              </div>
+              <div className="mt-1 text-[11px] text-orange-800">
+                {loading ? 'Loading…' : `${tallyPostedB2CCount} posted out of ${tallyTotalB2CCount}`}
               </div>
             </div>
             <div className="rounded-lg bg-violet-50 border border-violet-100 px-4 py-3">
@@ -618,32 +629,8 @@ export default function DashboardPage() {
               <div className="mt-1 text-2xl font-semibold text-gray-900">
                 {loading ? '…' : cnTallyPostedCount}
               </div>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {(user?.role === 'manager' || user?.role === 'admin') && (
-        <Card
-          title="Tally sync status"
-          subtitle="Posted vs pending to post (decided tickets only)"
-          className="border-l-4 border-l-indigo-300"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-4 py-3">
-              <div className="text-xs font-medium text-emerald-700 uppercase tracking-wide">
-                Posted
-              </div>
-              <div className="mt-1 text-2xl font-semibold text-gray-900">
-                {loading ? '…' : tallyPostedCount}
-              </div>
-            </div>
-            <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3">
-              <div className="text-xs font-medium text-amber-700 uppercase tracking-wide">
-                Pending
-              </div>
-              <div className="mt-1 text-2xl font-semibold text-gray-900">
-                {loading ? '…' : tallyPendingCount}
+              <div className="mt-1 text-[11px] text-violet-800">
+                {loading ? 'Loading…' : `${cnTallyPostedCount} posted out of ${cnTallyTotalCount}`}
               </div>
             </div>
           </div>
