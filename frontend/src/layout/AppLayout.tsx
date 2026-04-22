@@ -53,7 +53,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/due/settings')) return 'Due — settings';
     if (location.pathname.startsWith('/due/')) return 'Due — open sheet';
     if (location.pathname.startsWith('/analytics')) return 'Analytics';
-    if (location.pathname.startsWith('/approvals')) return 'Approvals';
+    if (location.pathname.startsWith('/approvals')) return 'TKTS and CN approvals';
     if (location.pathname.startsWith('/reports')) return 'Reports';
     if (location.pathname.startsWith('/admin')) return 'Admin Panel';
     return 'Dashboard';
@@ -524,7 +524,7 @@ export default function AppLayout() {
                 <span className="truncate">{isManager ? 'Approvals' : 'Tickets'}</span>
               </NavLink>
               <NavLink
-                to={isManager ? '/credit-note-approvals' : '/credit-notes'}
+                to="/credit-notes"
                 className={({ isActive }) =>
                   `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
                     isActive ? 'text-indigo-600' : 'text-gray-500'
@@ -532,7 +532,7 @@ export default function AppLayout() {
                 }
               >
                 <FileText className="w-4 h-4" />
-                <span className="truncate">{isManager ? 'CN approvals' : 'Credit notes'}</span>
+                <span className="truncate">Credit notes</span>
               </NavLink>
             </>
           )}

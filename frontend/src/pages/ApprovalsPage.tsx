@@ -254,7 +254,7 @@ export default function ApprovalsPage() {
     <div className="space-y-4 min-w-0 max-w-full">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between min-w-0">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-gray-900">Pending approvals</h2>
+          <h2 className="text-lg font-semibold text-gray-900">TKTS and CN approvals</h2>
           <p className="text-sm text-gray-500">
             Managers can review both pending tickets and credit notes in one queue. Admin view stays
             ticket-focused.
