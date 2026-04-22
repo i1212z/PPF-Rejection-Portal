@@ -243,12 +243,13 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      try {
-        const canSeeTallyCounts =
-          user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
-        const canSeeCreditNotes =
-          user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
-        const [res, tallyRes, cnRes, cnTallyRes] = await Promise.all([
+      const canSeeTallyCounts =
+        user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
+      const canSeeCreditNotes =
+        user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
+
+      const [ticketsResult, tallyResult, creditNotesResult, cnTallyResult] =
+        await Promise.allSettled([
           apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
             params: { limit: 500 },
           }),
@@ -264,22 +265,34 @@ export default function DashboardPage() {
             ? apiClient.get<{ credit_note_ids: string[] }>('/credit-note-tally/posted')
             : Promise.resolve({ data: { credit_note_ids: [] as string[] } }),
         ]);
-        setTickets(res.data.items);
-        setCreditNotes(cnRes.data.items);
-        setTallyPostedIds(new Set(tallyRes.data.ticket_ids || []));
-        setCnTallyPostedIds(new Set(cnTallyRes.data.credit_note_ids || []));
-      } catch (err: unknown) {
-        // If unauthorized, just show empty state instead of spamming errors.
-        // Other errors also degrade gracefully to an empty dashboard.
+
+      if (ticketsResult.status === 'fulfilled') {
+        setTickets(ticketsResult.value.data.items || []);
+      } else {
         setTickets([]);
-        setCreditNotes([]);
-        setTallyPostedIds(new Set());
-        setCnTallyPostedIds(new Set());
         // eslint-disable-next-line no-console
-        console.warn('Dashboard tickets load failed', err);
-      } finally {
-        setLoading(false);
+        console.warn('Dashboard tickets load failed', ticketsResult.reason);
       }
+
+      if (tallyResult.status === 'fulfilled') {
+        setTallyPostedIds(new Set(tallyResult.value.data.ticket_ids || []));
+      } else {
+        setTallyPostedIds(new Set());
+      }
+
+      if (creditNotesResult.status === 'fulfilled') {
+        setCreditNotes(creditNotesResult.value.data.items || []);
+      } else {
+        setCreditNotes([]);
+      }
+
+      if (cnTallyResult.status === 'fulfilled') {
+        setCnTallyPostedIds(new Set(cnTallyResult.value.data.credit_note_ids || []));
+      } else {
+        setCnTallyPostedIds(new Set());
+      }
+
+      setLoading(false);
     };
     void load();
   }, [user?.role]);
