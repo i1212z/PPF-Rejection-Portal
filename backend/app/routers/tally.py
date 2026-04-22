@@ -20,7 +20,15 @@ class TallyIds(BaseModel):
 @router.get("/posted", response_model=TallyIds)
 async def list_posted_for_tally(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.TALLY, UserRole.ADMIN, UserRole.MANAGER)),
+    current_user: User = Depends(
+        require_roles(
+            UserRole.TALLY,
+            UserRole.ADMIN,
+            UserRole.MANAGER,
+            UserRole.B2B,
+            UserRole.B2C,
+        )
+    ),
 ):
     """List ticket IDs that have been posted to Tally (in tally_pending)."""
     result = await db.execute(select(TallyPending.ticket_id))
@@ -31,7 +39,15 @@ async def list_posted_for_tally(
 @router.get("/pending", response_model=TallyIds)
 async def list_pending_for_tally(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.TALLY, UserRole.ADMIN, UserRole.MANAGER)),
+    current_user: User = Depends(
+        require_roles(
+            UserRole.TALLY,
+            UserRole.ADMIN,
+            UserRole.MANAGER,
+            UserRole.B2B,
+            UserRole.B2C,
+        )
+    ),
 ):
     """Alias for backward compat: same as /posted (ids in tally_pending)."""
     result = await db.execute(select(TallyPending.ticket_id))

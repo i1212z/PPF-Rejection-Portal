@@ -17,7 +17,15 @@ router = APIRouter(prefix="/credit-note-tally", tags=["credit-note-tally"])
 @router.get("/posted", response_model=CreditNoteTallyIds)
 async def list_posted_credit_notes_for_tally(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.TALLY, UserRole.ADMIN, UserRole.MANAGER)),
+    current_user: User = Depends(
+        require_roles(
+            UserRole.TALLY,
+            UserRole.ADMIN,
+            UserRole.MANAGER,
+            UserRole.B2B,
+            UserRole.B2C,
+        )
+    ),
 ):
     result = await db.execute(select(CreditNoteTallyPending.credit_note_id))
     rows = result.scalars().all()
@@ -27,7 +35,15 @@ async def list_posted_credit_notes_for_tally(
 @router.get("/pending", response_model=CreditNoteTallyIds)
 async def list_pending_credit_note_tally_alias(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.TALLY, UserRole.ADMIN, UserRole.MANAGER)),
+    current_user: User = Depends(
+        require_roles(
+            UserRole.TALLY,
+            UserRole.ADMIN,
+            UserRole.MANAGER,
+            UserRole.B2B,
+            UserRole.B2C,
+        )
+    ),
 ):
     result = await db.execute(select(CreditNoteTallyPending.credit_note_id))
     rows = result.scalars().all()
