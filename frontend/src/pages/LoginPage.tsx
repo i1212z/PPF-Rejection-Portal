@@ -30,11 +30,13 @@ export default function LoginPage() {
     <div className="min-h-screen min-w-0 flex items-center justify-center px-4 py-6 bg-gradient-to-br from-[#321b8f] via-[#6b23d9] to-[#a036ff]">
       <div className="w-full max-w-md min-w-0 bg-white/95 border border-white/40 rounded-2xl px-4 py-6 sm:px-6 sm:py-8 shadow-2xl shadow-violet-900/40">
         <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center">
-          <img
-            src={ppfLogo}
-            alt="Purple Patch Farms logo"
-            className="h-10 w-10 rounded-xl border border-primary-200 object-cover"
-          />
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white border border-slate-200 p-1 shadow-sm">
+            <img
+              src={ppfLogo}
+              alt="Purple Patch Farms logo"
+              className="h-full w-full rounded-xl object-contain"
+            />
+          </div>
           <div>
             <h1 className="text-lg font-semibold text-slate-900 mb-0.5">
               Complaint Log System

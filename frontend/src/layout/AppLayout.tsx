@@ -101,11 +101,13 @@ export default function AppLayout() {
       {/* Sidebar: visible on desktop, hidden on smaller screens */}
       <aside className="hidden lg:flex lg:w-60 lg:flex-col bg-gray-900 text-gray-100">
         <div className="px-4 py-4 border-b border-gray-800 flex items-center gap-3">
-          <img
-            src={ppfLogo}
-            alt="Purple Patch Farms logo"
-            className="h-9 w-9 rounded-xl object-cover"
-          />
+          <div className="h-10 w-10 rounded-xl bg-white p-1 shadow-sm border border-gray-200 shrink-0">
+            <img
+              src={ppfLogo}
+              alt="Purple Patch Farms logo"
+              className="h-full w-full rounded-lg object-contain"
+            />
+          </div>
           <div className="flex flex-col min-w-0">
             {isDue ? (
               <>
