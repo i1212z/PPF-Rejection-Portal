@@ -2,6 +2,7 @@ import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import ppfLogo from '../assets/ppf-logo.png';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -29,9 +30,11 @@ export default function LoginPage() {
     <div className="min-h-screen min-w-0 flex items-center justify-center px-4 py-6 bg-gradient-to-br from-[#321b8f] via-[#6b23d9] to-[#a036ff]">
       <div className="w-full max-w-md min-w-0 bg-white/95 border border-white/40 rounded-2xl px-4 py-6 sm:px-6 sm:py-8 shadow-2xl shadow-violet-900/40">
         <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center">
-          <div className="h-9 w-9 rounded-xl bg-primary-100 flex items-center justify-center text-xs font-semibold text-primary-600 border border-primary-200">
-            CLS
-          </div>
+          <img
+            src={ppfLogo}
+            alt="Purple Patch Farms logo"
+            className="h-10 w-10 rounded-xl border border-primary-200 object-cover"
+          />
           <div>
             <h1 className="text-lg font-semibold text-slate-900 mb-0.5">
               Complaint Log System

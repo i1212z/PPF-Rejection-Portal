@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut, FileText, MoreHorizontal } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { apiClient } from '../api/client';
+import ppfLogo from '../assets/ppf-logo.png';
 
 const navItemBase =
   'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors';
@@ -100,13 +101,11 @@ export default function AppLayout() {
       {/* Sidebar: visible on desktop, hidden on smaller screens */}
       <aside className="hidden lg:flex lg:w-60 lg:flex-col bg-gray-900 text-gray-100">
         <div className="px-4 py-4 border-b border-gray-800 flex items-center gap-3">
-          <div
-            className={`h-9 w-9 rounded-xl flex items-center justify-center text-[10px] font-bold tracking-tight ${
-              isDue ? 'bg-emerald-700 text-white' : 'bg-indigo-600 text-white'
-            }`}
-          >
-            {isDue ? 'DUE' : 'CLS'}
-          </div>
+          <img
+            src={ppfLogo}
+            alt="Purple Patch Farms logo"
+            className="h-9 w-9 rounded-xl object-cover"
+          />
           <div className="flex flex-col min-w-0">
             {isDue ? (
               <>
