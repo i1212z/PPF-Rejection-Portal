@@ -243,17 +243,19 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const canSeeTallyCounts =
-        user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
+      const canSeeTallyPostedEndpoints =
+        user?.role === 'manager' || user?.role === 'admin';
       const canSeeCreditNotes =
         user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
+      const canSeeCreditNoteTallyPostedEndpoints =
+        user?.role === 'manager' || user?.role === 'admin';
 
       const [ticketsResult, tallyResult, creditNotesResult, cnTallyResult] =
         await Promise.allSettled([
           apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
             params: { limit: 500 },
           }),
-          canSeeTallyCounts
+          canSeeTallyPostedEndpoints
             ? apiClient.get<{ ticket_ids: string[] }>('/tally/posted')
             : Promise.resolve({ data: { ticket_ids: [] as string[] } }),
           canSeeCreditNotes
@@ -261,7 +263,7 @@ export default function DashboardPage() {
                 params: { limit: 500 },
               })
             : Promise.resolve({ data: { items: [] as CreditNote[], total: 0 } }),
-          canSeeCreditNotes
+          canSeeCreditNoteTallyPostedEndpoints
             ? apiClient.get<{ credit_note_ids: string[] }>('/credit-note-tally/posted')
             : Promise.resolve({ data: { credit_note_ids: [] as string[] } }),
         ]);
@@ -606,7 +608,10 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {(user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b') && (
+      {(user?.role === 'manager' ||
+        user?.role === 'admin' ||
+        user?.role === 'b2b' ||
+        user?.role === 'b2c') && (
         <Card
           title="Tally posted view"
           subtitle="Quick posted counts by channel and credit notes"
