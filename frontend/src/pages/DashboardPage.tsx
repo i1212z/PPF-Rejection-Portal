@@ -231,6 +231,9 @@ function TicketRow({
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const isManagerOrAdmin = user?.role === 'manager' || user?.role === 'admin';
+  const isB2B = user?.role === 'b2b';
+  const isB2C = user?.role === 'b2c';
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
   const [tallyPostedIds, setTallyPostedIds] = useState<Set<string>>(new Set());
@@ -608,38 +611,43 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {(user?.role === 'manager' ||
-        user?.role === 'admin' ||
-        user?.role === 'b2b' ||
-        user?.role === 'b2c') && (
+      {(isManagerOrAdmin || isB2B || isB2C) && (
         <Card
           title="Tally posted view"
           subtitle="Quick posted counts by channel and credit notes"
           className="border-l-4 border-l-sky-300"
         >
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-lg bg-sky-50 border border-sky-100 px-4 py-3">
-              <div className="text-xs font-medium text-sky-700 uppercase tracking-wide">
-                B2B posted
+          <div
+            className={`grid grid-cols-1 ${
+              isManagerOrAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'
+            } gap-4`}
+          >
+            {(isManagerOrAdmin || isB2B) && (
+              <div className="rounded-lg bg-sky-50 border border-sky-100 px-4 py-3">
+                <div className="text-xs font-medium text-sky-700 uppercase tracking-wide">
+                  B2B posted
+                </div>
+                <div className="mt-1 text-2xl font-semibold text-gray-900">
+                  {loading ? '…' : tallyPostedB2BCount}
+                </div>
+                <div className="mt-1 text-[11px] text-sky-800">
+                  {loading ? 'Loading…' : `${tallyPostedB2BCount} posted out of ${tallyTotalB2BCount}`}
+                </div>
               </div>
-              <div className="mt-1 text-2xl font-semibold text-gray-900">
-                {loading ? '…' : tallyPostedB2BCount}
+            )}
+            {(isManagerOrAdmin || isB2C) && (
+              <div className="rounded-lg bg-orange-50 border border-orange-100 px-4 py-3">
+                <div className="text-xs font-medium text-orange-700 uppercase tracking-wide">
+                  B2C posted
+                </div>
+                <div className="mt-1 text-2xl font-semibold text-gray-900">
+                  {loading ? '…' : tallyPostedB2CCount}
+                </div>
+                <div className="mt-1 text-[11px] text-orange-800">
+                  {loading ? 'Loading…' : `${tallyPostedB2CCount} posted out of ${tallyTotalB2CCount}`}
+                </div>
               </div>
-              <div className="mt-1 text-[11px] text-sky-800">
-                {loading ? 'Loading…' : `${tallyPostedB2BCount} posted out of ${tallyTotalB2BCount}`}
-              </div>
-            </div>
-            <div className="rounded-lg bg-orange-50 border border-orange-100 px-4 py-3">
-              <div className="text-xs font-medium text-orange-700 uppercase tracking-wide">
-                B2C posted
-              </div>
-              <div className="mt-1 text-2xl font-semibold text-gray-900">
-                {loading ? '…' : tallyPostedB2CCount}
-              </div>
-              <div className="mt-1 text-[11px] text-orange-800">
-                {loading ? 'Loading…' : `${tallyPostedB2CCount} posted out of ${tallyTotalB2CCount}`}
-              </div>
-            </div>
+            )}
             <div className="rounded-lg bg-violet-50 border border-violet-100 px-4 py-3">
               <div className="text-xs font-medium text-violet-700 uppercase tracking-wide">
                 CN posted
