@@ -21,6 +21,7 @@ import DueSettingsPage from './pages/DueSettingsPage';
 import DueReportPage from './pages/DueReportPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import MobileMorePage from './pages/MobileMorePage';
+import B2CSalesEntryPage from './pages/B2CSalesEntryPage';
 import AppLayout from './layout/AppLayout';
 import { RequireRoles } from './auth/RequireRoles';
 
@@ -69,6 +70,14 @@ function App() {
           >
             <Route index element={<DefaultPage />} />
             <Route path="dashboard" element={<DashboardPage />} />
+            <Route
+              path="b2c-sales"
+              element={
+                <RequireRoles roles={['b2c', 'manager', 'admin']}>
+                  <B2CSalesEntryPage />
+                </RequireRoles>
+              }
+            />
             <Route path="tickets" element={<TicketsPage />} />
             <Route path="tickets/new" element={<CreateTicketPage />} />
             <Route

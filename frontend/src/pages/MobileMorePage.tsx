@@ -113,6 +113,15 @@ export default function MobileMorePage() {
           label: 'Tickets',
           icon: <Ticket className="w-4 h-4" />,
         },
+        ...(role === 'b2c'
+          ? ([
+              {
+                to: '/b2c-sales',
+                label: 'B2C daily entry',
+                icon: <FileText className="w-4 h-4" />,
+              },
+            ] as MenuItem[])
+          : []),
         ...(canCreditNotes
           ? ([
               {

@@ -48,6 +48,13 @@ interface CreditNote {
   status: 'pending' | 'approved' | 'rejected';
 }
 
+interface B2CSalesAnalytics {
+  total_orders: number;
+  total_sale_value: number;
+  total_entries: number;
+  top_locations: Array<{ location: string; orders: number; sale_value: number }>;
+}
+
 function truncate(s: string, len: number) {
   if (!s) return '–';
   return s.length <= len ? s : `${s.slice(0, len)}…`;
@@ -238,6 +245,7 @@ export default function DashboardPage() {
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
   const [tallyPostedIds, setTallyPostedIds] = useState<Set<string>>(new Set());
   const [cnTallyPostedIds, setCnTallyPostedIds] = useState<Set<string>>(new Set());
+  const [b2cSalesAnalytics, setB2CSalesAnalytics] = useState<B2CSalesAnalytics | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showB2BUnits, setShowB2BUnits] = useState(false);
@@ -253,13 +261,15 @@ export default function DashboardPage() {
         user?.role === 'b2c';
       const canSeeCreditNotes =
         user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
+      const canSeeB2CSalesAnalytics =
+        user?.role === 'b2c' || user?.role === 'manager' || user?.role === 'admin';
       const canSeeCreditNoteTallyPostedEndpoints =
         user?.role === 'manager' ||
         user?.role === 'admin' ||
         user?.role === 'b2b' ||
         user?.role === 'b2c';
 
-      const [ticketsResult, tallyResult, creditNotesResult, cnTallyResult] =
+      const [ticketsResult, tallyResult, creditNotesResult, cnTallyResult, b2cSalesResult] =
         await Promise.allSettled([
           apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
             params: { limit: 500 },
@@ -275,6 +285,16 @@ export default function DashboardPage() {
           canSeeCreditNoteTallyPostedEndpoints
             ? apiClient.get<{ credit_note_ids: string[] }>('/credit-note-tally/posted')
             : Promise.resolve({ data: { credit_note_ids: [] as string[] } }),
+          canSeeB2CSalesAnalytics
+            ? apiClient.get<B2CSalesAnalytics>('/b2c-sales/analytics')
+            : Promise.resolve({
+                data: {
+                  total_orders: 0,
+                  total_sale_value: 0,
+                  total_entries: 0,
+                  top_locations: [],
+                } as B2CSalesAnalytics,
+              }),
         ]);
 
       if (ticketsResult.status === 'fulfilled') {
@@ -301,6 +321,17 @@ export default function DashboardPage() {
         setCnTallyPostedIds(new Set(cnTallyResult.value.data.credit_note_ids || []));
       } else {
         setCnTallyPostedIds(new Set());
+      }
+
+      if (b2cSalesResult.status === 'fulfilled') {
+        setB2CSalesAnalytics(b2cSalesResult.value.data);
+      } else {
+        setB2CSalesAnalytics({
+          total_orders: 0,
+          total_sale_value: 0,
+          total_entries: 0,
+          top_locations: [],
+        });
       }
 
       setLoading(false);
@@ -664,6 +695,68 @@ export default function DashboardPage() {
               <div className="mt-1 text-[11px] text-violet-800">
                 {loading ? 'Loading…' : `${cnTallyPostedCount} posted out of ${cnTallyTotalCount}`}
               </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {(isB2C || isManagerOrAdmin) && (
+        <Card
+          title="B2C daily sales analytics"
+          subtitle="From B2C daily entry system"
+          className="border-l-4 border-l-purple-300"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
+            <div className="rounded-lg bg-purple-50 border border-purple-100 px-4 py-3">
+              <div className="text-xs font-medium text-purple-700 uppercase tracking-wide">
+                Total orders
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-gray-900">
+                {loading ? '…' : b2cSalesAnalytics?.total_orders ?? 0}
+              </div>
+            </div>
+            <div className="rounded-lg bg-indigo-50 border border-indigo-100 px-4 py-3">
+              <div className="text-xs font-medium text-indigo-700 uppercase tracking-wide">
+                Total sale value
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-gray-900">
+                {loading
+                  ? '…'
+                  : Number(b2cSalesAnalytics?.total_sale_value ?? 0).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+              </div>
+            </div>
+            <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
+              <div className="text-xs font-medium text-slate-700 uppercase tracking-wide">
+                Entry rows
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-gray-900">
+                {loading ? '…' : b2cSalesAnalytics?.total_entries ?? 0}
+              </div>
+            </div>
+          </div>
+          <div className="rounded-lg border border-gray-200 overflow-hidden">
+            <div className="px-3 py-2 bg-gray-50 text-xs font-semibold text-gray-700">
+              Top locations by sale value
+            </div>
+            <div className="divide-y divide-gray-100">
+              {(b2cSalesAnalytics?.top_locations ?? []).length === 0 && (
+                <div className="px-3 py-2 text-xs text-gray-500">No B2C daily entries yet.</div>
+              )}
+              {(b2cSalesAnalytics?.top_locations ?? []).map((row) => (
+                <div key={row.location} className="px-3 py-2 text-xs flex items-center justify-between gap-3">
+                  <div className="min-w-0 truncate text-gray-700">{row.location}</div>
+                  <div className="shrink-0 text-gray-900 font-medium">
+                    Orders: {row.orders} · Value:{' '}
+                    {Number(row.sale_value).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </Card>

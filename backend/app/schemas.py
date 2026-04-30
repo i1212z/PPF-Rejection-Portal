@@ -395,6 +395,44 @@ class CreditNoteTallyIds(BaseModel):
     credit_note_ids: List[str]
 
 
+class B2CDailyEntryCreate(BaseModel):
+    delivery_date: date
+    location: str = Field(min_length=1, max_length=255)
+    no_of_order: int = Field(ge=0)
+    total_sale_value: float = Field(ge=0)
+
+    @field_validator("location")
+    @classmethod
+    def location_strip(cls, v: str) -> str:
+        return (v or "").strip()
+
+
+class B2CDailyEntryRead(BaseModel):
+    id: UUID
+    delivery_date: date
+    location: str
+    no_of_order: int
+    total_sale_value: float
+    created_by: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class B2CLocationSummary(BaseModel):
+    location: str
+    orders: int
+    sale_value: float
+
+
+class B2CDailySalesAnalytics(BaseModel):
+    total_orders: int
+    total_sale_value: float
+    total_entries: int
+    top_locations: List[B2CLocationSummary]
+
+
 class DailyRejectionCostPoint(BaseModel):
     date: date
     total_cost: float

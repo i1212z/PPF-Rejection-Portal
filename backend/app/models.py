@@ -150,6 +150,18 @@ class CreditNoteTallyPending(Base):
     posted_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class B2CDailyEntry(Base):
+    __tablename__ = "b2c_daily_entries"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    delivery_date = Column(Date, nullable=False, index=True)
+    location = Column(String(255), nullable=False, index=True)
+    no_of_order = Column(Integer, nullable=False, default=0)
+    total_sale_value = Column(Numeric(14, 2), nullable=False, default=0)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+
+
 class CreditNoteDueTracking(Base):
     """Per approved credit note: Due desk timer phases, row order, paid marker."""
 

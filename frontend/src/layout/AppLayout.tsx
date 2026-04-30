@@ -54,6 +54,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/due/settings')) return 'Due — settings';
     if (location.pathname.startsWith('/due/')) return 'Due — open sheet';
     if (location.pathname.startsWith('/analytics')) return 'Analytics';
+    if (location.pathname.startsWith('/b2c-sales')) return 'B2C daily entry';
     if (location.pathname.startsWith('/approvals')) return 'TKTS and CN approvals';
     if (location.pathname.startsWith('/reports')) return 'Reports';
     if (location.pathname.startsWith('/admin')) return 'Admin Panel';
@@ -173,6 +174,9 @@ export default function AppLayout() {
               <SidebarLink to="/analytics" icon={<BarChart3 className="w-4 h-4" />} label="Analytics" />
               <SidebarLink to="/tickets/new" icon={<PlusCircle className="w-4 h-4" />} label="Create Ticket" />
               <SidebarLink to="/tickets" icon={<Ticket className="w-4 h-4" />} label="Tickets" />
+              {user?.role === 'b2c' && (
+                <SidebarLink to="/b2c-sales" icon={<FileText className="w-4 h-4" />} label="B2C daily entry" />
+              )}
               {canCreditNotes && (
                 <>
                   <SidebarLink to="/credit-notes/new" icon={<FileText className="w-4 h-4" />} label="New credit note" />

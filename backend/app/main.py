@@ -9,7 +9,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .routers import auth, tickets, approvals, admin, tally, credit_notes, credit_note_approvals, credit_note_tally, due, due_aging
+from .routers import auth, tickets, approvals, admin, tally, credit_notes, credit_note_approvals, credit_note_tally, due, due_aging, b2c_sales
 from .database import engine, Base, get_db, AsyncSessionLocal
 from .models import (
     User,
@@ -267,6 +267,7 @@ app.include_router(tally.router)
 app.include_router(credit_notes.router)
 app.include_router(credit_note_approvals.router)
 app.include_router(credit_note_tally.router)
+app.include_router(b2c_sales.router)
 app.include_router(due.router)
 app.include_router(due_aging.router)
 app.include_router(admin.router)
