@@ -1,5 +1,4 @@
 from datetime import date
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -124,14 +123,19 @@ async def b2c_daily_sales_analytics(
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_b2c_daily_entry(
-    entry_id: UUID,
+    entry_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.B2C, UserRole.MANAGER, UserRole.ADMIN)),
 ):
-    row = (
-        await db.execute(select(B2CDailyEntry).where(B2CDailyEntry.id == entry_id))
-    ).scalars().first()
-    if not row:
+    try:
+        from uuid import UUID
+        entry_uuid = UUID(entry_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid entry id")
+
+    result = await db.execute(select(B2CDailyEntry).where(B2CDailyEntry.id == entry_uuid))
+    row = result.scalars().first()
+    if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
 
     if current_user.role == UserRole.B2C and row.created_by != current_user.id:
