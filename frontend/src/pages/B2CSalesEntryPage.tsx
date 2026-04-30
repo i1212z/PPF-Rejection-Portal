@@ -20,6 +20,7 @@ export default function B2CSalesEntryPage() {
   const [entries, setEntries] = useState<B2CDailyEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadEntries = async () => {
@@ -37,6 +38,21 @@ export default function B2CSalesEntryPage() {
   useEffect(() => {
     void loadEntries();
   }, []);
+
+  const handleDelete = async (entryId: string) => {
+    const ok = window.confirm('Delete this entry?');
+    if (!ok) return;
+    setError(null);
+    setDeletingId(entryId);
+    try {
+      await apiClient.delete(`/b2c-sales/${entryId}`);
+      await loadEntries();
+    } catch {
+      setError('Could not delete entry. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -152,6 +168,7 @@ export default function B2CSalesEntryPage() {
                   <th className="px-3 py-2 text-right">No of order</th>
                   <th className="px-3 py-2 text-right">Total sale value</th>
                   <th className="px-3 py-2 text-left">Created</th>
+                  <th className="px-3 py-2 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -168,6 +185,16 @@ export default function B2CSalesEntryPage() {
                     </td>
                     <td className="px-3 py-2 text-gray-500">
                       {new Date(e.created_at).toLocaleString('en-GB')}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(e.id)}
+                        disabled={deletingId === e.id}
+                        className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
+                      >
+                        {deletingId === e.id ? 'Deleting…' : 'Delete'}
+                      </button>
                     </td>
                   </tr>
                 ))}
