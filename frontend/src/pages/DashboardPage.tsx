@@ -262,7 +262,10 @@ export default function DashboardPage() {
       const canSeeCreditNotes =
         user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
       const canSeeB2CSalesAnalytics =
-        user?.role === 'b2c' || user?.role === 'manager' || user?.role === 'admin';
+        user?.role === 'b2b' ||
+        user?.role === 'b2c' ||
+        user?.role === 'manager' ||
+        user?.role === 'admin';
       const canSeeCreditNoteTallyPostedEndpoints =
         user?.role === 'manager' ||
         user?.role === 'admin' ||
@@ -700,7 +703,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {(isB2C || isManagerOrAdmin) && (
+      {(isB2B || isB2C || isManagerOrAdmin) && (
         <Card
           title="B2C daily sales analytics"
           subtitle="From B2C daily entry system"

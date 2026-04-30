@@ -78,7 +78,9 @@ async def list_b2c_daily_entries(
 @router.get("/analytics", response_model=B2CDailySalesAnalytics)
 async def b2c_daily_sales_analytics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.B2C, UserRole.MANAGER, UserRole.ADMIN)),
+    current_user: User = Depends(
+        require_roles(UserRole.B2B, UserRole.B2C, UserRole.MANAGER, UserRole.ADMIN)
+    ),
 ):
     filters = []
     if current_user.role == UserRole.B2C:
