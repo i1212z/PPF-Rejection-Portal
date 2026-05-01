@@ -8,6 +8,16 @@ import { ChannelDistributionPie } from '../components/charts/ChannelDistribution
 import { ApprovedVsRejectedChart } from '../components/charts/ApprovedVsRejectedChart';
 import type { ApprovedRejectedPoint } from '../components/charts/ApprovedVsRejectedChart';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+} from 'recharts';
 
 type TicketStatus = 'pending' | 'approved' | 'rejected';
 
@@ -706,62 +716,67 @@ export default function DashboardPage() {
       {(isB2B || isB2C || isManagerOrAdmin) && (
         <Card
           title="B2C daily sales analytics"
-          subtitle="From B2C daily entry system"
+          subtitle="Graph view from B2C daily entry system"
           className="border-l-4 border-l-purple-300"
         >
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
-            <div className="rounded-lg bg-purple-50 border border-purple-100 px-4 py-3">
-              <div className="text-xs font-medium text-purple-700 uppercase tracking-wide">
-                Total orders
-              </div>
-              <div className="mt-1 text-2xl font-semibold text-gray-900">
-                {loading ? '…' : b2cSalesAnalytics?.total_orders ?? 0}
-              </div>
-            </div>
-            <div className="rounded-lg bg-indigo-50 border border-indigo-100 px-4 py-3">
-              <div className="text-xs font-medium text-indigo-700 uppercase tracking-wide">
-                Total sale value
-              </div>
-              <div className="mt-1 text-2xl font-semibold text-gray-900">
-                {loading
-                  ? '…'
-                  : Number(b2cSalesAnalytics?.total_sale_value ?? 0).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-              </div>
-            </div>
-            <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
-              <div className="text-xs font-medium text-slate-700 uppercase tracking-wide">
-                Entry rows
-              </div>
-              <div className="mt-1 text-2xl font-semibold text-gray-900">
-                {loading ? '…' : b2cSalesAnalytics?.total_entries ?? 0}
-              </div>
-            </div>
-          </div>
-          <div className="rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-3 py-2 bg-gray-50 text-xs font-semibold text-gray-700">
-              Top locations by sale value
-            </div>
-            <div className="divide-y divide-gray-100">
-              {(b2cSalesAnalytics?.top_locations ?? []).length === 0 && (
-                <div className="px-3 py-2 text-xs text-gray-500">No B2C daily entries yet.</div>
-              )}
-              {(b2cSalesAnalytics?.top_locations ?? []).map((row) => (
-                <div key={row.location} className="px-3 py-2 text-xs flex items-center justify-between gap-3">
-                  <div className="min-w-0 truncate text-gray-700">{row.location}</div>
-                  <div className="shrink-0 text-gray-900 font-medium">
-                    Orders: {row.orders} · Value:{' '}
-                    {Number(row.sale_value).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </div>
+          {(b2cSalesAnalytics?.top_locations ?? []).length === 0 ? (
+            <div className="text-sm text-gray-500">No B2C daily entries yet.</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-gray-200 p-3">
+                <div className="text-xs font-semibold text-gray-700 mb-2">
+                  Top locations - orders vs sale value
                 </div>
-              ))}
+                <div className="w-full min-w-0 max-w-full" style={{ height: 320, minHeight: 320 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={(b2cSalesAnalytics?.top_locations ?? []).map((r) => ({
+                        location: r.location,
+                        orders: r.orders,
+                        saleValue: Number(r.sale_value ?? 0),
+                      }))}
+                      margin={{ top: 8, right: 12, left: 8, bottom: 28 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="location" angle={-20} textAnchor="end" interval={0} height={60} tick={{ fontSize: 10 }} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        tick={{ fontSize: 10 }}
+                        tickFormatter={(v) =>
+                          Number(v).toLocaleString(undefined, {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          })
+                        }
+                      />
+                      <Tooltip
+                        formatter={(value: number, name: string) =>
+                          name === 'Sale value'
+                            ? Number(value).toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })
+                            : Number(value).toLocaleString(undefined, {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              })
+                        }
+                      />
+                      <Legend />
+                      <Bar yAxisId="left" dataKey="orders" name="Orders" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="right" dataKey="saleValue" name="Sale value" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="text-[11px] text-gray-500">
+                Total entries captured: {b2cSalesAnalytics?.total_entries ?? 0} • Charts refresh with
+                latest B2C daily entries.
+              </div>
             </div>
-          </div>
+          )}
         </Card>
       )}
 
