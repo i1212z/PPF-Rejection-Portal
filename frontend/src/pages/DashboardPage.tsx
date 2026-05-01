@@ -752,17 +752,19 @@ export default function DashboardPage() {
                         }
                       />
                       <Tooltip
-                        formatter={(value: number, name: string) =>
-                          name === 'Sale value'
-                            ? Number(value).toLocaleString(undefined, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })
-                            : Number(value).toLocaleString(undefined, {
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 0,
-                              })
-                        }
+                        formatter={(value, name) => {
+                          const n = Number(value ?? 0);
+                          if (name === 'Sale value') {
+                            return n.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            });
+                          }
+                          return n.toLocaleString(undefined, {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          });
+                        }}
                       />
                       <Legend />
                       <Bar yAxisId="left" dataKey="orders" name="Orders" fill="#7c3aed" radius={[4, 4, 0, 0]} />
