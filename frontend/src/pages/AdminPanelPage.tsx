@@ -3,9 +3,53 @@ import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
 
 export default function AdminPanelPage() {
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupError, setBackupError] = useState<string | null>(null);
+
   const [resetting, setResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
+
+  const handleDownloadBackup = async () => {
+    setBackupError(null);
+    setBackupLoading(true);
+    try {
+      const res = await apiClient.get<Blob>('/admin/export-backup.zip', {
+        responseType: 'blob',
+      });
+      const blob = res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.download = `ppf-backup-${stamp}.zip`;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { status?: number; data?: unknown } }).response : null;
+      const status = res?.status;
+      let msg = 'Could not download backup.';
+      if (status === 403) {
+        msg = 'You must be logged in as admin to download backups.';
+      } else if (status === 401) {
+        msg = 'Session expired. Sign in again.';
+      } else if (res?.data instanceof Blob) {
+        try {
+          const text = await res.data.text();
+          const parsed = JSON.parse(text) as { detail?: string };
+          if (typeof parsed.detail === 'string') msg = parsed.detail;
+        } catch {
+          /* ignore */
+        }
+      }
+      setBackupError(msg);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
 
   const handleResetDb = async () => {
     if (!window.confirm('Reset database? This will delete ALL tickets and approvals (B2B and B2C). Users will be kept. This cannot be undone.')) return;
@@ -39,6 +83,32 @@ export default function AdminPanelPage() {
           Configure system settings and manage database.
         </p>
       </div>
+      <Card
+        title="Download data backup"
+        subtitle="ZIP of CSV files (all main tables). Saves to your browser’s download folder."
+        className="border-l-4 border-l-indigo-400"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-gray-700">
+            Use this for a monthly snapshot you can open in Excel or keep on Drive.{' '}
+            <code className="text-xs bg-gray-100 px-1 rounded">users.csv</code> omits password hashes; for a full
+            database copy use <code className="text-xs bg-gray-100 px-1 rounded">pg_dump</code> — see{' '}
+            <code className="text-xs bg-gray-100 px-1 rounded">docs/SUPABASE_PG_DUMP.md</code> in the repo.
+          </p>
+          {backupError && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{backupError}</div>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleDownloadBackup()}
+            disabled={backupLoading}
+            className="w-full md:w-auto rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 px-4 py-2.5 md:py-2 text-sm font-medium text-white"
+          >
+            {backupLoading ? 'Preparing ZIP…' : 'Download backup (ZIP)'}
+          </button>
+        </div>
+      </Card>
+
       <Card
         title="Database reset"
         subtitle="Empty all tickets and approvals (B2B and B2C). Users are kept."
