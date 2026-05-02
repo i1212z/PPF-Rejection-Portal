@@ -3,6 +3,14 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
 
+const B2C_LOCATION_OPTIONS = [
+  'Calicut',
+  'Kochi',
+  'Thrissur',
+  'Coimbatore',
+  'Bangalore',
+] as const;
+
 interface B2CDailyEntry {
   id: string;
   delivery_date: string;
@@ -101,13 +109,19 @@ export default function B2CSalesEntryPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Location</label>
-            <input
+            <select
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm"
-              placeholder="e.g. Calicut"
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm bg-white"
               required
-            />
+            >
+              <option value="">Select location</option>
+              {B2C_LOCATION_OPTIONS.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">No of order</label>
