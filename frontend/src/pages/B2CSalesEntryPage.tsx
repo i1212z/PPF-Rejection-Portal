@@ -235,6 +235,14 @@ function B2COverviewScannerSection() {
     amount: true,
     avgBill: false,
   });
+  const [isMobile, setIsMobile] = useState<boolean>(typeof window !== 'undefined' ? window.innerWidth < 640 : false);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const loadScans = useCallback(async () => {
     try {
@@ -418,7 +426,10 @@ function B2COverviewScannerSection() {
       .sort((a, b) => b.amount - a.amount);
   }, [filteredPoints]);
 
-  const locationSummaryForCharts = useMemo(() => locationSummary.slice(0, 10), [locationSummary]);
+  const locationSummaryForCharts = useMemo(
+    () => locationSummary.slice(0, isMobile ? 6 : 10),
+    [locationSummary, isMobile],
+  );
   const pieMetric: 'orders' | 'amount' = selectedMetrics.amount ? 'amount' : 'orders';
   const locationBarMetric: 'orders' | 'amount' | 'avgBillValue' = selectedMetrics.orders
     ? 'orders'
@@ -732,11 +743,19 @@ function B2COverviewScannerSection() {
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={monthSummary}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={70} />
+                        <XAxis
+                          dataKey="month"
+                          interval={isMobile ? 1 : 0}
+                          angle={isMobile ? 0 : -20}
+                          textAnchor={isMobile ? 'middle' : 'end'}
+                          height={isMobile ? 40 : 70}
+                          tick={{ fontSize: isMobile ? 10 : 11 }}
+                          tickFormatter={(v) => (isMobile ? String(v).slice(0, 3) : String(v))}
+                        />
                         <YAxis yAxisId="left" tickFormatter={(v) => compactNumber(Number(v))} />
                         <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => compactNumber(Number(v))} />
                         <Tooltip />
-                        <Legend />
+                        <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px' }} />
                         {selectedMetrics.orders && <Bar yAxisId="left" dataKey="orders" name="Orders" fill="#3b82f6" />}
                         {selectedMetrics.amount && (
                           <Line yAxisId="right" type="monotone" dataKey="amount" name="Amount" stroke="#ef4444" strokeWidth={2} />
@@ -761,9 +780,24 @@ function B2COverviewScannerSection() {
                             ))}
                           </Pie>
                           <Tooltip />
+                        {!isMobile && (
                           <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: '11px' }} />
+                        )}
                         </PieChart>
                       </ResponsiveContainer>
+                    {isMobile && (
+                      <div className="mt-2 text-[10px] text-gray-600 flex flex-wrap gap-x-3 gap-y-1">
+                        {locationSummaryForCharts.map((item, idx) => (
+                          <span key={item.location} className="inline-flex items-center gap-1">
+                            <span
+                              className="inline-block h-2 w-2 rounded-full"
+                              style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}
+                            />
+                            <span>{item.location.length > 14 ? `${item.location.slice(0, 14)}…` : item.location}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     </div>
                     <div className="h-72 rounded-md border border-gray-200 p-2">
                       <div className="text-[11px] text-gray-600 mb-2">Location wise item ({locationBarMetric})</div>
@@ -771,13 +805,22 @@ function B2COverviewScannerSection() {
                         <BarChart
                           data={locationSummaryForCharts}
                           layout="vertical"
-                          margin={{ top: 8, right: 10, left: 50, bottom: 8 }}
+                      margin={{ top: 8, right: 10, left: isMobile ? 10 : 50, bottom: 8 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis type="number" tickFormatter={(v) => compactNumber(Number(v))} />
-                          <YAxis type="category" dataKey="location" width={125} tick={{ fontSize: 10 }} />
+                      <YAxis
+                        type="category"
+                        dataKey="location"
+                        width={isMobile ? 78 : 125}
+                        tick={{ fontSize: isMobile ? 9 : 10 }}
+                        tickFormatter={(v) => {
+                          const t = String(v);
+                          return isMobile && t.length > 10 ? `${t.slice(0, 10)}…` : t;
+                        }}
+                      />
                           <Tooltip />
-                          <Legend />
+                      <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px' }} />
                           <Bar
                             dataKey={locationBarMetric}
                             name={locationBarMetric === 'avgBillValue' ? 'Avg bill value' : locationBarMetric}
