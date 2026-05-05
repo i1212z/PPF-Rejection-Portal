@@ -2,7 +2,26 @@ import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Bar, BarChart, CartesianGrid, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Scatter,
+  ScatterChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
 
@@ -21,6 +40,7 @@ const MONTHS = [
   'February',
   'March',
 ] as const;
+const CHART_COLORS = ['#4f46e5', '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6', '#f97316'];
 
 type MonthName = (typeof MONTHS)[number];
 type Subsection = 'daily' | 'overview';
@@ -86,7 +106,13 @@ function parseNum(raw: string | undefined): number | null {
 }
 
 function isBlankRow(row: string[]): boolean {
-  return row.every((c) => !String(c || '').trim());
+  return row.every((c) => {
+    const normalized = String(c || '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/\t/g, ' ')
+      .trim();
+    return normalized === '';
+  });
 }
 
 function compactSheetRows(rows: string[][]): string[][] {
@@ -192,7 +218,7 @@ function B2COverviewScannerSection() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analyticsView, setAnalyticsView] = useState<'location' | 'month' | 'dataset'>('location');
-  const [analyticsMode, setAnalyticsMode] = useState<'table' | 'charts'>('charts');
+  const [analyticsMode, setAnalyticsMode] = useState<'table' | 'bar' | 'line' | 'area' | 'combo' | 'pie' | 'scatter'>('bar');
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedSheet, setSelectedSheet] = useState<string>('all');
 
@@ -531,7 +557,7 @@ function B2COverviewScannerSection() {
         )}
       </Card>
 
-      <Card title="Analytics options" subtitle="Professional charts, filters, and intelligence generated from scanned sheets">
+      <Card title="Analytics options" subtitle="Professional charts, colors, slicers, and intelligence from scanned sheets">
         {!monthlyPoints.length ? (
           <div className="text-sm text-gray-500">
             No monthly matrix detected yet. Expected columns like April..March with Orders/Amount (and optional Avg bill Value).
@@ -603,10 +629,19 @@ function B2COverviewScannerSection() {
               <label className="text-xs text-gray-600 ml-2">Display</label>
               <select
                 value={analyticsMode}
-                onChange={(e) => setAnalyticsMode(e.target.value as 'table' | 'charts')}
+                onChange={(e) =>
+                  setAnalyticsMode(
+                    e.target.value as 'table' | 'bar' | 'line' | 'area' | 'combo' | 'pie' | 'scatter',
+                  )
+                }
                 className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
               >
-                <option value="charts">Charts</option>
+                <option value="bar">Bar / column charts</option>
+                <option value="line">Line charts</option>
+                <option value="area">Area charts</option>
+                <option value="combo">Combo charts</option>
+                <option value="pie">Pie / donut charts</option>
+                <option value="scatter">Scatter charts</option>
                 <option value="table">Table</option>
               </select>
               <button
@@ -617,15 +652,25 @@ function B2COverviewScannerSection() {
                 Download Power BI workbook
               </button>
             </div>
+            {filteredPoints.length === 0 && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                No data for selected filters. Change sheet/location slicers to see visuals.
+              </div>
+            )}
 
-            {analyticsView === 'location' && analyticsMode === 'charts' && (
+            {analyticsView === 'location' && analyticsMode === 'pie' && (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div className="h-72 rounded-md border border-gray-200 p-2">
-                  <div className="text-[11px] text-gray-600 mb-2">Location amount share (pie)</div>
+                  <div className="text-[11px] text-gray-600 mb-2">Location amount share (donut)</div>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={locationSummary} dataKey="amount" nameKey="location" outerRadius={95} fill="#0ea5e9" label />
+                      <Pie data={locationSummary} dataKey="amount" nameKey="location" outerRadius={95} innerRadius={45}>
+                        {locationSummary.map((_, idx) => (
+                          <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                        ))}
+                      </Pie>
                       <Tooltip />
+                      <Legend />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -642,6 +687,83 @@ function B2COverviewScannerSection() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+              </div>
+            )}
+
+            {analyticsView === 'location' && analyticsMode === 'bar' && (
+              <div className="h-80 rounded-md border border-gray-200 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={locationSummary}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="orders" fill="#2563eb" />
+                    <Bar dataKey="amount" fill="#14b8a6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {analyticsView === 'location' && analyticsMode === 'line' && (
+              <div className="h-80 rounded-md border border-gray-200 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={locationSummary}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="orders" stroke="#2563eb" strokeWidth={2} />
+                    <Line type="monotone" dataKey="amount" stroke="#14b8a6" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {analyticsView === 'location' && analyticsMode === 'area' && (
+              <div className="h-80 rounded-md border border-gray-200 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={locationSummary}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Area type="monotone" dataKey="amount" fill="#a5f3fc" stroke="#0891b2" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {analyticsView === 'location' && analyticsMode === 'combo' && (
+              <div className="h-80 rounded-md border border-gray-200 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={locationSummary}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="orders" fill="#3b82f6" />
+                    <Line type="monotone" dataKey="avgBillValue" stroke="#f59e0b" strokeWidth={2} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {analyticsView === 'location' && analyticsMode === 'scatter' && (
+              <div className="h-80 rounded-md border border-gray-200 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart>
+                    <CartesianGrid />
+                    <XAxis type="number" dataKey="orders" name="Orders" />
+                    <YAxis type="number" dataKey="amount" name="Amount" />
+                    <Tooltip />
+                    <Scatter data={locationSummary} fill="#7c3aed" />
+                  </ScatterChart>
+                </ResponsiveContainer>
               </div>
             )}
 
@@ -670,7 +792,7 @@ function B2COverviewScannerSection() {
               </div>
             )}
 
-            {analyticsView === 'month' && analyticsMode === 'charts' && (
+            {analyticsView === 'month' && analyticsMode === 'bar' && (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div className="h-72 rounded-md border border-gray-200 p-2">
                   <div className="text-[11px] text-gray-600 mb-2">Amount by month (bar)</div>
@@ -698,6 +820,83 @@ function B2COverviewScannerSection() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+              </div>
+            )}
+
+            {analyticsView === 'month' && analyticsMode === 'line' && (
+              <div className="h-80 rounded-md border border-gray-200 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={monthSummary}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="orders" stroke="#22c55e" strokeWidth={2} />
+                    <Line type="monotone" dataKey="amount" stroke="#0ea5e9" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {analyticsView === 'month' && analyticsMode === 'area' && (
+              <div className="h-80 rounded-md border border-gray-200 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={monthSummary}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Area type="monotone" dataKey="amount" fill="#bfdbfe" stroke="#2563eb" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {analyticsView === 'month' && analyticsMode === 'combo' && (
+              <div className="h-80 rounded-md border border-gray-200 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={monthSummary}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={70} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="orders" fill="#22c55e" />
+                    <Line type="monotone" dataKey="avgBillValue" stroke="#f59e0b" strokeWidth={2} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {analyticsView === 'month' && analyticsMode === 'pie' && (
+              <div className="h-80 rounded-md border border-gray-200 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={monthSummary} dataKey="amount" nameKey="month" outerRadius={120} innerRadius={50}>
+                      {monthSummary.map((_, idx) => (
+                        <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {analyticsView === 'month' && analyticsMode === 'scatter' && (
+              <div className="h-80 rounded-md border border-gray-200 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart>
+                    <CartesianGrid />
+                    <XAxis type="number" dataKey="orders" name="Orders" />
+                    <YAxis type="number" dataKey="amount" name="Amount" />
+                    <Tooltip />
+                    <Scatter data={monthSummary} fill="#8b5cf6" />
+                  </ScatterChart>
+                </ResponsiveContainer>
               </div>
             )}
 
