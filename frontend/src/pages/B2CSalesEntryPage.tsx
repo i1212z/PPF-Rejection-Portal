@@ -3,8 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -12,12 +10,9 @@ import {
   ComposedChart,
   Legend,
   Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
-  Scatter,
-  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
@@ -217,8 +212,7 @@ function B2COverviewScannerSection() {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [analyticsView, setAnalyticsView] = useState<'location' | 'month' | 'dataset'>('location');
-  const [analyticsMode, setAnalyticsMode] = useState<'table' | 'bar' | 'line' | 'area' | 'combo' | 'pie' | 'scatter'>('bar');
+  const [showHistory, setShowHistory] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedSheet, setSelectedSheet] = useState<string>('all');
 
@@ -380,23 +374,6 @@ function B2COverviewScannerSection() {
     }));
   }, [filteredPoints]);
 
-  const intelligenceSummary = useMemo(() => {
-    const totalOrders = monthSummary.reduce((acc, m) => acc + m.orders, 0);
-    const totalAmount = monthSummary.reduce((acc, m) => acc + m.amount, 0);
-    const monthsWithData = monthSummary.filter((m) => m.orders > 0 || m.amount > 0).length;
-    const avgBill = totalOrders > 0 ? totalAmount / totalOrders : 0;
-    const monthlyRunRate = monthsWithData > 0 ? totalAmount / monthsWithData : 0;
-    const projectedFY = monthlyRunRate * 12;
-    return {
-      totalOrders,
-      totalAmount,
-      avgBill,
-      monthlyRunRate,
-      projectedFY,
-      monthsWithData,
-    };
-  }, [monthSummary]);
-
   const exportPowerBIWorkbook = () => {
     if (!monthlyPoints.length) return;
     const wb = XLSX.utils.book_new();
@@ -424,24 +401,28 @@ function B2COverviewScannerSection() {
 
   return (
     <div className="space-y-4">
-      <Card title="Overview" subtitle="Excel scanner and structured analysis for FY 2026-27 style sheets">
-        <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-cyan-50 p-3 sm:p-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-2">
-            <label className="text-xs text-gray-700">
-              Upload Excel (.xlsx, .xls)
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  void onUpload(f);
-                  e.currentTarget.value = '';
-                }}
-                className="mt-1 block text-xs"
-              />
-            </label>
-            <div className="text-[11px] text-gray-500">{uploading ? 'Scanning workbook...' : 'Scans all sheets and extracts monthly intelligence.'}</div>
-          </div>
+      <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-cyan-50 p-3 sm:p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer">
+            {uploading ? 'Scanning...' : 'Upload Excel (.xlsx, .xls)'}
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                void onUpload(f);
+                e.currentTarget.value = '';
+              }}
+              className="hidden"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            {showHistory ? 'Hide scan history' : 'Scan history'}
+          </button>
           <button
             type="button"
             disabled={!activeScanId || deleting}
@@ -451,60 +432,62 @@ function B2COverviewScannerSection() {
             {deleting ? 'Deleting...' : 'Delete selected scan'}
           </button>
         </div>
-        {error && (
-          <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
-        )}
-      </Card>
+      </div>
+      {error && (
+        <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
+      )}
 
-      <Card title="Scan history" subtitle="Saved files with open / download actions">
-        {scans.length === 0 ? (
-          <div className="text-sm text-gray-500">No scans yet.</div>
-        ) : (
-          <div className="w-full overflow-x-auto">
-            <table className="min-w-full text-xs">
-              <thead className="bg-gray-50 text-[11px] text-gray-500 uppercase">
-                <tr>
-                  <th className="px-3 py-2 text-left">File</th>
-                  <th className="px-3 py-2 text-left">Sheets</th>
-                  <th className="px-3 py-2 text-left">Size</th>
-                  <th className="px-3 py-2 text-left">Scanned at</th>
-                  <th className="px-3 py-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {scans.map((s) => (
-                  <tr key={s.id} className={activeScanId === s.id ? 'bg-indigo-50/40' : ''}>
-                    <td className="px-3 py-2">{s.source_filename}</td>
-                    <td className="px-3 py-2">{s.sheet_count}</td>
-                    <td className="px-3 py-2">{fileSizeLabel(Number(s.file_size || 0))}</td>
-                    <td className="px-3 py-2 text-gray-500">{new Date(s.created_at).toLocaleString('en-GB')}</td>
-                    <td className="px-3 py-2 text-right">
-                      <div className="inline-flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setActiveScanId(s.id)}
-                          className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
-                        >
-                          Open
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void onDownload(s.id, s.source_filename)}
-                          className="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100"
-                        >
-                          Download
-                        </button>
-                      </div>
-                    </td>
+      {showHistory && (
+        <Card title="Scan history" subtitle="Saved uploads">
+          {scans.length === 0 ? (
+            <div className="text-sm text-gray-500">No scans yet.</div>
+          ) : (
+            <div className="w-full overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead className="bg-gray-50 text-[11px] text-gray-500 uppercase">
+                  <tr>
+                    <th className="px-3 py-2 text-left">File</th>
+                    <th className="px-3 py-2 text-left">Sheets</th>
+                    <th className="px-3 py-2 text-left">Size</th>
+                    <th className="px-3 py-2 text-left">Scanned at</th>
+                    <th className="px-3 py-2 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {scans.map((s) => (
+                    <tr key={s.id} className={activeScanId === s.id ? 'bg-indigo-50/40' : ''}>
+                      <td className="px-3 py-2">{s.source_filename}</td>
+                      <td className="px-3 py-2">{s.sheet_count}</td>
+                      <td className="px-3 py-2">{fileSizeLabel(Number(s.file_size || 0))}</td>
+                      <td className="px-3 py-2 text-gray-500">{new Date(s.created_at).toLocaleString('en-GB')}</td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="inline-flex gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setActiveScanId(s.id)}
+                            className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
+                          >
+                            Open
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void onDownload(s.id, s.source_filename)}
+                            className="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100"
+                          >
+                            Download
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
 
-      <Card title="Workbook output" subtitle="Clean sheet preview (blank rows removed)">
+      <Card title="Workbook op" subtitle="Clean sheet preview (blank rows removed)">
         {loading ? (
           <div className="text-sm text-gray-500">Loading scan...</div>
         ) : !scanDetail || scanDetail.sheets.length === 0 ? (
@@ -557,49 +540,14 @@ function B2COverviewScannerSection() {
         )}
       </Card>
 
-      <Card title="Analytics options" subtitle="Professional charts, colors, slicers, and intelligence from scanned sheets">
+      <Card title="Analytics op" subtitle="Monthly Order vs Amount and Location wise item output">
         {!monthlyPoints.length ? (
           <div className="text-sm text-gray-500">
             No monthly matrix detected yet. Expected columns like April..March with Orders/Amount (and optional Avg bill Value).
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
-                <div className="text-[11px] uppercase text-emerald-700">Total amount</div>
-                <div className="text-lg font-semibold text-emerald-900">
-                  {intelligenceSummary.totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </div>
-              </div>
-              <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
-                <div className="text-[11px] uppercase text-blue-700">Total orders</div>
-                <div className="text-lg font-semibold text-blue-900">{intelligenceSummary.totalOrders.toLocaleString()}</div>
-              </div>
-              <div className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2">
-                <div className="text-[11px] uppercase text-violet-700">Avg bill value</div>
-                <div className="text-lg font-semibold text-violet-900">
-                  {intelligenceSummary.avgBill.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </div>
-              </div>
-              <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
-                <div className="text-[11px] uppercase text-amber-700">Projected FY value</div>
-                <div className="text-lg font-semibold text-amber-900">
-                  {intelligenceSummary.projectedFY.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </div>
-              </div>
-            </div>
-
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
-              <label className="text-xs text-gray-600">Analytics view</label>
-              <select
-                value={analyticsView}
-                onChange={(e) => setAnalyticsView(e.target.value as 'location' | 'month' | 'dataset')}
-                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
-              >
-                <option value="location">By location</option>
-                <option value="month">By month</option>
-                <option value="dataset">Normalized dataset</option>
-              </select>
               <label className="text-xs text-gray-600 ml-2">Location</label>
               <select
                 value={selectedLocation}
@@ -626,24 +574,6 @@ function B2COverviewScannerSection() {
                   </option>
                 ))}
               </select>
-              <label className="text-xs text-gray-600 ml-2">Display</label>
-              <select
-                value={analyticsMode}
-                onChange={(e) =>
-                  setAnalyticsMode(
-                    e.target.value as 'table' | 'bar' | 'line' | 'area' | 'combo' | 'pie' | 'scatter',
-                  )
-                }
-                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
-              >
-                <option value="bar">Bar / column charts</option>
-                <option value="line">Line charts</option>
-                <option value="area">Area charts</option>
-                <option value="combo">Combo charts</option>
-                <option value="pie">Pie / donut charts</option>
-                <option value="scatter">Scatter charts</option>
-                <option value="table">Table</option>
-              </select>
               <button
                 type="button"
                 onClick={exportPowerBIWorkbook}
@@ -652,230 +582,35 @@ function B2COverviewScannerSection() {
                 Download Power BI workbook
               </button>
             </div>
-            {filteredPoints.length === 0 && (
+            {filteredPoints.length === 0 ? (
               <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                No data for selected filters. Change sheet/location slicers to see visuals.
+                No data for selected filters. Change sheet/location filters to see output.
               </div>
-            )}
+            ) : (
+              <>
+            <div className="h-80 rounded-md border border-gray-200 p-2">
+              <div className="text-[11px] text-gray-600 mb-2">Monthly Order Vs Amount</div>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={monthSummary}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={70} />
+                  <YAxis yAxisId="left" />
+                  <YAxis yAxisId="right" orientation="right" />
+                  <Tooltip />
+                  <Legend />
+                  <Bar yAxisId="left" dataKey="orders" fill="#3b82f6" />
+                  <Line yAxisId="right" type="monotone" dataKey="amount" stroke="#ef4444" strokeWidth={2} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
 
-            {analyticsView === 'location' && analyticsMode === 'pie' && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div className="h-72 rounded-md border border-gray-200 p-2">
-                  <div className="text-[11px] text-gray-600 mb-2">Location amount share (donut)</div>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={locationSummary} dataKey="amount" nameKey="location" outerRadius={95} innerRadius={45}>
-                        {locationSummary.map((_, idx) => (
-                          <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="h-72 rounded-md border border-gray-200 p-2">
-                  <div className="text-[11px] text-gray-600 mb-2">Orders by location (bar)</div>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={locationSummary}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={60} />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="orders" fill="#2563eb" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
-            {analyticsView === 'location' && analyticsMode === 'bar' && (
-              <div className="h-80 rounded-md border border-gray-200 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={locationSummary}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="orders" fill="#2563eb" />
-                    <Bar dataKey="amount" fill="#14b8a6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {analyticsView === 'location' && analyticsMode === 'line' && (
-              <div className="h-80 rounded-md border border-gray-200 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={locationSummary}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="orders" stroke="#2563eb" strokeWidth={2} />
-                    <Line type="monotone" dataKey="amount" stroke="#14b8a6" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {analyticsView === 'location' && analyticsMode === 'area' && (
-              <div className="h-80 rounded-md border border-gray-200 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={locationSummary}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Area type="monotone" dataKey="amount" fill="#a5f3fc" stroke="#0891b2" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {analyticsView === 'location' && analyticsMode === 'combo' && (
-              <div className="h-80 rounded-md border border-gray-200 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={locationSummary}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="orders" fill="#3b82f6" />
-                    <Line type="monotone" dataKey="avgBillValue" stroke="#f59e0b" strokeWidth={2} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {analyticsView === 'location' && analyticsMode === 'scatter' && (
-              <div className="h-80 rounded-md border border-gray-200 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ScatterChart>
-                    <CartesianGrid />
-                    <XAxis type="number" dataKey="orders" name="Orders" />
-                    <YAxis type="number" dataKey="amount" name="Amount" />
-                    <Tooltip />
-                    <Scatter data={locationSummary} fill="#7c3aed" />
-                  </ScatterChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {analyticsView === 'location' && analyticsMode === 'table' && (
-              <div className="w-full overflow-x-auto">
-                <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Location</th>
-                      <th className="px-3 py-2 text-right">Orders</th>
-                      <th className="px-3 py-2 text-right">Amount</th>
-                      <th className="px-3 py-2 text-right">Avg bill value</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {locationSummary.map((r) => (
-                      <tr key={r.location}>
-                        <td className="px-3 py-2">{r.location}</td>
-                        <td className="px-3 py-2 text-right">{r.orders.toLocaleString()}</td>
-                        <td className="px-3 py-2 text-right">{r.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                        <td className="px-3 py-2 text-right">{r.avgBillValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {analyticsView === 'month' && analyticsMode === 'bar' && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div className="h-72 rounded-md border border-gray-200 p-2">
-                  <div className="text-[11px] text-gray-600 mb-2">Amount by month (bar)</div>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthSummary}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={60} />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="amount" fill="#0ea5e9" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="h-72 rounded-md border border-gray-200 p-2">
-                  <div className="text-[11px] text-gray-600 mb-2">Orders by month (bar)</div>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthSummary}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={60} />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="orders" fill="#22c55e" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
-            {analyticsView === 'month' && analyticsMode === 'line' && (
-              <div className="h-80 rounded-md border border-gray-200 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthSummary}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="orders" stroke="#22c55e" strokeWidth={2} />
-                    <Line type="monotone" dataKey="amount" stroke="#0ea5e9" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {analyticsView === 'month' && analyticsMode === 'area' && (
-              <div className="h-80 rounded-md border border-gray-200 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={monthSummary}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Area type="monotone" dataKey="amount" fill="#bfdbfe" stroke="#2563eb" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {analyticsView === 'month' && analyticsMode === 'combo' && (
-              <div className="h-80 rounded-md border border-gray-200 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={monthSummary}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={70} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="orders" fill="#22c55e" />
-                    <Line type="monotone" dataKey="avgBillValue" stroke="#f59e0b" strokeWidth={2} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {analyticsView === 'month' && analyticsMode === 'pie' && (
-              <div className="h-80 rounded-md border border-gray-200 p-2">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="h-72 rounded-md border border-gray-200 p-2">
+                <div className="text-[11px] text-gray-600 mb-2">Location wise item (amount share)</div>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={monthSummary} dataKey="amount" nameKey="month" outerRadius={120} innerRadius={50}>
-                      {monthSummary.map((_, idx) => (
+                    <Pie data={locationSummary} dataKey="amount" nameKey="location" outerRadius={95} innerRadius={40}>
+                      {locationSummary.map((_, idx) => (
                         <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
                       ))}
                     </Pie>
@@ -884,74 +619,43 @@ function B2COverviewScannerSection() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-            )}
-
-            {analyticsView === 'month' && analyticsMode === 'scatter' && (
-              <div className="h-80 rounded-md border border-gray-200 p-2">
+              <div className="h-72 rounded-md border border-gray-200 p-2">
+                <div className="text-[11px] text-gray-600 mb-2">Location wise item (orders)</div>
                 <ResponsiveContainer width="100%" height="100%">
-                  <ScatterChart>
-                    <CartesianGrid />
-                    <XAxis type="number" dataKey="orders" name="Orders" />
-                    <YAxis type="number" dataKey="amount" name="Amount" />
+                  <BarChart data={locationSummary}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={60} />
+                    <YAxis />
                     <Tooltip />
-                    <Scatter data={monthSummary} fill="#8b5cf6" />
-                  </ScatterChart>
+                    <Legend />
+                    <Bar dataKey="orders" fill="#22c55e" />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
-            )}
-
-            {analyticsView === 'month' && analyticsMode === 'table' && (
-              <div className="w-full overflow-x-auto">
-                <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Month</th>
-                      <th className="px-3 py-2 text-right">Orders</th>
-                      <th className="px-3 py-2 text-right">Amount</th>
-                      <th className="px-3 py-2 text-right">Avg bill value</th>
+            </div>
+            <div className="w-full overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Location</th>
+                    <th className="px-3 py-2 text-right">Orders</th>
+                    <th className="px-3 py-2 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {locationSummary.map((r) => (
+                    <tr key={r.location}>
+                      <td className="px-3 py-2">{r.location}</td>
+                      <td className="px-3 py-2 text-right">{r.orders.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right">
+                        {r.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {monthSummary.map((r) => (
-                      <tr key={r.month}>
-                        <td className="px-3 py-2">{r.month}</td>
-                        <td className="px-3 py-2 text-right">{r.orders.toLocaleString()}</td>
-                        <td className="px-3 py-2 text-right">{r.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                        <td className="px-3 py-2 text-right">{r.avgBillValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {analyticsView === 'dataset' && (
-              <div className="w-full overflow-x-auto">
-                <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Sheet</th>
-                      <th className="px-3 py-2 text-left">Location</th>
-                      <th className="px-3 py-2 text-left">Month</th>
-                      <th className="px-3 py-2 text-right">Orders</th>
-                      <th className="px-3 py-2 text-right">Amount</th>
-                      <th className="px-3 py-2 text-right">Avg bill value</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredPoints.map((r, idx) => (
-                      <tr key={`${r.sheet}-${r.location}-${r.month}-${idx}`}>
-                        <td className="px-3 py-2">{r.sheet}</td>
-                        <td className="px-3 py-2">{r.location}</td>
-                        <td className="px-3 py-2">{r.month}</td>
-                        <td className="px-3 py-2 text-right">{r.orders.toLocaleString()}</td>
-                        <td className="px-3 py-2 text-right">{r.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                        <td className="px-3 py-2 text-right">{r.avgBillValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+              </>
             )}
           </div>
         )}
