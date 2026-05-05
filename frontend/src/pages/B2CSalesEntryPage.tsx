@@ -2,6 +2,7 @@ import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import { Bar, BarChart, CartesianGrid, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
 
@@ -177,6 +178,7 @@ function B2COverviewScannerSection() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analyticsView, setAnalyticsView] = useState<'location' | 'month' | 'dataset'>('location');
+  const [analyticsMode, setAnalyticsMode] = useState<'table' | 'charts'>('charts');
 
   const loadScans = useCallback(async () => {
     try {
@@ -463,11 +465,18 @@ function B2COverviewScannerSection() {
                     <tbody className="divide-y divide-gray-100">
                       {activeSheet.rows.map((row, rIdx) => (
                         <tr key={rIdx}>
-                          {row.map((cell, cIdx) => (
-                            <td key={`${rIdx}-${cIdx}`} className="px-2 py-1.5 border-r border-gray-100 whitespace-pre-wrap">
-                              {cell || <span className="text-gray-300"> </span>}
-                            </td>
-                          ))}
+                          <td className="px-2 py-1.5 border-r border-gray-100 text-[10px] text-gray-400">
+                            {rIdx + 1}
+                            {row.every((c) => !String(c || '').trim()) ? ' (empty)' : ''}
+                          </td>
+                          {Array.from({ length: Math.max(activeSheet.column_count, row.length) }).map((_, cIdx) => {
+                            const cell = row[cIdx] ?? '';
+                            return (
+                              <td key={`${rIdx}-${cIdx}`} className="px-2 py-1.5 border-r border-gray-100 whitespace-pre-wrap">
+                                {cell || <span className="text-gray-300"> </span>}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))}
                     </tbody>
@@ -479,7 +488,7 @@ function B2COverviewScannerSection() {
         )}
       </Card>
 
-      <Card title="Power BI analytics options" subtitle="Monthly/location analytics extracted from related sheets">
+      <Card title="Analytics options" subtitle="Monthly/location analytics extracted from related sheets">
         {!monthlyPoints.length ? (
           <div className="text-sm text-gray-500">
             No monthly matrix detected yet. Expected columns like April..March with Orders/Amount (and optional Avg bill Value).
@@ -497,6 +506,15 @@ function B2COverviewScannerSection() {
                 <option value="month">By month</option>
                 <option value="dataset">Normalized dataset</option>
               </select>
+              <label className="text-xs text-gray-600 ml-2">Display</label>
+              <select
+                value={analyticsMode}
+                onChange={(e) => setAnalyticsMode(e.target.value as 'table' | 'charts')}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
+              >
+                <option value="charts">Charts</option>
+                <option value="table">Table</option>
+              </select>
               <button
                 type="button"
                 onClick={exportPowerBIWorkbook}
@@ -506,7 +524,34 @@ function B2COverviewScannerSection() {
               </button>
             </div>
 
-            {analyticsView === 'location' && (
+            {analyticsView === 'location' && analyticsMode === 'charts' && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="h-72 rounded-md border border-gray-200 p-2">
+                  <div className="text-[11px] text-gray-600 mb-2">Location amount share (pie)</div>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={locationSummary} dataKey="amount" nameKey="location" outerRadius={95} fill="#4f46e5" label />
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="h-72 rounded-md border border-gray-200 p-2">
+                  <div className="text-[11px] text-gray-600 mb-2">Orders by location (bar)</div>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={locationSummary}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={60} />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="orders" fill="#2563eb" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {analyticsView === 'location' && analyticsMode === 'table' && (
               <div className="w-full overflow-x-auto">
                 <table className="min-w-full text-xs">
                   <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
@@ -531,7 +576,38 @@ function B2COverviewScannerSection() {
               </div>
             )}
 
-            {analyticsView === 'month' && (
+            {analyticsView === 'month' && analyticsMode === 'charts' && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="h-72 rounded-md border border-gray-200 p-2">
+                  <div className="text-[11px] text-gray-600 mb-2">Amount by month (bar)</div>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthSummary}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={60} />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="amount" fill="#0ea5e9" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="h-72 rounded-md border border-gray-200 p-2">
+                  <div className="text-[11px] text-gray-600 mb-2">Orders by month (bar)</div>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthSummary}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={60} />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="orders" fill="#22c55e" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {analyticsView === 'month' && analyticsMode === 'table' && (
               <div className="w-full overflow-x-auto">
                 <table className="min-w-full text-xs">
                   <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
