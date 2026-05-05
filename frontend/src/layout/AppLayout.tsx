@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut, FileText, MoreHorizontal, MessageSquareWarning } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut, FileText, MoreHorizontal, MessageSquareWarning, ChevronDown } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { apiClient } from '../api/client';
 import ppfLogo from '../assets/ppf-logo.png';
@@ -71,6 +71,9 @@ export default function AppLayout() {
   const canCreditNotes = user?.role === 'b2b' || user?.role === 'manager' || user?.role === 'admin';
   const canGeneralComplaints =
     user?.role === 'b2b' || user?.role === 'b2c' || user?.role === 'manager' || user?.role === 'admin';
+  const canB2CDailyEntry = user?.role === 'b2c' || user?.role === 'manager' || user?.role === 'admin';
+  const [b2cMenuOpen, setB2cMenuOpen] = useState(false);
+  const showB2CSubmenu = canB2CDailyEntry && (b2cMenuOpen || location.pathname.startsWith('/b2c-sales'));
 
   const submitPasswordChange = async () => {
     setPwError(null);
@@ -184,8 +187,48 @@ export default function AppLayout() {
                   label="General complaints"
                 />
               )}
-              {(user?.role === 'b2c' || user?.role === 'manager' || user?.role === 'admin') && (
-                <SidebarLink to="/b2c-sales" icon={<FileText className="w-4 h-4" />} label="B2C daily entry" />
+              {canB2CDailyEntry && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setB2cMenuOpen((v) => !v)}
+                    className={`${navItemBase} w-full justify-between border-l-2 ${
+                      location.pathname.startsWith('/b2c-sales') ? 'border-l-indigo-500 bg-gray-800 text-white pl-2.5' : 'border-l-transparent'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-3">
+                      <FileText className="w-4 h-4" />
+                      <span>B2C daily entry</span>
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform ${showB2CSubmenu ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {showB2CSubmenu && (
+                    <div className="ml-6 mt-1 space-y-1">
+                      <NavLink
+                        to="/b2c-sales"
+                        className={({ isActive }) =>
+                          `block rounded-md px-2 py-1.5 text-xs ${
+                            isActive ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                          }`
+                        }
+                      >
+                        Daily entry
+                      </NavLink>
+                      <NavLink
+                        to="/b2c-sales/overview"
+                        className={({ isActive }) =>
+                          `block rounded-md px-2 py-1.5 text-xs ${
+                            isActive ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                          }`
+                        }
+                      >
+                        Overview
+                      </NavLink>
+                    </div>
+                  )}
+                </>
               )}
               {canCreditNotes && (
                 <>

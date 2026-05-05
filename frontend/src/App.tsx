@@ -75,7 +75,15 @@ function App() {
               path="b2c-sales"
               element={
                 <RequireRoles roles={['b2c', 'manager', 'admin']}>
-                  <B2CSalesEntryPage />
+                  <B2CSalesEntryPage startSection="daily" />
+                </RequireRoles>
+              }
+            />
+            <Route
+              path="b2c-sales/overview"
+              element={
+                <RequireRoles roles={['b2c', 'manager', 'admin']}>
+                  <B2CSalesEntryPage startSection="overview" />
                 </RequireRoles>
               }
             />

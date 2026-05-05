@@ -131,6 +131,11 @@ export default function MobileMorePage() {
                 label: 'B2C daily entry',
                 icon: <FileText className="w-4 h-4" />,
               },
+              {
+                to: '/b2c-sales/overview',
+                label: 'B2C overview',
+                icon: <FileText className="w-4 h-4" />,
+              },
             ] as MenuItem[])
           : []),
         ...(canCreditNotes
