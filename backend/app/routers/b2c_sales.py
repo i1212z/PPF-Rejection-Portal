@@ -81,10 +81,16 @@ async def b2c_daily_sales_analytics(
     current_user: User = Depends(
         require_roles(UserRole.B2B, UserRole.B2C, UserRole.MANAGER, UserRole.ADMIN)
     ),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
 ):
     filters = []
     if current_user.role == UserRole.B2C:
         filters.append(B2CDailyEntry.created_by == current_user.id)
+    if from_date:
+        filters.append(B2CDailyEntry.delivery_date >= from_date)
+    if to_date:
+        filters.append(B2CDailyEntry.delivery_date <= to_date)
 
     total_result = await db.execute(
         select(

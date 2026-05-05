@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { GeneralComplaintsSection } from '../components/GeneralComplaintsSection';
 import { CustomerNameField } from '../components/CustomerNameField';
 import { Card } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -213,6 +214,8 @@ export default function CreditNotesPage() {
 
   return (
     <div className="space-y-4 min-w-0 max-w-full">
+      <GeneralComplaintsSection channelLabel="B2B" allowCreate={user?.role === 'b2b'} />
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Credit notes register</h2>

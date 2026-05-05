@@ -174,7 +174,7 @@ export default function AppLayout() {
               <SidebarLink to="/analytics" icon={<BarChart3 className="w-4 h-4" />} label="Analytics" />
               <SidebarLink to="/tickets/new" icon={<PlusCircle className="w-4 h-4" />} label="Create Ticket" />
               <SidebarLink to="/tickets" icon={<Ticket className="w-4 h-4" />} label="Tickets" />
-              {user?.role === 'b2c' && (
+              {(user?.role === 'b2c' || user?.role === 'manager' || user?.role === 'admin') && (
                 <SidebarLink to="/b2c-sales" icon={<FileText className="w-4 h-4" />} label="B2C daily entry" />
               )}
               {canCreditNotes && (

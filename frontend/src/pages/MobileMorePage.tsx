@@ -113,7 +113,7 @@ export default function MobileMorePage() {
           label: 'Tickets',
           icon: <Ticket className="w-4 h-4" />,
         },
-        ...(role === 'b2c'
+        ...(role === 'b2c' || role === 'manager' || role === 'admin'
           ? ([
               {
                 to: '/b2c-sales',

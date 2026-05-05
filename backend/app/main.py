@@ -9,7 +9,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .routers import auth, tickets, approvals, admin, tally, credit_notes, credit_note_approvals, credit_note_tally, due, due_aging, b2c_sales
+from .routers import auth, tickets, approvals, admin, tally, credit_notes, credit_note_approvals, credit_note_tally, due, due_aging, b2c_sales, general_complaints
 from .database import engine, Base, get_db, AsyncSessionLocal
 from .models import (
     User,
@@ -27,6 +27,7 @@ from .models import (
     DueAgingScan,
     DueAgingAdjustment,
     DueAgingRow,
+    GeneralComplaint,
 )
 from .auth.deps import require_roles
 
@@ -243,6 +244,7 @@ async def reset_database(
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     """Delete all tickets, credit notes, approvals, and tally marks. Users are kept. Admin only."""
+    await db.execute(delete(GeneralComplaint))
     await db.execute(delete(CreditNoteTallyPending))
     await db.execute(delete(DueCustomCell))
     await db.execute(delete(CreditNoteDueTracking))
@@ -268,6 +270,7 @@ app.include_router(credit_notes.router)
 app.include_router(credit_note_approvals.router)
 app.include_router(credit_note_tally.router)
 app.include_router(b2c_sales.router)
+app.include_router(general_complaints.router)
 app.include_router(due.router)
 app.include_router(due_aging.router)
 app.include_router(admin.router)

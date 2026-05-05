@@ -433,6 +433,52 @@ class B2CDailySalesAnalytics(BaseModel):
     top_locations: List[B2CLocationSummary]
 
 
+class GeneralComplaintCreate(BaseModel):
+    complaint_text: str = Field(min_length=1)
+    customer_name: str = Field(min_length=1, max_length=255)
+    complaint_date: date
+    remark: Optional[str] = None
+
+    @field_validator("complaint_text")
+    @classmethod
+    def complaint_strip(cls, v: str) -> str:
+        t = (v or "").strip()
+        if not t:
+            raise ValueError("complaint_text is required")
+        return t
+
+    @field_validator("customer_name")
+    @classmethod
+    def customer_strip(cls, v: str) -> str:
+        t = (v or "").strip()
+        if not t:
+            raise ValueError("customer_name is required")
+        return t
+
+    @field_validator("remark")
+    @classmethod
+    def remark_strip(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        t = v.strip()
+        return t if t else None
+
+
+class GeneralComplaintRead(BaseModel):
+    id: UUID
+    channel: Channel
+    complaint_text: str
+    customer_name: str
+    complaint_date: date
+    remark: Optional[str] = None
+    created_by: UUID
+    created_at: datetime
+    creator: Optional[UserBase] = None
+
+    class Config:
+        from_attributes = True
+
+
 class DailyRejectionCostPoint(BaseModel):
     date: date
     total_cost: float

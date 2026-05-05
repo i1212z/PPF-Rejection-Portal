@@ -162,6 +162,23 @@ class B2CDailyEntry(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
 
 
+class GeneralComplaint(Base):
+    """Per-channel operational complaints (B2C vs B2B desks)."""
+
+    __tablename__ = "general_complaints"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    channel = Column(Enum(Channel, name="channel"), nullable=False, index=True)
+    complaint_text = Column(Text, nullable=False)
+    customer_name = Column(String(255), nullable=False)
+    complaint_date = Column(Date, nullable=False, index=True)
+    remark = Column(Text, nullable=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+
+    creator = relationship("User", foreign_keys=[created_by])
+
+
 class CreditNoteDueTracking(Base):
     """Per approved credit note: Due desk timer phases, row order, paid marker."""
 

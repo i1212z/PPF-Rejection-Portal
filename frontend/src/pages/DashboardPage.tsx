@@ -260,6 +260,10 @@ export default function DashboardPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showB2BUnits, setShowB2BUnits] = useState(false);
   const [showB2CUnits, setShowB2CUnits] = useState(false);
+  const [rangeFrom, setRangeFrom] = useState('');
+  const [rangeTo, setRangeTo] = useState('');
+  const [appliedFrom, setAppliedFrom] = useState('');
+  const [appliedTo, setAppliedTo] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -282,24 +286,38 @@ export default function DashboardPage() {
         user?.role === 'b2b' ||
         user?.role === 'b2c';
 
+      const ticketParams: Record<string, string | number> = { limit: 500 };
+      if (appliedFrom) ticketParams.from_date = appliedFrom;
+      if (appliedTo) ticketParams.to_date = appliedTo;
+
+      const creditNoteParams: Record<string, string | number> = { limit: 500 };
+      if (appliedFrom) creditNoteParams.from_date = appliedFrom;
+      if (appliedTo) creditNoteParams.to_date = appliedTo;
+
+      const b2cAnalyticsParams: Record<string, string> = {};
+      if (appliedFrom) b2cAnalyticsParams.from_date = appliedFrom;
+      if (appliedTo) b2cAnalyticsParams.to_date = appliedTo;
+
       const [ticketsResult, tallyResult, creditNotesResult, cnTallyResult, b2cSalesResult] =
         await Promise.allSettled([
           apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
-            params: { limit: 500 },
+            params: ticketParams,
           }),
           canSeeTallyPostedEndpoints
             ? apiClient.get<{ ticket_ids: string[] }>('/tally/posted')
             : Promise.resolve({ data: { ticket_ids: [] as string[] } }),
           canSeeCreditNotes
             ? apiClient.get<{ items: CreditNote[]; total: number }>('/credit-notes', {
-                params: { limit: 500 },
+                params: creditNoteParams,
               })
             : Promise.resolve({ data: { items: [] as CreditNote[], total: 0 } }),
           canSeeCreditNoteTallyPostedEndpoints
             ? apiClient.get<{ credit_note_ids: string[] }>('/credit-note-tally/posted')
             : Promise.resolve({ data: { credit_note_ids: [] as string[] } }),
           canSeeB2CSalesAnalytics
-            ? apiClient.get<B2CSalesAnalytics>('/b2c-sales/analytics')
+            ? apiClient.get<B2CSalesAnalytics>('/b2c-sales/analytics', {
+                params: b2cAnalyticsParams,
+              })
             : Promise.resolve({
                 data: {
                   total_orders: 0,
@@ -350,7 +368,7 @@ export default function DashboardPage() {
       setLoading(false);
     };
     void load();
-  }, [user?.role]);
+  }, [user?.role, appliedFrom, appliedTo]);
 
   const channelFilter = user?.role === 'b2b' ? 'B2B' : user?.role === 'b2c' ? 'B2C' : null;
 
@@ -512,6 +530,69 @@ export default function DashboardPage() {
     [rejectedByUnit.B2C],
   );
 
+  const dateFilterSubtitle =
+    appliedFrom || appliedTo
+      ? [
+          appliedFrom ? `From ${appliedFrom}` : null,
+          appliedTo ? `To ${appliedTo}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : 'No delivery-date filter';
+
+  const dateRangeBar = (
+    <div className="mt-3 flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-end">
+      <div className="flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-[11px] font-medium text-gray-600 mb-0.5">From</label>
+          <input
+            type="date"
+            value={rangeFrom}
+            onChange={(e) => setRangeFrom(e.target.value)}
+            className="rounded-md border border-gray-200 px-2 py-1.5 text-xs bg-white min-h-[36px]"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-gray-600 mb-0.5">To</label>
+          <input
+            type="date"
+            value={rangeTo}
+            onChange={(e) => setRangeTo(e.target.value)}
+            className="rounded-md border border-gray-200 px-2 py-1.5 text-xs bg-white min-h-[36px]"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setAppliedFrom(rangeFrom);
+            setAppliedTo(rangeTo);
+          }}
+          className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-800 min-h-[36px]"
+        >
+          Apply range
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setRangeFrom('');
+            setRangeTo('');
+            setAppliedFrom('');
+            setAppliedTo('');
+          }}
+          className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 min-h-[36px]"
+        >
+          Clear
+        </button>
+      </div>
+      {(appliedFrom || appliedTo) && (
+        <p className="text-[11px] text-gray-500 sm:ml-1">
+          Dashboard metrics use ticket and credit-note delivery dates in range; B2C daily analytics uses entry delivery
+          dates.
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-3 md:space-y-6 min-w-0 max-w-full">
       {/* Header */}
@@ -524,6 +605,7 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-500">
               Rejection overview for {user?.role} across B2B and B2C.
             </p>
+            {dateRangeBar}
           </div>
           <div className="inline-flex w-full md:w-auto justify-center md:justify-start items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-[11px] text-emerald-700 shrink-0">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -543,6 +625,13 @@ export default function DashboardPage() {
 
         {/* Mobile quick actions */}
         <div className="md:hidden space-y-3">
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold text-gray-900 tracking-tight">Dashboard</h2>
+            <p className="text-sm text-gray-500">
+              Rejection overview for {user?.role} across B2B and B2C.
+            </p>
+            {dateRangeBar}
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <Link
               to="/tickets/new"
@@ -785,7 +874,7 @@ export default function DashboardPage() {
       {/* Current delivery window by channel – summary (overall ticket value) */}
       <Card
         title="Current delivery window by channel"
-        subtitle="This week — rejected quantity in kg per channel"
+        subtitle={`Rejected quantity (kg) by channel — ${dateFilterSubtitle}`}
         className="border-l-4 border-l-indigo-400"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -826,10 +915,10 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 xl:gap-6 min-w-0">
         <Card
         title="Confirmed rejected quantity (kg)"
-        subtitle="This week — confirmed (approved) quantity by channel in kg"
+        subtitle={`Confirmed (approved) quantity by channel (kg) — ${dateFilterSubtitle}`}
           rightSlot={
             <span className="rounded-full border border-gray-200 px-3 py-1 text-[11px] text-gray-600 bg-gray-50 inline-block w-full sm:w-auto text-center">
-              This week
+              {appliedFrom || appliedTo ? 'Range' : 'All dates'}
             </span>
           }
           className="xl:col-span-2 min-h-[280px] min-w-0"
