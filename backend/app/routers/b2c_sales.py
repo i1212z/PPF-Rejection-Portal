@@ -307,6 +307,38 @@ async def delete_b2c_workbook_scan(
     return None
 
 
+@router.delete("/scans/{scan_id}/sheets/{sheet_name}", response_model=B2CWorkbookScanDetail)
+async def delete_b2c_workbook_sheet(
+    scan_id: UUID,
+    sheet_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.B2C, UserRole.MANAGER, UserRole.ADMIN)),
+):
+    row = (await db.execute(select(B2CWorkbookScan).where(B2CWorkbookScan.id == scan_id))).scalars().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Scan not found.")
+    if _role_value(current_user) == "b2c" and row.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    try:
+        parsed = json.loads(row.workbook_json or "[]")
+    except json.JSONDecodeError:
+        parsed = []
+    if not isinstance(parsed, list):
+        parsed = []
+
+    kept = [s for s in parsed if str(s.get("name") or "") != sheet_name]
+    if len(kept) == len(parsed):
+        raise HTTPException(status_code=404, detail="Sheet not found in scan.")
+    if not kept:
+        raise HTTPException(status_code=400, detail="Cannot remove the last sheet. Delete the scan instead.")
+
+    row.workbook_json = json.dumps(kept, ensure_ascii=False)
+    await db.commit()
+    await db.refresh(row)
+    return _scan_detail(row)
+
+
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_b2c_daily_entry(
     entry_id: str,

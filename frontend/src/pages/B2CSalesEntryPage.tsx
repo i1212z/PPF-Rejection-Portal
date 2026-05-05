@@ -85,6 +85,21 @@ function fileSizeLabel(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function compactNumber(value: number): string {
+  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return `${Math.round(value)}`;
+}
+
+function formatSheetLabel(name: string): string {
+  const raw = (name || '').trim();
+  const m = raw.match(/^(\d{2}|\d{4})\s*[-_/]\s*(\d{2}|\d{4})$/);
+  if (!m) return raw;
+  const left = m[1].slice(-2);
+  const right = m[2].slice(-2);
+  return `FY ${left}-${right}`;
+}
+
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -215,6 +230,11 @@ function B2COverviewScannerSection() {
   const [showHistory, setShowHistory] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedSheet, setSelectedSheet] = useState<string>('all');
+  const [selectedMetrics, setSelectedMetrics] = useState<{ orders: boolean; amount: boolean; avgBill: boolean }>({
+    orders: true,
+    amount: true,
+    avgBill: false,
+  });
 
   const loadScans = useCallback(async () => {
     try {
@@ -282,14 +302,14 @@ function B2COverviewScannerSection() {
     }
   };
 
-  const onDeleteActive = async () => {
-    if (!activeScanId) return;
+  const onDeleteScan = async (scanId: string) => {
+    if (!scanId) return;
     if (!window.confirm('Delete selected scan?')) return;
     setDeleting(true);
     setError(null);
     try {
-      await apiClient.delete(`/b2c-sales/scans/${activeScanId}`);
-      const next = scans.filter((s) => s.id !== activeScanId);
+      await apiClient.delete(`/b2c-sales/scans/${scanId}`);
+      const next = scans.filter((s) => s.id !== scanId);
       setScans(next);
       const nextId = next[0]?.id ?? null;
       setActiveScanId(nextId);
@@ -299,6 +319,11 @@ function B2COverviewScannerSection() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const onDeleteActive = async () => {
+    if (!activeScanId) return;
+    await onDeleteScan(activeScanId);
   };
 
   const onDownload = async (scanId: string, fileName: string) => {
@@ -315,6 +340,37 @@ function B2COverviewScannerSection() {
     } catch {
       setError('Could not download file.');
     }
+  };
+
+  const onDeleteSheet = async (sheetName: string) => {
+    if (!scanDetail) return;
+    if (!window.confirm(`Delete sheet "${formatSheetLabel(sheetName)}"?`)) return;
+    setError(null);
+    try {
+      const res = await apiClient.delete<B2CWorkbookScanDetail>(
+        `/b2c-sales/scans/${scanDetail.scan.id}/sheets/${encodeURIComponent(sheetName)}`,
+      );
+      setScanDetail(res.data ?? null);
+      setActiveSheetIndex(0);
+      await loadScans();
+    } catch (err: unknown) {
+      const msg =
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          ? String((err as { response: { data: { detail: string } } }).response.data.detail)
+          : 'Could not delete sheet.';
+      setError(msg);
+    }
+  };
+
+  const toggleMetric = (key: 'orders' | 'amount' | 'avgBill') => {
+    setSelectedMetrics((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      if (!next.orders && !next.amount && !next.avgBill) return prev;
+      return next;
+    });
   };
 
   const activeSheet = useMemo(() => {
@@ -355,8 +411,20 @@ function B2COverviewScannerSection() {
         amount: v.amount,
         avgBillValue: v.orders > 0 ? v.amount / v.orders : 0,
       }))
+      .filter((r) => {
+        const n = r.location.trim().toLowerCase();
+        return !!n && !n.includes('total') && !n.includes('share');
+      })
       .sort((a, b) => b.amount - a.amount);
   }, [filteredPoints]);
+
+  const locationSummaryForCharts = useMemo(() => locationSummary.slice(0, 10), [locationSummary]);
+  const pieMetric: 'orders' | 'amount' = selectedMetrics.amount ? 'amount' : 'orders';
+  const locationBarMetric: 'orders' | 'amount' | 'avgBillValue' = selectedMetrics.orders
+    ? 'orders'
+    : selectedMetrics.amount
+      ? 'amount'
+      : 'avgBillValue';
 
   const monthSummary = useMemo(() => {
     const base = MONTHS.map((m) => ({ month: m, orders: 0, amount: 0 }));
@@ -476,6 +544,13 @@ function B2COverviewScannerSection() {
                           >
                             Download
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => void onDeleteScan(s.id)}
+                            className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -487,7 +562,20 @@ function B2COverviewScannerSection() {
         </Card>
       )}
 
-      <Card title="Workbook op" subtitle="Clean sheet preview (blank rows removed)">
+      <Card
+        title="Workbook op"
+        subtitle="Clean sheet preview (blank rows removed)"
+        rightSlot={
+          <button
+            type="button"
+            disabled={!activeScanId || deleting}
+            onClick={() => void onDeleteActive()}
+            className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
+          >
+            Delete scan
+          </button>
+        }
+      >
         {loading ? (
           <div className="text-sm text-gray-500">Loading scan...</div>
         ) : !scanDetail || scanDetail.sheets.length === 0 ? (
@@ -496,18 +584,34 @@ function B2COverviewScannerSection() {
           <div className="space-y-3">
             <div className="flex flex-wrap gap-1.5">
               {scanDetail.sheets.map((sheet, idx) => (
-                <button
+                <div
                   key={`${sheet.name}-${idx}`}
-                  type="button"
-                  onClick={() => setActiveSheetIndex(idx)}
-                  className={`rounded-full px-3 py-1 text-[11px] font-semibold border ${
+                  className={`inline-flex items-center rounded-full border ${
                     idx === activeSheetIndex
                       ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      : 'bg-white text-gray-700 border-gray-200'
                   }`}
                 >
-                  {sheet.name}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSheetIndex(idx)}
+                    className="px-3 py-1 text-[11px] font-semibold"
+                  >
+                    {formatSheetLabel(sheet.name)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onDeleteSheet(sheet.name)}
+                    className={`mr-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                      idx === activeSheetIndex
+                        ? 'bg-white/20 text-white hover:bg-white/30'
+                        : 'border border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                    }`}
+                    title="Delete this sheet"
+                  >
+                    x
+                  </button>
+                </div>
               ))}
             </div>
             {activeSheet && (
@@ -546,117 +650,169 @@ function B2COverviewScannerSection() {
             No monthly matrix detected yet. Expected columns like April..March with Orders/Amount (and optional Avg bill Value).
           </div>
         ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
-              <label className="text-xs text-gray-600 ml-2">Location</label>
-              <select
-                value={selectedLocation}
-                onChange={(e) => setSelectedLocation(e.target.value)}
-                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
-              >
-                <option value="all">All locations</option>
-                {locationOptions.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc}
-                  </option>
-                ))}
-              </select>
-              <label className="text-xs text-gray-600 ml-2">Sheet</label>
-              <select
-                value={selectedSheet}
-                onChange={(e) => setSelectedSheet(e.target.value)}
-                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
-              >
-                <option value="all">All sheets</option>
-                {(scanDetail?.sheets ?? []).map((s) => (
-                  <option key={s.name} value={s.name}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+            <div className="xl:col-span-1 rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase text-gray-500 mb-1">Filters</div>
+                <label className="text-xs text-gray-600">Location</label>
+                <select
+                  value={selectedLocation}
+                  onChange={(e) => setSelectedLocation(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                >
+                  <option value="all">All locations</option>
+                  {locationOptions.map((loc) => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))}
+                </select>
+                <label className="mt-2 block text-xs text-gray-600">Sheet</label>
+                <select
+                  value={selectedSheet}
+                  onChange={(e) => setSelectedSheet(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                >
+                  <option value="all">All sheets</option>
+                  {(scanDetail?.sheets ?? []).map((s) => (
+                    <option key={s.name} value={s.name}>
+                      {formatSheetLabel(s.name)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase text-gray-500 mb-1">Variables</div>
+                <label className="flex items-center gap-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={selectedMetrics.orders}
+                    onChange={() => toggleMetric('orders')}
+                    className="rounded border-gray-300"
+                  />
+                  Orders
+                </label>
+                <label className="mt-1 flex items-center gap-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={selectedMetrics.amount}
+                    onChange={() => toggleMetric('amount')}
+                    className="rounded border-gray-300"
+                  />
+                  Amount
+                </label>
+                <label className="mt-1 flex items-center gap-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={selectedMetrics.avgBill}
+                    onChange={() => toggleMetric('avgBill')}
+                    className="rounded border-gray-300"
+                  />
+                  Avg bill value
+                </label>
+              </div>
               <button
                 type="button"
                 onClick={exportPowerBIWorkbook}
-                className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                className="w-full rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
               >
                 Download Power BI workbook
               </button>
             </div>
-            {filteredPoints.length === 0 ? (
-              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                No data for selected filters. Change sheet/location filters to see output.
-              </div>
-            ) : (
-              <>
-            <div className="h-80 rounded-md border border-gray-200 p-2">
-              <div className="text-[11px] text-gray-600 mb-2">Monthly Order Vs Amount</div>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={monthSummary}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={70} />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <Tooltip />
-                  <Legend />
-                  <Bar yAxisId="left" dataKey="orders" fill="#3b82f6" />
-                  <Line yAxisId="right" type="monotone" dataKey="amount" stroke="#ef4444" strokeWidth={2} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <div className="h-72 rounded-md border border-gray-200 p-2">
-                <div className="text-[11px] text-gray-600 mb-2">Location wise item (amount share)</div>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={locationSummary} dataKey="amount" nameKey="location" outerRadius={95} innerRadius={40}>
-                      {locationSummary.map((_, idx) => (
-                        <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="h-72 rounded-md border border-gray-200 p-2">
-                <div className="text-[11px] text-gray-600 mb-2">Location wise item (orders)</div>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={locationSummary}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="location" interval={0} angle={-20} textAnchor="end" height={60} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="orders" fill="#22c55e" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+            <div className="xl:col-span-4 space-y-4">
+              {filteredPoints.length === 0 ? (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  No data for selected filters. Change sheet/location filters to see output.
+                </div>
+              ) : (
+                <>
+                  <div className="h-80 rounded-md border border-gray-200 p-2">
+                    <div className="text-[11px] text-gray-600 mb-2">Monthly Order Vs Amount</div>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={monthSummary}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" interval={0} angle={-20} textAnchor="end" height={70} />
+                        <YAxis yAxisId="left" tickFormatter={(v) => compactNumber(Number(v))} />
+                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => compactNumber(Number(v))} />
+                        <Tooltip />
+                        <Legend />
+                        {selectedMetrics.orders && <Bar yAxisId="left" dataKey="orders" name="Orders" fill="#3b82f6" />}
+                        {selectedMetrics.amount && (
+                          <Line yAxisId="right" type="monotone" dataKey="amount" name="Amount" stroke="#ef4444" strokeWidth={2} />
+                        )}
+                        {selectedMetrics.avgBill && (
+                          <Line yAxisId="right" type="monotone" dataKey="avgBillValue" name="Avg bill" stroke="#a855f7" strokeWidth={2} />
+                        )}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div className="h-72 rounded-md border border-gray-200 p-2">
+                      <div className="text-[11px] text-gray-600 mb-2">
+                        Location wise item ({pieMetric === 'amount' ? 'amount share' : 'orders share'})
+                      </div>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={locationSummaryForCharts} dataKey={pieMetric} nameKey="location" outerRadius={95} innerRadius={40}>
+                            {locationSummaryForCharts.map((_, idx) => (
+                              <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                          <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: '11px' }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="h-72 rounded-md border border-gray-200 p-2">
+                      <div className="text-[11px] text-gray-600 mb-2">Location wise item ({locationBarMetric})</div>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={locationSummaryForCharts}
+                          layout="vertical"
+                          margin={{ top: 8, right: 10, left: 50, bottom: 8 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" tickFormatter={(v) => compactNumber(Number(v))} />
+                          <YAxis type="category" dataKey="location" width={125} tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Legend />
+                          <Bar
+                            dataKey={locationBarMetric}
+                            name={locationBarMetric === 'avgBillValue' ? 'Avg bill value' : locationBarMetric}
+                            fill="#22c55e"
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="w-full overflow-x-auto">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Location</th>
+                          <th className="px-3 py-2 text-right">Orders</th>
+                          <th className="px-3 py-2 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {locationSummary.map((r) => (
+                          <tr key={r.location}>
+                            <td className="px-3 py-2">{r.location}</td>
+                            <td className="px-3 py-2 text-right">{r.orders.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right">
+                              {r.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="w-full overflow-x-auto">
-              <table className="min-w-full text-xs">
-                <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Location</th>
-                    <th className="px-3 py-2 text-right">Orders</th>
-                    <th className="px-3 py-2 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {locationSummary.map((r) => (
-                    <tr key={r.location}>
-                      <td className="px-3 py-2">{r.location}</td>
-                      <td className="px-3 py-2 text-right">{r.orders.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right">
-                        {r.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-              </>
-            )}
           </div>
         )}
       </Card>
