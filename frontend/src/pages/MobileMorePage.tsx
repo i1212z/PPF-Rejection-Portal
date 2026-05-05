@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { Link } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Ticket, FileText, CheckCircle2, BarChart3, Settings } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Ticket, FileText, CheckCircle2, BarChart3, Settings, MessageSquareWarning } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from '../components/ui/Card';
 
@@ -21,6 +21,8 @@ export default function MobileMorePage() {
   const role = user?.role;
 
   const canCreditNotes = role === 'b2b' || role === 'manager' || role === 'admin';
+  const canGeneralComplaints =
+    role === 'b2b' || role === 'b2c' || role === 'manager' || role === 'admin';
   const isManager = role === 'manager' || role === 'admin';
   const isAdmin = role === 'admin';
   const isDue = role === 'due';
@@ -113,6 +115,15 @@ export default function MobileMorePage() {
           label: 'Tickets',
           icon: <Ticket className="w-4 h-4" />,
         },
+        ...(canGeneralComplaints
+          ? ([
+              {
+                to: '/general-complaints',
+                label: 'General complaints',
+                icon: <MessageSquareWarning className="w-4 h-4" />,
+              },
+            ] as MenuItem[])
+          : []),
         ...(role === 'b2c' || role === 'manager' || role === 'admin'
           ? ([
               {

@@ -22,6 +22,7 @@ import DueReportPage from './pages/DueReportPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import MobileMorePage from './pages/MobileMorePage';
 import B2CSalesEntryPage from './pages/B2CSalesEntryPage';
+import GeneralComplaintsPage from './pages/GeneralComplaintsPage';
 import AppLayout from './layout/AppLayout';
 import { RequireRoles } from './auth/RequireRoles';
 
@@ -75,6 +76,14 @@ function App() {
               element={
                 <RequireRoles roles={['b2c', 'manager', 'admin']}>
                   <B2CSalesEntryPage />
+                </RequireRoles>
+              }
+            />
+            <Route
+              path="general-complaints"
+              element={
+                <RequireRoles roles={['b2b', 'b2c', 'manager', 'admin']}>
+                  <GeneralComplaintsPage />
                 </RequireRoles>
               }
             />

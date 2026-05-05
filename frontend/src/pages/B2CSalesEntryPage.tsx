@@ -1,8 +1,6 @@
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
-import { GeneralComplaintsSection } from '../components/GeneralComplaintsSection';
 import { Card } from '../components/ui/Card';
 
 const B2C_LOCATION_OPTIONS = [
@@ -23,7 +21,6 @@ interface B2CDailyEntry {
 }
 
 export default function B2CSalesEntryPage() {
-  const { user } = useAuth();
   const [deliveryDate, setDeliveryDate] = useState('');
   const [location, setLocation] = useState('');
   const [noOfOrder, setNoOfOrder] = useState<number | ''>('');
@@ -97,11 +94,6 @@ export default function B2CSalesEntryPage() {
           Enter daily B2C operational numbers for dashboard analytics.
         </p>
       </div>
-
-      <GeneralComplaintsSection
-        channelLabel="B2C"
-        allowCreate={user?.role === 'b2c'}
-      />
 
       <Card title="New entry" subtitle="Delivery date, location, order count, and sale value">
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3">

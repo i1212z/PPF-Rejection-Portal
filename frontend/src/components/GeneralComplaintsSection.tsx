@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Card } from './ui/Card';
@@ -25,13 +25,22 @@ interface GeneralComplaintRow {
 }
 
 interface Props {
-  /** Used for section title copy only; API channel is enforced server-side by role. */
+  /** Card heading (default: General complaints). */
+  cardTitle?: string;
+  /** Used for section subtitle only; API channel is enforced server-side by role. */
   channelLabel: ComplaintChannel;
-  /** B2C/B2B users can create; managers/admins see all rows but only use the register on this desk. */
+  /** B2C/B2B users can create; managers/admins use view-only lists here. */
   allowCreate: boolean;
+  /** When set (manager/admin), list is filtered to this channel via API. */
+  listChannel?: ComplaintChannel;
 }
 
-export function GeneralComplaintsSection({ channelLabel, allowCreate }: Props) {
+export function GeneralComplaintsSection({
+  cardTitle = 'General complaints',
+  channelLabel,
+  allowCreate,
+  listChannel,
+}: Props) {
   const { user } = useAuth();
   const [complaintText, setComplaintText] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -45,21 +54,23 @@ export function GeneralComplaintsSection({ channelLabel, allowCreate }: Props) {
 
   const showCreator = user?.role === 'manager' || user?.role === 'admin';
 
-  const loadRows = async () => {
+  const loadRows = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get<GeneralComplaintRow[]>('/general-complaints');
+      const res = await apiClient.get<GeneralComplaintRow[]>('/general-complaints', {
+        params: listChannel ? { channel: listChannel } : undefined,
+      });
       setRows(res.data ?? []);
     } catch {
       setRows([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [listChannel]);
 
   useEffect(() => {
     void loadRows();
-  }, []);
+  }, [loadRows]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -102,8 +113,8 @@ export function GeneralComplaintsSection({ channelLabel, allowCreate }: Props) {
 
   return (
     <Card
-      title="General complaints"
-      subtitle={`${channelLabel} — short notes visible to managers and admins`}
+      title={cardTitle}
+      subtitle={`${channelLabel} desk — visible to managers and admins`}
     >
       {allowCreate ? (
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">

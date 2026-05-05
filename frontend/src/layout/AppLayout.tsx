@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut, FileText, MoreHorizontal } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Ticket, CheckCircle2, BarChart3, Settings, Bell, Search, User, CheckCircle, XCircle, LogOut, FileText, MoreHorizontal, MessageSquareWarning } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { apiClient } from '../api/client';
 import ppfLogo from '../assets/ppf-logo.png';
@@ -54,6 +54,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/due/settings')) return 'Due — settings';
     if (location.pathname.startsWith('/due/')) return 'Due — open sheet';
     if (location.pathname.startsWith('/analytics')) return 'Analytics';
+    if (location.pathname.startsWith('/general-complaints')) return 'General complaints';
     if (location.pathname.startsWith('/b2c-sales')) return 'B2C daily entry';
     if (location.pathname.startsWith('/approvals')) return 'TKTS and CN approvals';
     if (location.pathname.startsWith('/reports')) return 'Reports';
@@ -68,6 +69,8 @@ export default function AppLayout() {
   const canChangePassword =
     user?.role === 'manager' || user?.role === 'admin' || user?.role === 'due';
   const canCreditNotes = user?.role === 'b2b' || user?.role === 'manager' || user?.role === 'admin';
+  const canGeneralComplaints =
+    user?.role === 'b2b' || user?.role === 'b2c' || user?.role === 'manager' || user?.role === 'admin';
 
   const submitPasswordChange = async () => {
     setPwError(null);
@@ -174,6 +177,13 @@ export default function AppLayout() {
               <SidebarLink to="/analytics" icon={<BarChart3 className="w-4 h-4" />} label="Analytics" />
               <SidebarLink to="/tickets/new" icon={<PlusCircle className="w-4 h-4" />} label="Create Ticket" />
               <SidebarLink to="/tickets" icon={<Ticket className="w-4 h-4" />} label="Tickets" />
+              {canGeneralComplaints && (
+                <SidebarLink
+                  to="/general-complaints"
+                  icon={<MessageSquareWarning className="w-4 h-4" />}
+                  label="General complaints"
+                />
+              )}
               {(user?.role === 'b2c' || user?.role === 'manager' || user?.role === 'admin') && (
                 <SidebarLink to="/b2c-sales" icon={<FileText className="w-4 h-4" />} label="B2C daily entry" />
               )}
