@@ -70,6 +70,10 @@ function fileSizeLabel(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function normalizeCell(s: string): string {
   return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -79,6 +83,16 @@ function parseNum(raw: string | undefined): number | null {
   if (!text) return null;
   const n = Number(text);
   return Number.isFinite(n) ? n : null;
+}
+
+function isBlankRow(row: string[]): boolean {
+  return row.every((c) => !String(c || '').trim());
+}
+
+function compactSheetRows(rows: string[][]): string[][] {
+  if (!rows.length) return [];
+  const nonEmpty = rows.filter((r) => !isBlankRow(r));
+  return nonEmpty;
 }
 
 function isLikelyTotalLabel(value: string): boolean {
@@ -179,6 +193,8 @@ function B2COverviewScannerSection() {
   const [error, setError] = useState<string | null>(null);
   const [analyticsView, setAnalyticsView] = useState<'location' | 'month' | 'dataset'>('location');
   const [analyticsMode, setAnalyticsMode] = useState<'table' | 'charts'>('charts');
+  const [selectedLocation, setSelectedLocation] = useState<string>('all');
+  const [selectedSheet, setSelectedSheet] = useState<string>('all');
 
   const loadScans = useCallback(async () => {
     try {
@@ -291,9 +307,22 @@ function B2COverviewScannerSection() {
     [scanDetail],
   );
 
+  const locationOptions = useMemo(
+    () => Array.from(new Set(monthlyPoints.map((p) => p.location))).sort((a, b) => a.localeCompare(b)),
+    [monthlyPoints],
+  );
+
+  const filteredPoints = useMemo(() => {
+    return monthlyPoints.filter((p) => {
+      if (selectedLocation !== 'all' && p.location !== selectedLocation) return false;
+      if (selectedSheet !== 'all' && p.sheet !== selectedSheet) return false;
+      return true;
+    });
+  }, [monthlyPoints, selectedLocation, selectedSheet]);
+
   const locationSummary = useMemo(() => {
     const map = new Map<string, { orders: number; amount: number }>();
-    monthlyPoints.forEach((p) => {
+    filteredPoints.forEach((p) => {
       const prev = map.get(p.location) ?? { orders: 0, amount: 0 };
       prev.orders += p.orders;
       prev.amount += p.amount;
@@ -307,13 +336,13 @@ function B2COverviewScannerSection() {
         avgBillValue: v.orders > 0 ? v.amount / v.orders : 0,
       }))
       .sort((a, b) => b.amount - a.amount);
-  }, [monthlyPoints]);
+  }, [filteredPoints]);
 
   const monthSummary = useMemo(() => {
     const base = MONTHS.map((m) => ({ month: m, orders: 0, amount: 0 }));
     const index = new Map<MonthName, number>();
     MONTHS.forEach((m, i) => index.set(m, i));
-    monthlyPoints.forEach((p) => {
+    filteredPoints.forEach((p) => {
       const idx = index.get(p.month);
       if (idx == null) return;
       base[idx].orders += p.orders;
@@ -323,7 +352,24 @@ function B2COverviewScannerSection() {
       ...r,
       avgBillValue: r.orders > 0 ? r.amount / r.orders : 0,
     }));
-  }, [monthlyPoints]);
+  }, [filteredPoints]);
+
+  const intelligenceSummary = useMemo(() => {
+    const totalOrders = monthSummary.reduce((acc, m) => acc + m.orders, 0);
+    const totalAmount = monthSummary.reduce((acc, m) => acc + m.amount, 0);
+    const monthsWithData = monthSummary.filter((m) => m.orders > 0 || m.amount > 0).length;
+    const avgBill = totalOrders > 0 ? totalAmount / totalOrders : 0;
+    const monthlyRunRate = monthsWithData > 0 ? totalAmount / monthsWithData : 0;
+    const projectedFY = monthlyRunRate * 12;
+    return {
+      totalOrders,
+      totalAmount,
+      avgBill,
+      monthlyRunRate,
+      projectedFY,
+      monthsWithData,
+    };
+  }, [monthSummary]);
 
   const exportPowerBIWorkbook = () => {
     if (!monthlyPoints.length) return;
@@ -331,7 +377,7 @@ function B2COverviewScannerSection() {
 
     const datasetRows = [
       ['Sheet', 'Location', 'Month', 'Orders', 'Amount', 'Avg Bill Value'],
-      ...monthlyPoints.map((p) => [p.sheet, p.location, p.month, p.orders, p.amount, p.avgBillValue]),
+      ...filteredPoints.map((p) => [p.sheet, p.location, p.month, p.orders, p.amount, p.avgBillValue]),
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(datasetRows), 'dataset');
 
@@ -352,8 +398,8 @@ function B2COverviewScannerSection() {
 
   return (
     <div className="space-y-4">
-      <Card title="Overview" subtitle="Excel scanner + cross-sheet analytics (April to March)">
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+      <Card title="Overview" subtitle="Excel scanner and structured analysis for FY 2026-27 style sheets">
+        <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-cyan-50 p-3 sm:p-4 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
           <div className="flex flex-col sm:flex-row sm:items-end gap-2">
             <label className="text-xs text-gray-700">
               Upload Excel (.xlsx, .xls)
@@ -368,7 +414,7 @@ function B2COverviewScannerSection() {
                 className="mt-1 block text-xs"
               />
             </label>
-            <div className="text-[11px] text-gray-500">{uploading ? 'Scanning workbook...' : 'Scans all sheets in the workbook.'}</div>
+            <div className="text-[11px] text-gray-500">{uploading ? 'Scanning workbook...' : 'Scans all sheets and extracts monthly intelligence.'}</div>
           </div>
           <button
             type="button"
@@ -432,7 +478,7 @@ function B2COverviewScannerSection() {
         )}
       </Card>
 
-      <Card title="Workbook output" subtitle="Spreadsheet-like tabs for each sheet">
+      <Card title="Workbook output" subtitle="Clean sheet preview (blank rows removed)">
         {loading ? (
           <div className="text-sm text-gray-500">Loading scan...</div>
         ) : !scanDetail || scanDetail.sheets.length === 0 ? (
@@ -463,12 +509,9 @@ function B2COverviewScannerSection() {
                 <div className="w-full overflow-x-auto border border-gray-200 rounded-md">
                   <table className="min-w-full text-xs">
                     <tbody className="divide-y divide-gray-100">
-                      {activeSheet.rows.map((row, rIdx) => (
+                      {compactSheetRows(activeSheet.rows).map((row, rIdx) => (
                         <tr key={rIdx}>
-                          <td className="px-2 py-1.5 border-r border-gray-100 text-[10px] text-gray-400">
-                            {rIdx + 1}
-                            {row.every((c) => !String(c || '').trim()) ? ' (empty)' : ''}
-                          </td>
+                          <td className="px-2 py-1.5 border-r border-gray-100 text-[10px] text-gray-500 bg-gray-50 font-medium">{rIdx + 1}</td>
                           {Array.from({ length: Math.max(activeSheet.column_count, row.length) }).map((_, cIdx) => {
                             const cell = row[cIdx] ?? '';
                             return (
@@ -488,14 +531,39 @@ function B2COverviewScannerSection() {
         )}
       </Card>
 
-      <Card title="Analytics options" subtitle="Monthly/location analytics extracted from related sheets">
+      <Card title="Analytics options" subtitle="Professional charts, filters, and intelligence generated from scanned sheets">
         {!monthlyPoints.length ? (
           <div className="text-sm text-gray-500">
             No monthly matrix detected yet. Expected columns like April..March with Orders/Amount (and optional Avg bill Value).
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+                <div className="text-[11px] uppercase text-emerald-700">Total amount</div>
+                <div className="text-lg font-semibold text-emerald-900">
+                  {intelligenceSummary.totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                <div className="text-[11px] uppercase text-blue-700">Total orders</div>
+                <div className="text-lg font-semibold text-blue-900">{intelligenceSummary.totalOrders.toLocaleString()}</div>
+              </div>
+              <div className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2">
+                <div className="text-[11px] uppercase text-violet-700">Avg bill value</div>
+                <div className="text-lg font-semibold text-violet-900">
+                  {intelligenceSummary.avgBill.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
+                <div className="text-[11px] uppercase text-amber-700">Projected FY value</div>
+                <div className="text-lg font-semibold text-amber-900">
+                  {intelligenceSummary.projectedFY.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
               <label className="text-xs text-gray-600">Analytics view</label>
               <select
                 value={analyticsView}
@@ -505,6 +573,32 @@ function B2COverviewScannerSection() {
                 <option value="location">By location</option>
                 <option value="month">By month</option>
                 <option value="dataset">Normalized dataset</option>
+              </select>
+              <label className="text-xs text-gray-600 ml-2">Location</label>
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
+              >
+                <option value="all">All locations</option>
+                {locationOptions.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+              <label className="text-xs text-gray-600 ml-2">Sheet</label>
+              <select
+                value={selectedSheet}
+                onChange={(e) => setSelectedSheet(e.target.value)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
+              >
+                <option value="all">All sheets</option>
+                {(scanDetail?.sheets ?? []).map((s) => (
+                  <option key={s.name} value={s.name}>
+                    {s.name}
+                  </option>
+                ))}
               </select>
               <label className="text-xs text-gray-600 ml-2">Display</label>
               <select
@@ -530,7 +624,7 @@ function B2COverviewScannerSection() {
                   <div className="text-[11px] text-gray-600 mb-2">Location amount share (pie)</div>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={locationSummary} dataKey="amount" nameKey="location" outerRadius={95} fill="#4f46e5" label />
+                      <Pie data={locationSummary} dataKey="amount" nameKey="location" outerRadius={95} fill="#0ea5e9" label />
                       <Tooltip />
                     </PieChart>
                   </ResponsiveContainer>
@@ -646,7 +740,7 @@ function B2COverviewScannerSection() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {monthlyPoints.map((r, idx) => (
+                    {filteredPoints.map((r, idx) => (
                       <tr key={`${r.sheet}-${r.location}-${r.month}-${idx}`}>
                         <td className="px-3 py-2">{r.sheet}</td>
                         <td className="px-3 py-2">{r.location}</td>
@@ -670,7 +764,7 @@ function B2COverviewScannerSection() {
 export default function B2CSalesEntryPage({ startSection = 'daily' }: { startSection?: Subsection }) {
   const navigate = useNavigate();
   const [subsection, setSubsection] = useState<Subsection>(startSection);
-  const [deliveryDate, setDeliveryDate] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState(todayIso());
   const [location, setLocation] = useState('');
   const [noOfOrder, setNoOfOrder] = useState<number | ''>('');
   const [totalSaleValue, setTotalSaleValue] = useState<number | ''>('');
@@ -748,7 +842,7 @@ export default function B2CSalesEntryPage({ startSection = 'daily' }: { startSec
     <div className="space-y-4 min-w-0 max-w-full">
       <div>
         <h2 className="text-lg font-semibold text-gray-900">B2C daily entry</h2>
-        <p className="text-sm text-gray-500">Use Daily entry or Overview scanner section.</p>
+        <p className="text-sm text-gray-500">Use Daily entry or Overview scanner section (FY 2026-27 ready workflow).</p>
       </div>
 
       <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1">
