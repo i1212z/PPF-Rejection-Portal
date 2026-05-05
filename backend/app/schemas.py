@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -431,6 +431,27 @@ class B2CDailySalesAnalytics(BaseModel):
     total_sale_value: float
     total_entries: int
     top_locations: List[B2CLocationSummary]
+
+
+class B2CWorkbookSheetRead(BaseModel):
+    name: str
+    rows: List[List[str]]
+    row_count: int
+    column_count: int
+
+
+class B2CWorkbookScanBrief(BaseModel):
+    id: UUID
+    source_filename: str
+    file_size: int
+    sheet_count: int
+    created_by: UUID
+    created_at: datetime
+
+
+class B2CWorkbookScanDetail(BaseModel):
+    scan: B2CWorkbookScanBrief
+    sheets: List[B2CWorkbookSheetRead]
 
 
 class GeneralComplaintCreate(BaseModel):

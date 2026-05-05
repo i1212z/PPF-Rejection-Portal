@@ -28,6 +28,7 @@ from .models import (
     DueAgingAdjustment,
     DueAgingRow,
     GeneralComplaint,
+    B2CWorkbookScan,
 )
 from .auth.deps import require_roles
 
@@ -244,6 +245,7 @@ async def reset_database(
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ):
     """Delete all tickets, credit notes, approvals, and tally marks. Users are kept. Admin only."""
+    await db.execute(delete(B2CWorkbookScan))
     await db.execute(delete(GeneralComplaint))
     await db.execute(delete(CreditNoteTallyPending))
     await db.execute(delete(DueCustomCell))

@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     Date,
     Text,
+    LargeBinary,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -160,6 +161,22 @@ class B2CDailyEntry(Base):
     total_sale_value = Column(Numeric(14, 2), nullable=False, default=0)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+
+
+class B2CWorkbookScan(Base):
+    """Stored Excel scans for B2C overview (all workbook sheets)."""
+
+    __tablename__ = "b2c_workbook_scans"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    source_filename = Column(String(512), nullable=False, default="scan.xlsx")
+    workbook_json = Column(Text, nullable=False, default="[]")
+    file_bytes = Column(LargeBinary, nullable=False)
+    file_size = Column(Integer, nullable=False, default=0)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+
+    creator = relationship("User", foreign_keys=[created_by])
 
 
 class GeneralComplaint(Base):
