@@ -366,22 +366,6 @@ export default function AnalyticsPage() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
             <ExpandableTopList
-              title="Who is returning the most (kg)"
-              rows={b2c.topCustomersKg}
-              valueFormatter={fmtQty}
-              suffix=" kg"
-              detailBuilder={(customer) =>
-                (b2c.customerDetailsByKg[customer] ?? [])
-                  .slice()
-                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-                  .map((d) => ({
-                    id: d.id,
-                    line1: d.primary,
-                    line2: `${fmtDate(d.date)}${d.kg !== undefined ? ` · ${fmtQty(d.kg)} kg` : ''}`,
-                  }))
-              }
-            />
-            <ExpandableTopList
               title="Which products are getting return (kg)"
               rows={b2c.topProductsKg}
               valueFormatter={fmtQty}
@@ -431,7 +415,6 @@ export default function AnalyticsPage() {
             />
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            <ChartCard title="Top customers (kg)" data={b2c.topCustomersKg.slice(0, 6)} color="#ea580c" />
             <ChartCard title="Top products (kg)" data={b2c.topProductsKg.slice(0, 6)} color="#f97316" />
           </div>
 
