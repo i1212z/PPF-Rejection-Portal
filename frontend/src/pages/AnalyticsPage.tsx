@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { ChannelDistributionPie } from '../components/charts/ChannelDistributionPie';
+import { RejectionValueVsQuantityChart } from '../components/charts/RejectionValueVsQuantityChart';
 import { Card } from '../components/ui/Card';
 
 type Channel = 'B2B' | 'B2C';
@@ -80,6 +82,20 @@ function topN(map: Record<string, number>, n = 8): TopRow[] {
     .map(([key, value]) => ({ key, value }))
     .sort((a, b) => b.value - a.value || a.key.localeCompare(b.key))
     .slice(0, n);
+}
+
+function channelConfirmedBreakdown(tickets: Ticket[], channel: Channel) {
+  const byUnit: Record<string, number> = {};
+  let qtyKg = 0;
+  tickets
+    .filter((t) => t.channel === channel && t.status === 'approved')
+    .forEach((t) => {
+      const unit = (t.uom || 'EA').toUpperCase();
+      const qty = Number(t.quantity || 0);
+      byUnit[unit] = (byUnit[unit] ?? 0) + qty;
+      qtyKg += toKg(qty, unit);
+    });
+  return { qtyKg, byUnit };
 }
 
 function channelAnalytics(tickets: Ticket[], channel: Channel) {
@@ -235,6 +251,8 @@ export default function AnalyticsPage() {
 
   const b2b = useMemo(() => channelAnalytics(tickets, 'B2B'), [tickets]);
   const b2c = useMemo(() => channelAnalytics(tickets, 'B2C'), [tickets]);
+  const b2bConfirmed = useMemo(() => channelConfirmedBreakdown(tickets, 'B2B'), [tickets]);
+  const b2cConfirmed = useMemo(() => channelConfirmedBreakdown(tickets, 'B2C'), [tickets]);
   const b2bMonthlyChart = useMemo(() => buildMonthlyProductChart(tickets, 'B2B'), [tickets]);
   const b2cMonthlyChart = useMemo(() => buildMonthlyProductChart(tickets, 'B2C'), [tickets]);
 
@@ -270,6 +288,40 @@ export default function AnalyticsPage() {
 
       {showB2B && (
         <Card title="B2B analytics" subtitle="Confirmed returns only (approved tickets)" className="text-sm">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 mb-3">
+            <Card
+              title="Current delivery window by channel"
+              subtitle="B2B confirmed rejected quantity (kg)"
+              className="border-l-4 border-l-sky-400"
+            >
+              <div className="text-xl font-semibold text-gray-900">{fmtQty(b2bConfirmed.qtyKg)} kg</div>
+              <div className="mt-1 text-[11px] text-gray-600">
+                By unit:{' '}
+                {Object.entries(b2bConfirmed.byUnit)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([u, v]) => `${fmtQty(v)} ${u}`)
+                  .join(' • ') || '–'}
+              </div>
+            </Card>
+            <Card
+              title="Confirmed rejected quantity (kg)"
+              subtitle="Confirmed (approved) quantity by channel (kg)"
+              className="xl:col-span-2"
+            >
+              <div style={{ width: '100%', height: 220 }}>
+                <ResponsiveContainer>
+                  <RejectionValueVsQuantityChart data={[{ channel: 'B2B', value: b2bConfirmed.qtyKg }]} />
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          </div>
+          <Card title="Channel distribution" subtitle="Share of confirmed quantity (kg)" className="mb-3">
+            <div style={{ width: '100%', height: 220 }}>
+              <ResponsiveContainer>
+                <ChannelDistributionPie data={[{ channel: 'B2B', value: b2bConfirmed.qtyKg }]} />
+              </ResponsiveContainer>
+            </div>
+          </Card>
           <MonthlyProductReturnsCard data={b2bMonthlyChart} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
             <Metric label="Confirmed qty (kg)" value={fmtQty(b2b.totalConfirmedQtyKg)} />
@@ -355,6 +407,40 @@ export default function AnalyticsPage() {
 
       {showB2C && (
         <Card title="B2C analytics" subtitle="Confirmed returns only (approved tickets)" className="text-sm">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 mb-3">
+            <Card
+              title="Current delivery window by channel"
+              subtitle="B2C confirmed rejected quantity (kg)"
+              className="border-l-4 border-l-rose-400"
+            >
+              <div className="text-xl font-semibold text-gray-900">{fmtQty(b2cConfirmed.qtyKg)} kg</div>
+              <div className="mt-1 text-[11px] text-gray-600">
+                By unit:{' '}
+                {Object.entries(b2cConfirmed.byUnit)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([u, v]) => `${fmtQty(v)} ${u}`)
+                  .join(' • ') || '–'}
+              </div>
+            </Card>
+            <Card
+              title="Confirmed rejected quantity (kg)"
+              subtitle="Confirmed (approved) quantity by channel (kg)"
+              className="xl:col-span-2"
+            >
+              <div style={{ width: '100%', height: 220 }}>
+                <ResponsiveContainer>
+                  <RejectionValueVsQuantityChart data={[{ channel: 'B2C', value: b2cConfirmed.qtyKg }]} />
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          </div>
+          <Card title="Channel distribution" subtitle="Share of confirmed quantity (kg)" className="mb-3">
+            <div style={{ width: '100%', height: 220 }}>
+              <ResponsiveContainer>
+                <ChannelDistributionPie data={[{ channel: 'B2C', value: b2cConfirmed.qtyKg }]} />
+              </ResponsiveContainer>
+            </div>
+          </Card>
           <MonthlyProductReturnsCard data={b2cMonthlyChart} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
             <Metric label="Confirmed qty (kg)" value={fmtQty(b2c.totalConfirmedQtyKg)} />
