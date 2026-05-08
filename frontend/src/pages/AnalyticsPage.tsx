@@ -28,6 +28,13 @@ interface CreditNote {
   status: 'pending' | 'approved' | 'rejected';
 }
 
+interface B2CSalesAnalytics {
+  total_orders: number;
+  total_sale_value: number;
+  total_entries: number;
+  top_locations: Array<{ location: string; orders: number; sale_value: number }>;
+}
+
 interface TopRow {
   key: string;
   value: number;
@@ -216,6 +223,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
+  const [b2cSalesAnalytics, setB2CSalesAnalytics] = useState<B2CSalesAnalytics | null>(null);
 
   const isManager = user?.role === 'manager' || user?.role === 'admin';
   const isB2B = user?.role === 'b2b';
@@ -226,17 +234,22 @@ export default function AnalyticsPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [tRes, cnRes] = await Promise.all([
+        const [tRes, cnRes, b2cRes] = await Promise.all([
           apiClient.get<{ items: Ticket[]; total: number }>('/tickets', { params: { limit: 1000 } }),
           canCN
             ? apiClient.get<{ items: CreditNote[]; total: number }>('/credit-notes', { params: { limit: 1000 } })
             : Promise.resolve({ data: { items: [] as CreditNote[], total: 0 } }),
+          apiClient
+            .get<B2CSalesAnalytics>('/b2c-sales/analytics')
+            .catch(() => ({ data: { total_orders: 0, total_sale_value: 0, total_entries: 0, top_locations: [] } as B2CSalesAnalytics })),
         ]);
         setTickets(tRes.data.items ?? []);
         setCreditNotes(cnRes.data.items ?? []);
+        setB2CSalesAnalytics(b2cRes.data ?? { total_orders: 0, total_sale_value: 0, total_entries: 0, top_locations: [] });
       } catch {
         setTickets([]);
         setCreditNotes([]);
+        setB2CSalesAnalytics({ total_orders: 0, total_sale_value: 0, total_entries: 0, top_locations: [] });
       } finally {
         setLoading(false);
       }
@@ -274,6 +287,7 @@ export default function AnalyticsPage() {
 
   const showB2B = isManager || isB2B;
   const showB2C = isManager || isB2C;
+  const showB2CSalesCard = isManager || isB2B || isB2C;
 
   return (
     <div className="space-y-4 min-w-0 max-w-full">
@@ -285,6 +299,21 @@ export default function AnalyticsPage() {
       </div>
 
       {loading && <div className="text-sm text-gray-500">Loading analytics…</div>}
+
+      {showB2CSalesCard && (
+        <Card title="B2C daily sales analytics" subtitle="Dashboard view card from B2C daily entry" className="text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+            <Metric label="Total entries" value={String(b2cSalesAnalytics?.total_entries ?? 0)} />
+            <Metric label="Total orders" value={fmtQty(b2cSalesAnalytics?.total_orders ?? 0)} />
+            <Metric label="Total sale value (INR)" value={fmtMoney(b2cSalesAnalytics?.total_sale_value ?? 0)} />
+          </div>
+          <TopList
+            title="Top B2C locations by sale value"
+            rows={(b2cSalesAnalytics?.top_locations ?? []).map((x) => ({ key: x.location, value: Number(x.sale_value || 0) }))}
+            valueFormatter={fmtMoney}
+          />
+        </Card>
+      )}
 
       {showB2B && (
         <Card title="B2B analytics" subtitle="Confirmed returns only (approved tickets)" className="text-sm">

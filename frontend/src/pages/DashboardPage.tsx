@@ -3,21 +3,9 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
-import { RejectionValueVsQuantityChart } from '../components/charts/RejectionValueVsQuantityChart';
-import { ChannelDistributionPie } from '../components/charts/ChannelDistributionPie';
 import { ApprovedVsRejectedChart } from '../components/charts/ApprovedVsRejectedChart';
 import type { ApprovedRejectedPoint } from '../components/charts/ApprovedVsRejectedChart';
 import { StatusBadge } from '../components/ui/StatusBadge';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-} from 'recharts';
 
 type TicketStatus = 'pending' | 'approved' | 'rejected';
 
@@ -56,13 +44,6 @@ interface TicketGroup {
 interface CreditNote {
   id: string;
   status: 'pending' | 'approved' | 'rejected';
-}
-
-interface B2CSalesAnalytics {
-  total_orders: number;
-  total_sale_value: number;
-  total_entries: number;
-  top_locations: Array<{ location: string; orders: number; sale_value: number }>;
 }
 
 function truncate(s: string, len: number) {
@@ -255,7 +236,6 @@ export default function DashboardPage() {
   const [creditNotes, setCreditNotes] = useState<CreditNote[]>([]);
   const [tallyPostedIds, setTallyPostedIds] = useState<Set<string>>(new Set());
   const [cnTallyPostedIds, setCnTallyPostedIds] = useState<Set<string>>(new Set());
-  const [b2cSalesAnalytics, setB2CSalesAnalytics] = useState<B2CSalesAnalytics | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showB2BUnits, setShowB2BUnits] = useState(false);
@@ -275,11 +255,6 @@ export default function DashboardPage() {
         user?.role === 'b2c';
       const canSeeCreditNotes =
         user?.role === 'manager' || user?.role === 'admin' || user?.role === 'b2b';
-      const canSeeB2CSalesAnalytics =
-        user?.role === 'b2b' ||
-        user?.role === 'b2c' ||
-        user?.role === 'manager' ||
-        user?.role === 'admin';
       const canSeeCreditNoteTallyPostedEndpoints =
         user?.role === 'manager' ||
         user?.role === 'admin' ||
@@ -294,11 +269,7 @@ export default function DashboardPage() {
       if (appliedFrom) creditNoteParams.from_date = appliedFrom;
       if (appliedTo) creditNoteParams.to_date = appliedTo;
 
-      const b2cAnalyticsParams: Record<string, string> = {};
-      if (appliedFrom) b2cAnalyticsParams.from_date = appliedFrom;
-      if (appliedTo) b2cAnalyticsParams.to_date = appliedTo;
-
-      const [ticketsResult, tallyResult, creditNotesResult, cnTallyResult, b2cSalesResult] =
+      const [ticketsResult, tallyResult, creditNotesResult, cnTallyResult] =
         await Promise.allSettled([
           apiClient.get<{ items: Ticket[]; total: number }>('/tickets', {
             params: ticketParams,
@@ -314,18 +285,6 @@ export default function DashboardPage() {
           canSeeCreditNoteTallyPostedEndpoints
             ? apiClient.get<{ credit_note_ids: string[] }>('/credit-note-tally/posted')
             : Promise.resolve({ data: { credit_note_ids: [] as string[] } }),
-          canSeeB2CSalesAnalytics
-            ? apiClient.get<B2CSalesAnalytics>('/b2c-sales/analytics', {
-                params: b2cAnalyticsParams,
-              })
-            : Promise.resolve({
-                data: {
-                  total_orders: 0,
-                  total_sale_value: 0,
-                  total_entries: 0,
-                  top_locations: [],
-                } as B2CSalesAnalytics,
-              }),
         ]);
 
       if (ticketsResult.status === 'fulfilled') {
@@ -354,17 +313,6 @@ export default function DashboardPage() {
         setCnTallyPostedIds(new Set());
       }
 
-      if (b2cSalesResult.status === 'fulfilled') {
-        setB2CSalesAnalytics(b2cSalesResult.value.data);
-      } else {
-        setB2CSalesAnalytics({
-          total_orders: 0,
-          total_sale_value: 0,
-          total_entries: 0,
-          top_locations: [],
-        });
-      }
-
       setLoading(false);
     };
     void load();
@@ -375,8 +323,6 @@ export default function DashboardPage() {
   const {
     totalTickets,
     pendingCount,
-    chartData,
-    pieData,
     recentGroups,
     globalDisplayByKey,
     globalItemLineByItemId,
@@ -424,16 +370,6 @@ export default function DashboardPage() {
         if (t.status === 'pending') pending += 1;
       });
 
-      const chart = [
-        { channel: 'B2B', value: confirmedKgB2B },
-        { channel: 'B2C', value: confirmedKgB2C },
-      ];
-
-      const pie = [
-        { channel: 'B2B', value: confirmedKgB2B },
-        { channel: 'B2C', value: confirmedKgB2C },
-      ];
-
       const approvedVsRejected: ApprovedRejectedPoint[] = [];
       if (channelFilter === 'B2B') {
         approvedVsRejected.push(
@@ -474,9 +410,6 @@ export default function DashboardPage() {
         itemsSorted.forEach((item, lineIdx) => globalItemLineByItemId.set(item.id, lineIdx + 1));
       });
 
-      const filterByChannel = <T extends { channel: string }>(arr: T[]): T[] =>
-        channelFilter ? arr.filter((x) => x.channel === channelFilter) : arr;
-
       // Tally: posted = in tally_pending; pending = decided but not posted
       const postedB2BCount = tickets.filter(
         (t) => tallyPostedIds.has(t.id) && t.channel === 'B2B',
@@ -496,8 +429,6 @@ export default function DashboardPage() {
       return {
         totalTickets: total,
         pendingCount: pending,
-        chartData: filterByChannel(chart),
-        pieData: filterByChannel(pie),
         recentGroups: recentTickets,
         globalDisplayByKey,
         globalItemLineByItemId,
@@ -529,16 +460,6 @@ export default function DashboardPage() {
       ),
     [rejectedByUnit.B2C],
   );
-
-  const dateFilterSubtitle =
-    appliedFrom || appliedTo
-      ? [
-          appliedFrom ? `From ${appliedFrom}` : null,
-          appliedTo ? `To ${appliedTo}` : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : 'No delivery-date filter';
 
   const dateRangeBar = (
     <div className="mt-3 flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:items-end">
@@ -801,152 +722,6 @@ export default function DashboardPage() {
           </div>
         </Card>
       )}
-
-      {(isB2B || isB2C || isManagerOrAdmin) && (
-        <Card
-          title="B2C daily sales analytics"
-          subtitle="Graph view from B2C daily entry system"
-          className="border-l-4 border-l-purple-300"
-        >
-          {(b2cSalesAnalytics?.top_locations ?? []).length === 0 ? (
-            <div className="text-sm text-gray-500">No B2C daily entries yet.</div>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-lg border border-gray-200 p-3">
-                <div className="text-xs font-semibold text-gray-700 mb-2">
-                  Top locations - orders vs sale value
-                </div>
-                <div className="w-full min-w-0 max-w-full" style={{ height: 320, minHeight: 320 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={(b2cSalesAnalytics?.top_locations ?? []).map((r) => ({
-                        location: r.location,
-                        orders: r.orders,
-                        saleValue: Number(r.sale_value ?? 0),
-                      }))}
-                      margin={{ top: 8, right: 12, left: 8, bottom: 28 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="location" angle={-20} textAnchor="end" interval={0} height={60} tick={{ fontSize: 10 }} />
-                      <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-                      <YAxis
-                        yAxisId="right"
-                        orientation="right"
-                        tick={{ fontSize: 10 }}
-                        tickFormatter={(v) =>
-                          Number(v).toLocaleString(undefined, {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          })
-                        }
-                      />
-                      <Tooltip
-                        formatter={(value, name) => {
-                          const n = Number(value ?? 0);
-                          if (name === 'Sale value') {
-                            return n.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            });
-                          }
-                          return n.toLocaleString(undefined, {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          });
-                        }}
-                      />
-                      <Legend />
-                      <Bar yAxisId="left" dataKey="orders" name="Orders" fill="#7c3aed" radius={[4, 4, 0, 0]} />
-                      <Bar yAxisId="right" dataKey="saleValue" name="Sale value" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-              <div className="text-[11px] text-gray-500">
-                Total entries captured: {b2cSalesAnalytics?.total_entries ?? 0} • Charts refresh with
-                latest B2C daily entries.
-              </div>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* Current delivery window by channel – summary (overall ticket value) */}
-      <Card
-        title="Current delivery window by channel"
-        subtitle={`Rejected quantity (kg) by channel — ${dateFilterSubtitle}`}
-        className="border-l-4 border-l-indigo-400"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {(!channelFilter || channelFilter === 'B2B') && (
-            <div className="rounded-lg bg-sky-50 border border-sky-100 px-4 py-3">
-              <div className="text-xs font-medium text-sky-700 uppercase tracking-wide">B2B</div>
-              <div className="mt-1 flex gap-4 text-sm">
-                <span><strong>Quantity:</strong> {fmtNoRound(chartData?.find((c) => c.channel === 'B2B')?.value ?? 0)} kg</span>
-              </div>
-              <div className="mt-1 text-[11px] text-sky-700">
-                <strong>By unit:</strong>{' '}
-                {Object.entries((rejectedByUnit as any)?.B2B ?? {})
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([u, v]) => `${fmtNoRound(Number(v), 6)} ${u} → ${fmtNoRound(toKg(Number(v), u), 6)} kg`)
-                  .join(' • ') || '–'}
-              </div>
-            </div>
-          )}
-          {(!channelFilter || channelFilter === 'B2C') && (
-            <div className="rounded-lg bg-orange-50 border border-orange-100 px-4 py-3">
-              <div className="text-xs font-medium text-orange-700 uppercase tracking-wide">B2C</div>
-              <div className="mt-1 flex gap-4 text-sm">
-                <span><strong>Quantity:</strong> {fmtNoRound(chartData?.find((c) => c.channel === 'B2C')?.value ?? 0)} kg</span>
-              </div>
-              <div className="mt-1 text-[11px] text-orange-700">
-                <strong>By unit:</strong>{' '}
-                {Object.entries((rejectedByUnit as any)?.B2C ?? {})
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([u, v]) => `${fmtNoRound(Number(v), 6)} ${u} → ${fmtNoRound(toKg(Number(v), u), 6)} kg`)
-                  .join(' • ') || '–'}
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* Overall ticket value chart */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 xl:gap-6 min-w-0">
-        <Card
-        title="Confirmed rejected quantity (kg)"
-        subtitle={`Confirmed (approved) quantity by channel (kg) — ${dateFilterSubtitle}`}
-          rightSlot={
-            <span className="rounded-full border border-gray-200 px-3 py-1 text-[11px] text-gray-600 bg-gray-50 inline-block w-full sm:w-auto text-center">
-              {appliedFrom || appliedTo ? 'Range' : 'All dates'}
-            </span>
-          }
-          className="xl:col-span-2 min-h-[280px] min-w-0"
-        >
-          {chartData && chartData.length > 0 && chartData.some((c) => (c?.value ?? 0) > 0) ? (
-            <div className="w-full min-w-0 max-w-full" style={{ minHeight: 240, height: 240 }}>
-              <RejectionValueVsQuantityChart data={chartData} />
-            </div>
-          ) : (
-            <div className="card-placeholder text-[11px] text-gray-500 py-8">
-              No data yet.
-            </div>
-          )}
-        </Card>
-        <Card
-          title="Channel distribution"
-          subtitle="Share of total ticket value"
-          className="min-h-[280px] min-w-0"
-        >
-          <div className="w-full min-w-0 max-w-full" style={{ minHeight: 240, height: 240 }}>
-            {pieData.length > 0 ? (
-              <ChannelDistributionPie data={pieData} />
-            ) : (
-              <div className="card-placeholder text-[11px] text-gray-500 py-8">No data yet.</div>
-            )}
-          </div>
-        </Card>
-      </div>
 
       {/* Approved vs Rejected chart — all accounts */}
       <Card
