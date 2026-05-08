@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { apiClient } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { ApprovedVsRejectedChart } from '../components/charts/ApprovedVsRejectedChart';
 import { ChannelDistributionPie } from '../components/charts/ChannelDistributionPie';
 import { RejectionValueVsQuantityChart } from '../components/charts/RejectionValueVsQuantityChart';
 import { Card } from '../components/ui/Card';
+import type { ApprovedRejectedPoint } from '../components/charts/ApprovedVsRejectedChart';
 
 type Channel = 'B2B' | 'B2C';
 type TicketStatus = 'pending' | 'approved' | 'rejected';
@@ -266,6 +268,34 @@ export default function AnalyticsPage() {
   const b2c = useMemo(() => channelAnalytics(tickets, 'B2C'), [tickets]);
   const b2bConfirmed = useMemo(() => channelConfirmedBreakdown(tickets, 'B2B'), [tickets]);
   const b2cConfirmed = useMemo(() => channelConfirmedBreakdown(tickets, 'B2C'), [tickets]);
+  const b2bDismissedKg = useMemo(
+    () =>
+      tickets
+        .filter((t) => t.channel === 'B2B' && t.status === 'rejected')
+        .reduce((acc, t) => acc + toKg(Number(t.quantity || 0), t.uom), 0),
+    [tickets],
+  );
+  const b2cDismissedKg = useMemo(
+    () =>
+      tickets
+        .filter((t) => t.channel === 'B2C' && t.status === 'rejected')
+        .reduce((acc, t) => acc + toKg(Number(t.quantity || 0), t.uom), 0),
+    [tickets],
+  );
+  const b2bApprovedVsDismissedData = useMemo<ApprovedRejectedPoint[]>(
+    () => [
+      { name: 'Confirmed', value: b2bConfirmed.qtyKg },
+      { name: 'Dismissed', value: b2bDismissedKg },
+    ],
+    [b2bConfirmed.qtyKg, b2bDismissedKg],
+  );
+  const b2cApprovedVsDismissedData = useMemo<ApprovedRejectedPoint[]>(
+    () => [
+      { name: 'Confirmed', value: b2cConfirmed.qtyKg },
+      { name: 'Dismissed', value: b2cDismissedKg },
+    ],
+    [b2cConfirmed.qtyKg, b2cDismissedKg],
+  );
   const b2bMonthlyChart = useMemo(() => buildMonthlyProductChart(tickets, 'B2B'), [tickets]);
   const b2cMonthlyChart = useMemo(() => buildMonthlyProductChart(tickets, 'B2C'), [tickets]);
 
@@ -350,6 +380,17 @@ export default function AnalyticsPage() {
                 <ChannelDistributionPie data={[{ channel: 'B2B', value: b2bConfirmed.qtyKg }]} />
               </ResponsiveContainer>
             </div>
+          </Card>
+          <Card
+            title="Confirmed vs Dismissed"
+            subtitle="B2B confirmed (approved) vs dismissed (rejected) quantities"
+            className="mb-3 border-l-4 border-l-emerald-300"
+          >
+            {b2bApprovedVsDismissedData.some((d) => d.value > 0) ? (
+              <ApprovedVsRejectedChart data={b2bApprovedVsDismissedData} />
+            ) : (
+              <div className="text-sm text-gray-500 py-4">No approved or rejected B2B tickets yet.</div>
+            )}
           </Card>
           <MonthlyProductReturnsCard data={b2bMonthlyChart} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
@@ -469,6 +510,17 @@ export default function AnalyticsPage() {
                 <ChannelDistributionPie data={[{ channel: 'B2C', value: b2cConfirmed.qtyKg }]} />
               </ResponsiveContainer>
             </div>
+          </Card>
+          <Card
+            title="Confirmed vs Dismissed"
+            subtitle="B2C confirmed (approved) vs dismissed (rejected) quantities"
+            className="mb-3 border-l-4 border-l-emerald-300"
+          >
+            {b2cApprovedVsDismissedData.some((d) => d.value > 0) ? (
+              <ApprovedVsRejectedChart data={b2cApprovedVsDismissedData} />
+            ) : (
+              <div className="text-sm text-gray-500 py-4">No approved or rejected B2C tickets yet.</div>
+            )}
           </Card>
           <MonthlyProductReturnsCard data={b2cMonthlyChart} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">

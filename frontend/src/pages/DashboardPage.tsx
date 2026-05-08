@@ -3,8 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
-import { ApprovedVsRejectedChart } from '../components/charts/ApprovedVsRejectedChart';
-import type { ApprovedRejectedPoint } from '../components/charts/ApprovedVsRejectedChart';
 import { StatusBadge } from '../components/ui/StatusBadge';
 
 type TicketStatus = 'pending' | 'approved' | 'rejected';
@@ -326,7 +324,6 @@ export default function DashboardPage() {
     recentGroups,
     globalDisplayByKey,
     globalItemLineByItemId,
-    approvedVsRejectedData,
     rejectedByUnit,
     tallyPostedB2BCount,
     tallyPostedB2CCount,
@@ -370,26 +367,6 @@ export default function DashboardPage() {
         if (t.status === 'pending') pending += 1;
       });
 
-      const approvedVsRejected: ApprovedRejectedPoint[] = [];
-      if (channelFilter === 'B2B') {
-        approvedVsRejected.push(
-          { name: 'Confirmed', value: confirmedKgB2B },
-          { name: 'Dismissed', value: dismissedKgB2B },
-        );
-      } else if (channelFilter === 'B2C') {
-        approvedVsRejected.push(
-          { name: 'Confirmed', value: confirmedKgB2C },
-          { name: 'Dismissed', value: dismissedKgB2C },
-        );
-      } else {
-        approvedVsRejected.push(
-          { name: 'B2B Confirmed', value: confirmedKgB2B },
-          { name: 'B2B Dismissed', value: dismissedKgB2B },
-          { name: 'B2C Confirmed', value: confirmedKgB2C },
-          { name: 'B2C Dismissed', value: dismissedKgB2C },
-        );
-      }
-
       const allGroupsNewest = groupTickets(tickets);
       const recentTickets = allGroupsNewest.slice(0, 5);
       const allGroupsAsc = [...allGroupsNewest].sort((a, b) => {
@@ -432,7 +409,6 @@ export default function DashboardPage() {
         recentGroups: recentTickets,
         globalDisplayByKey,
         globalItemLineByItemId,
-        approvedVsRejectedData: approvedVsRejected,
         rejectedByUnit,
         tallyPostedB2BCount: postedB2BCount,
         tallyPostedB2CCount: postedB2CCount,
@@ -722,19 +698,6 @@ export default function DashboardPage() {
           </div>
         </Card>
       )}
-
-      {/* Approved vs Rejected chart — all accounts */}
-      <Card
-        title="Confirmed vs Dismissed"
-        subtitle="Confirmed (approved) vs dismissed (rejected) quantities"
-        className="border-l-4 border-l-emerald-300"
-      >
-        {approvedVsRejectedData.length > 0 && approvedVsRejectedData.some((d) => d.value > 0) ? (
-          <ApprovedVsRejectedChart data={approvedVsRejectedData} />
-        ) : (
-          <div className="text-sm text-gray-500 py-4">No approved or rejected tickets yet.</div>
-        )}
-      </Card>
 
       {/* Recent tickets table */}
       <Card
