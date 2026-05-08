@@ -20,7 +20,17 @@ import {
 import { apiClient } from '../api/client';
 import { Card } from '../components/ui/Card';
 
-const B2C_LOCATION_OPTIONS = ['Calicut', 'Kochi', 'Thrissur', 'Coimbatore', 'Bangalore'] as const;
+const B2C_LOCATION_OPTIONS = [
+  'Calicut',
+  'Kochi',
+  'Thrissur',
+  'Coimbatore',
+  'Bangalore',
+  'Ooty',
+  'Aluva',
+  'Kottayam',
+  'Nilambur',
+] as const;
 const MONTHS = [
   'April',
   'May',
