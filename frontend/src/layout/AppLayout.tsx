@@ -17,6 +17,7 @@ interface SidebarLinkProps {
 
 function SidebarLink({ to, icon, label }: SidebarLinkProps) {
   return (
+    
     <NavLink
       to={to}
       className={({ isActive }) =>
@@ -64,6 +65,7 @@ export default function AppLayout() {
 
   const isTally = user?.role === 'tally';
   const isDue = user?.role === 'due';
+  const isB2C = user?.role === 'b2c';
   const isManager = user?.role === 'manager' || user?.role === 'admin';
   const showMobileTopNav = isTally || isDue;
   const canChangePassword =
@@ -581,17 +583,33 @@ export default function AppLayout() {
                 {isManager ? <CheckCircle2 className="w-4 h-4" /> : <Ticket className="w-4 h-4" />}
                 <span className="truncate">{isManager ? 'Approvals' : 'Tickets'}</span>
               </NavLink>
-              <NavLink
-                to="/credit-notes"
-                className={({ isActive }) =>
-                  `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
-                    isActive ? 'text-indigo-600' : 'text-gray-500'
-                  }`
-                }
-              >
-                <FileText className="w-4 h-4" />
-                <span className="truncate">Credit notes</span>
-              </NavLink>
+              {isB2C ? (
+                <NavLink
+                  to="/b2c-sales"
+                  className={({ isActive }) =>
+                    `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                      isActive || location.pathname.startsWith('/b2c-sales')
+                        ? 'text-indigo-600'
+                        : 'text-gray-500'
+                    }`
+                  }
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="truncate">B2C entry</span>
+                </NavLink>
+              ) : (
+                <NavLink
+                  to="/credit-notes"
+                  className={({ isActive }) =>
+                    `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 ${
+                      isActive ? 'text-indigo-600' : 'text-gray-500'
+                    }`
+                  }
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="truncate">Credit notes</span>
+                </NavLink>
+              )}
             </>
           )}
 

@@ -213,10 +213,18 @@ export default function CreditNotesPage() {
 
   return (
     <div className="space-y-4 min-w-0 max-w-full">
+      <div className="md:hidden">
+        <Link
+          to="/credit-notes/new"
+          className="inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white min-h-[44px]"
+        >
+          New CN
+        </Link>
+      </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Credit notes register</h2>
-          <p className="text-sm text-gray-500">B2B credit notes (separate from rejection tickets).</p>
+          <p className="hidden md:block text-sm text-gray-500">B2B credit notes (separate from rejection tickets).</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 w-full lg:max-w-3xl text-xs shrink-0">
           <div className="flex flex-col gap-1">
@@ -262,14 +270,6 @@ export default function CreditNotesPage() {
             </select>
           </div>
         </div>
-      </div>
-      <div className="md:hidden">
-        <Link
-          to="/credit-notes/new"
-          className="inline-flex w-full items-center justify-center rounded-2xl bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white min-h-[44px]"
-        >
-          New CN
-        </Link>
       </div>
 
       {error && (

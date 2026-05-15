@@ -433,6 +433,31 @@ class B2CDailySalesAnalytics(BaseModel):
     top_locations: List[B2CLocationSummary]
 
 
+class B2CLocationKpi(BaseModel):
+    location: str
+    orders: int
+    sale_value: float
+    avg_order_value: float
+
+
+class B2CDailyOverviewAnalytics(BaseModel):
+    period_label: str
+    previous_period_label: str
+    total_orders: int
+    total_sale_value: float
+    avg_order_value: float
+    previous_total_orders: int
+    previous_total_sale_value: float
+    previous_avg_order_value: float
+    mom_orders_pct: Optional[float] = None
+    mom_revenue_pct: Optional[float] = None
+    locations: List[B2CLocationKpi]
+    top_orders: List[B2CLocationKpi]
+    bottom_orders: List[B2CLocationKpi]
+    top_revenue: List[B2CLocationKpi]
+    bottom_revenue: List[B2CLocationKpi]
+
+
 class B2CWorkbookSheetRead(BaseModel):
     name: str
     rows: List[List[str]]

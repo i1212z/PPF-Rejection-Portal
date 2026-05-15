@@ -1,4 +1,5 @@
-from datetime import date
+from calendar import monthrange
+from datetime import date, timedelta
 import json
 from io import BytesIO
 from uuid import UUID
@@ -15,7 +16,9 @@ from ..models import B2CDailyEntry, B2CWorkbookScan, User, UserRole
 from ..schemas import (
     B2CDailyEntryCreate,
     B2CDailyEntryRead,
+    B2CDailyOverviewAnalytics,
     B2CDailySalesAnalytics,
+    B2CLocationKpi,
     B2CLocationSummary,
     B2CWorkbookScanBrief,
     B2CWorkbookScanDetail,
@@ -204,6 +207,127 @@ async def b2c_daily_sales_analytics(
         total_sale_value=float(total_sale_value or 0),
         total_entries=int(total_entries or 0),
         top_locations=top_locations,
+    )
+
+
+def _month_bounds(year: int, month: int) -> tuple[date, date]:
+    last_day = monthrange(year, month)[1]
+    return date(year, month, 1), date(year, month, last_day)
+
+
+def _month_label(d: date) -> str:
+    return d.strftime("%B %Y")
+
+
+def _mom_pct(current: float, previous: float) -> float | None:
+    if previous == 0:
+        return None
+    return round(((current - previous) / previous) * 100.0, 1)
+
+
+def _location_kpis_from_rows(rows) -> list[B2CLocationKpi]:
+    items: list[B2CLocationKpi] = []
+    for r in rows:
+        orders = int(r.orders or 0)
+        sale_value = float(r.sale_value or 0)
+        items.append(
+            B2CLocationKpi(
+                location=str(r.location or "Unknown"),
+                orders=orders,
+                sale_value=sale_value,
+                avg_order_value=round(sale_value / orders, 2) if orders > 0 else 0.0,
+            )
+        )
+    return items
+
+
+async def _location_agg(
+    db: AsyncSession,
+    filters: list,
+    start: date,
+    end: date,
+) -> list[B2CLocationKpi]:
+    period_filters = [*filters, B2CDailyEntry.delivery_date >= start, B2CDailyEntry.delivery_date <= end]
+    result = await db.execute(
+        select(
+            B2CDailyEntry.location,
+            func.coalesce(func.sum(B2CDailyEntry.no_of_order), 0).label("orders"),
+            func.coalesce(func.sum(B2CDailyEntry.total_sale_value), 0).label("sale_value"),
+        )
+        .where(*period_filters)
+        .group_by(B2CDailyEntry.location)
+    )
+    return _location_kpis_from_rows(result.all())
+
+
+async def _period_totals(
+    db: AsyncSession,
+    filters: list,
+    start: date,
+    end: date,
+) -> tuple[int, float]:
+    period_filters = [*filters, B2CDailyEntry.delivery_date >= start, B2CDailyEntry.delivery_date <= end]
+    result = await db.execute(
+        select(
+            func.coalesce(func.sum(B2CDailyEntry.no_of_order), 0),
+            func.coalesce(func.sum(B2CDailyEntry.total_sale_value), 0),
+        ).where(*period_filters)
+    )
+    orders, sale_value = result.one()
+    return int(orders or 0), float(sale_value or 0)
+
+
+@router.get("/overview-analytics", response_model=B2CDailyOverviewAnalytics)
+async def b2c_daily_overview_analytics(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_roles(UserRole.B2B, UserRole.B2C, UserRole.MANAGER, UserRole.ADMIN)
+    ),
+):
+    """Current calendar month vs previous month — location KPIs, MoM, top/bottom cities."""
+    filters: list = []
+    if current_user.role == UserRole.B2C:
+        filters.append(B2CDailyEntry.created_by == current_user.id)
+
+    today = date.today()
+    cur_start, cur_end = _month_bounds(today.year, today.month)
+    prev_end = cur_start - timedelta(days=1)
+    prev_start, _ = _month_bounds(prev_end.year, prev_end.month)
+
+    cur_orders, cur_revenue = await _period_totals(db, filters, cur_start, cur_end)
+    prev_orders, prev_revenue = await _period_totals(db, filters, prev_start, prev_end)
+
+    cur_avg = round(cur_revenue / cur_orders, 2) if cur_orders > 0 else 0.0
+    prev_avg = round(prev_revenue / prev_orders, 2) if prev_orders > 0 else 0.0
+
+    locations = await _location_agg(db, filters, cur_start, cur_end)
+    locations_sorted_orders = sorted(locations, key=lambda x: (-x.orders, -x.sale_value, x.location))
+    locations_sorted_revenue = sorted(locations, key=lambda x: (-x.sale_value, -x.orders, x.location))
+
+    def top5(items: list[B2CLocationKpi]) -> list[B2CLocationKpi]:
+        return items[:5]
+
+    def bottom5(items: list[B2CLocationKpi]) -> list[B2CLocationKpi]:
+        if len(items) <= 5:
+            return list(reversed(items))
+        return list(reversed(items[-5:]))
+
+    return B2CDailyOverviewAnalytics(
+        period_label=_month_label(cur_start),
+        previous_period_label=_month_label(prev_start),
+        total_orders=cur_orders,
+        total_sale_value=cur_revenue,
+        avg_order_value=cur_avg,
+        previous_total_orders=prev_orders,
+        previous_total_sale_value=prev_revenue,
+        previous_avg_order_value=prev_avg,
+        mom_orders_pct=_mom_pct(float(cur_orders), float(prev_orders)),
+        mom_revenue_pct=_mom_pct(cur_revenue, prev_revenue),
+        locations=locations_sorted_revenue,
+        top_orders=top5(locations_sorted_orders),
+        bottom_orders=bottom5(locations_sorted_orders),
+        top_revenue=top5(locations_sorted_revenue),
+        bottom_revenue=bottom5(locations_sorted_revenue),
     )
 
 

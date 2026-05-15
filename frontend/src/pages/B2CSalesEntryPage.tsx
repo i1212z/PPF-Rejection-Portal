@@ -18,6 +18,7 @@ import {
   YAxis,
 } from 'recharts';
 import { apiClient } from '../api/client';
+import B2CDailyOverviewAnalyticsPanel from '../components/b2c/B2CDailyOverviewAnalytics';
 import { Card } from '../components/ui/Card';
 
 const B2C_LOCATION_OPTIONS = [
@@ -979,7 +980,19 @@ export default function B2CSalesEntryPage({ startSection = 'daily' }: { startSec
       </div>
 
       {subsection === 'overview' ? (
-        <B2COverviewScannerSection />
+        <>
+          <div className="md:hidden">
+            <Card title="B2C analytics" subtitle="Location performance from daily entries (current month)">
+              <B2CDailyOverviewAnalyticsPanel />
+            </Card>
+          </div>
+          <div className="hidden md:block space-y-4">
+            <Card title="B2C analytics" subtitle="Location performance from daily entries (current month)">
+              <B2CDailyOverviewAnalyticsPanel />
+            </Card>
+            <B2COverviewScannerSection />
+          </div>
+        </>
       ) : (
         <>
           <Card title="New entry" subtitle="Delivery date, location, order count, and sale value">
