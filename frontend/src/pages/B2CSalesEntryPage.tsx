@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { apiClient } from '../api/client';
 import B2CFusedOverviewAnalytics from '../components/b2c/B2CFusedOverviewAnalytics';
-import { extractMonthlyPoints } from '../lib/b2cWorkbookParse';
+import { extractMonthlyPoints, filterWorkbookDisplayRows } from '../lib/b2cWorkbookParse';
 import { Card } from '../components/ui/Card';
 
 const B2C_LOCATION_OPTIONS = [
@@ -67,21 +67,6 @@ function formatSheetLabel(name: string): string {
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function isBlankRow(row: string[]): boolean {
-  return row.every((c) => {
-    const normalized = String(c || '')
-      .replace(/\u00a0/g, ' ')
-      .replace(/\t/g, ' ')
-      .trim();
-    return normalized === '';
-  });
-}
-
-function compactSheetRows(rows: string[][]): string[][] {
-  if (!rows.length) return [];
-  return rows.filter((r) => !isBlankRow(r));
 }
 
 function B2COverviewScannerSection() {
@@ -408,7 +393,7 @@ function B2COverviewScannerSection() {
                 <div className="w-full overflow-x-auto border border-gray-200 rounded-md">
                   <table className="min-w-full text-xs">
                     <tbody className="divide-y divide-gray-100">
-                      {compactSheetRows(activeSheet.rows).map((row, rIdx) => (
+                      {filterWorkbookDisplayRows(activeSheetIndex, activeSheet.rows).map((row, rIdx) => (
                         <tr key={rIdx}>
                           <td className="px-2 py-1.5 border-r border-gray-100 text-[10px] text-gray-500 bg-gray-50 font-medium">{rIdx + 1}</td>
                           {Array.from({ length: Math.max(activeSheet.column_count, row.length) }).map((_, cIdx) => {
@@ -515,7 +500,6 @@ export default function B2CSalesEntryPage({ startSection = 'daily' }: { startSec
     <div className="space-y-4 min-w-0 max-w-full">
       <div>
         <h2 className="text-lg font-semibold text-gray-900">B2C daily entry</h2>
-        <p className="text-sm text-gray-500">Use Daily entry or Overview scanner section (FY 2026-27 ready workflow).</p>
       </div>
 
       <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1">
@@ -542,12 +526,12 @@ export default function B2CSalesEntryPage({ startSection = 'daily' }: { startSec
       {subsection === 'overview' ? (
         <>
           <div className="md:hidden">
-            <Card title="B2C analytics" subtitle="FY workbook + daily entries — pick month & compare">
+            <Card title="B2C analytics">
               <B2CFusedOverviewAnalytics />
             </Card>
           </div>
           <div className="hidden md:block space-y-4">
-            <Card title="B2C analytics" subtitle="FY workbook + daily entries — pick month & compare">
+            <Card title="B2C analytics">
               <B2CFusedOverviewAnalytics />
             </Card>
             <B2COverviewScannerSection />

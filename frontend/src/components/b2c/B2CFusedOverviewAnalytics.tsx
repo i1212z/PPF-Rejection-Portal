@@ -17,7 +17,6 @@ import {
   type LocationKpi,
 } from '../../lib/b2cDataMerge';
 import {
-  COMPARE_MODE_LABELS,
   comparisonPeriodKeys,
   defaultFocusYmKey,
   FISCAL_YEAR_OPTIONS,
@@ -27,7 +26,6 @@ import {
   parseYmKey,
   pctChange,
   ymKey,
-  type CompareMode,
   type FiscalYearId,
 } from '../../lib/b2cFiscal';
 import { extractMonthlyPoints, type B2CWorkbookSheet } from '../../lib/b2cWorkbookParse';
@@ -59,6 +57,34 @@ function fmtPct(n: number | null) {
   if (n == null) return '—';
   const sign = n > 0 ? '+' : '';
   return `${sign}${n.toFixed(1)}%`;
+}
+
+function MonthTick({
+  active,
+  onClick,
+  title,
+  disabled,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+        active
+          ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
+          : 'border-gray-200 bg-white text-gray-400 hover:border-indigo-300 hover:text-indigo-600'
+      }`}
+    >
+      {active ? '✓' : ''}
+    </button>
+  );
 }
 
 function ChangeBadge({ label, value }: { label: string; value: number | null }) {
@@ -146,8 +172,8 @@ export default function B2CFusedOverviewAnalytics() {
 
   const [fiscalYear, setFiscalYear] = useState<FiscalYearId>(() => fiscalYearForDate(new Date()));
   const [focusYm, setFocusYm] = useState(() => defaultFocusYmKey());
-  const [compareMode, setCompareMode] = useState<CompareMode>('previous_month');
   const [comparePickYm, setComparePickYm] = useState<string>('');
+  const compareMode = comparePickYm ? ('pick_month' as const) : ('none' as const);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -212,12 +238,7 @@ export default function B2CFusedOverviewAnalytics() {
     }
   }, [fiscalYear, fyMonthOptions, focusYm]);
 
-  useEffect(() => {
-    if (compareMode === 'pick_month' && !comparePickYm && allYmWithData.length) {
-      const idx = allYmWithData.findIndex((o) => o.key === focusYm);
-      setComparePickYm(allYmWithData[Math.max(0, idx - 1)]?.key ?? allYmWithData[0].key);
-    }
-  }, [compareMode, comparePickYm, allYmWithData, focusYm]);
+  const ymWithDataSet = useMemo(() => new Set(allYmWithData.map((o) => o.key)), [allYmWithData]);
 
   const focus = parseYmKey(focusYm);
   const focusLabel = `${monthNameFromCalMonth(focus.calMonth)} ${focus.year}`;
@@ -253,16 +274,6 @@ export default function B2CFusedOverviewAnalytics() {
     [focusLocs],
   );
 
-  const dataSourcesNote = useMemo(() => {
-    const inFocus = merged.filter((r) => ymKey(r.year, r.calMonth) === focusYm);
-    const daily = inFocus.filter((r) => r.source === 'daily' || r.source === 'daily+workbook').length;
-    const wb = inFocus.filter((r) => r.source === 'workbook' || r.source === 'daily+workbook').length;
-    if (daily > 0 && wb > 0) return 'This month uses daily entries (live) where entered; workbook fills other cities/months.';
-    if (daily > 0) return 'This month is built from B2C daily entries (FY 2026-27 live data).';
-    if (wb > 0) return 'This month is from the uploaded workbook (FY 2025-26).';
-    return 'No data for this month yet — add daily entries or upload workbook.';
-  }, [merged, focusYm]);
-
   if (loading) {
     return <div className="text-sm text-gray-500">Loading analytics…</div>;
   }
@@ -274,76 +285,81 @@ export default function B2CFusedOverviewAnalytics() {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 space-y-3">
-        <p className="text-xs text-indigo-900">
-          <span className="font-semibold">FY 2025-26 workbook</span> (Apr 2025 – Mar 2026) plus{' '}
-          <span className="font-semibold">FY 2026-27 daily entries</span> (current months update as you save).
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <div>
-            <label className="block text-[10px] font-medium text-gray-600 mb-1">Financial year</label>
-            <select
-              value={fiscalYear}
-              onChange={(e) => setFiscalYear(e.target.value as FiscalYearId)}
-              className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
-            >
-              {FISCAL_YEAR_OPTIONS.map((fy) => (
-                <option key={fy.id} value={fy.id}>
-                  {fy.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-medium text-gray-600 mb-1">Show analytics for month</label>
-            <select
-              value={focusYm}
-              onChange={(e) => setFocusYm(e.target.value)}
-              className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
-            >
-              {fyMonthOptions.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-medium text-gray-600 mb-1">Compare to</label>
-            <select
-              value={compareMode}
-              onChange={(e) => setCompareMode(e.target.value as CompareMode)}
-              className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
-            >
-              {(Object.keys(COMPARE_MODE_LABELS) as CompareMode[]).map((m) => (
-                <option key={m} value={m}>
-                  {COMPARE_MODE_LABELS[m]}
-                </option>
-              ))}
-            </select>
-          </div>
-          {compareMode === 'pick_month' && (
-            <div>
-              <label className="block text-[10px] font-medium text-gray-600 mb-1">Compare month</label>
-              <select
-                value={comparePickYm || allYmWithData[0]?.key || ''}
-                onChange={(e) => setComparePickYm(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
-              >
-                {allYmWithData.map((o) => (
-                  <option key={o.key} value={o.key}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+        <div>
+          <label className="block text-[10px] font-medium text-gray-600 mb-1">Financial year</label>
+          <select
+            value={fiscalYear}
+            onChange={(e) => {
+              setFiscalYear(e.target.value as FiscalYearId);
+              setComparePickYm('');
+            }}
+            className="w-full max-w-xs rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
+          >
+            {FISCAL_YEAR_OPTIONS.map((fy) => (
+              <option key={fy.id} value={fy.id}>
+                {fy.label}
+              </option>
+            ))}
+          </select>
         </div>
-        <p className="text-[11px] text-indigo-800">{dataSourcesNote}</p>
-        {scanDetail && (
-          <p className="text-[10px] text-gray-500">
-            Workbook: {scanDetail.scan.source_filename} ({scanDetail.sheets.length} sheets)
+
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-2 pr-1">
+            <span className="text-[10px] font-medium text-gray-600">Months</span>
+            <div className="flex items-center gap-4 text-[10px] font-medium text-gray-500">
+              <span className="w-7 text-center">View</span>
+              <span className="w-7 text-center">Compare</span>
+            </div>
+          </div>
+          <ul className="max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+            {fyMonthOptions.map((o) => {
+              const hasData = ymWithDataSet.has(o.key);
+              const isFocus = focusYm === o.key;
+              const isCompare = comparePickYm === o.key;
+              return (
+                <li
+                  key={o.key}
+                  className={`flex items-center justify-between gap-2 px-2 py-1.5 ${isFocus ? 'bg-indigo-50/80' : ''}`}
+                >
+                  <span
+                    className={`text-xs min-w-0 truncate ${hasData ? 'text-gray-900 font-medium' : 'text-gray-400'}`}
+                  >
+                    {o.label}
+                    {hasData ? (
+                      <span
+                        className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle"
+                        title="Has data"
+                      />
+                    ) : null}
+                  </span>
+                  <div className="flex items-center gap-4 shrink-0">
+                    <MonthTick
+                      active={isFocus}
+                      title="Show analytics for this month"
+                      onClick={() => {
+                        setFocusYm(o.key);
+                        if (comparePickYm === o.key) setComparePickYm('');
+                      }}
+                    />
+                    <MonthTick
+                      active={isCompare}
+                      title="Compare to this month"
+                      disabled={isFocus}
+                      onClick={() => {
+                        if (isFocus) return;
+                        setComparePickYm(isCompare ? '' : o.key);
+                      }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-[10px] text-gray-500 mt-2">
+            Tick <span className="font-medium">View</span> for the month to analyze; tick{' '}
+            <span className="font-medium">Compare</span> on another month for % change (tap again to clear).
           </p>
-        )}
+        </div>
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700">

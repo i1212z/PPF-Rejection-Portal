@@ -33,6 +33,33 @@ function isLikelyTotalLabel(value: string): boolean {
   return v === 'total' || v === 'grand total' || v === 'totals';
 }
 
+/** Trailing workbook summary rows (e.g. HAMPER SALES, TOTAL B2C Share). */
+export function isWorkbookSummaryRow(row: string[]): boolean {
+  const first = String(row[0] ?? '').trim().toUpperCase();
+  const joined = row.map((c) => String(c ?? '').trim()).join(' ');
+  if (first.includes('HAMPER SALES')) return true;
+  if (/TOTAL.*B2C\s*SHARE/i.test(joined)) return true;
+  if (first.includes('TOTAL') && /B2C\s*SHARE/i.test(joined)) return true;
+  return false;
+}
+
+function isBlankRow(row: string[]): boolean {
+  return row.every((c) => {
+    const normalized = String(c || '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/\t/g, ' ')
+      .trim();
+    return normalized === '';
+  });
+}
+
+/** Sheet preview rows: drop blanks; on first sheet drop summary footer rows. */
+export function filterWorkbookDisplayRows(sheetIndex: number, rows: string[][]): string[][] {
+  const compact = rows.filter((r) => !isBlankRow(r));
+  if (sheetIndex !== 0) return compact;
+  return compact.filter((r) => !isWorkbookSummaryRow(r));
+}
+
 export function extractMonthlyPoints(sheet: B2CWorkbookSheet): MonthlyPoint[] {
   const rows = sheet.rows ?? [];
   if (rows.length === 0) return [];
@@ -82,7 +109,7 @@ export function extractMonthlyPoints(sheet: B2CWorkbookSheet): MonthlyPoint[] {
   for (let r = dataStart; r < rows.length; r += 1) {
     const row = rows[r] ?? [];
     const location = (row[locationCol] ?? row[0] ?? '').trim();
-    if (!location || isLikelyTotalLabel(location)) continue;
+    if (!location || isLikelyTotalLabel(location) || isWorkbookSummaryRow(row)) continue;
 
     monthPositions.forEach((entry, idx) => {
       const endCol = idx < monthPositions.length - 1 ? monthPositions[idx + 1].col - 1 : row.length - 1;
