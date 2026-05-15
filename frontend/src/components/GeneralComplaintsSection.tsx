@@ -112,10 +112,7 @@ export function GeneralComplaintsSection({
   };
 
   return (
-    <Card
-      title={cardTitle}
-      subtitle={`${channelLabel} desk — visible to managers and admins`}
-    >
+    <Card title={cardTitle}>
       {allowCreate ? (
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         <div className="md:col-span-2">

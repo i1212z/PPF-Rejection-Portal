@@ -335,7 +335,6 @@ function B2COverviewScannerSection() {
 
       <Card
         title="Workbook op"
-        subtitle="Clean sheet preview (blank rows removed)"
         rightSlot={
           <button
             type="button"

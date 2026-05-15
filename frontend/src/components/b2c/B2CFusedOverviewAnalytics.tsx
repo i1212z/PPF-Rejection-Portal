@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import {
   Bar,
   BarChart,
@@ -59,31 +60,176 @@ function fmtPct(n: number | null) {
   return `${sign}${n.toFixed(1)}%`;
 }
 
-function MonthTick({
-  active,
-  onClick,
-  title,
-  disabled,
+type MonthOption = { key: string; label: string };
+
+function useClickOutside(ref: RefObject<HTMLElement | null>, onClose: () => void, enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    const fn = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [enabled, onClose, ref]);
+}
+
+function monthSummary(
+  selectedKeys: string[],
+  options: MonthOption[],
+  allKeys: string[],
+  emptyLabel: string,
+): string {
+  if (selectedKeys.length === 0) return emptyLabel;
+  if (allKeys.length > 0 && allKeys.every((k) => selectedKeys.includes(k))) return 'All months';
+  if (selectedKeys.length === 1) {
+    return options.find((o) => o.key === selectedKeys[0])?.label ?? '1 month';
+  }
+  return `${selectedKeys.length} months`;
+}
+
+function MonthMultiSelectDropdown({
+  label,
+  options,
+  selectedKeys,
+  allKeys,
+  hasDataKeys,
+  onToggle,
+  onSelectAll,
+  onClearAll,
 }: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  disabled?: boolean;
+  label: string;
+  options: MonthOption[];
+  selectedKeys: string[];
+  allKeys: string[];
+  hasDataKeys: Set<string>;
+  onToggle: (key: string) => void;
+  onSelectAll: () => void;
+  onClearAll: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const allSelected = allKeys.length > 0 && allKeys.every((k) => selectedKeys.includes(k));
+  useClickOutside(ref, () => setOpen(false), open);
+
+  const summary = monthSummary(selectedKeys, options, allKeys, 'Select month');
+
   return (
-    <button
-      type="button"
-      title={title}
-      disabled={disabled}
-      onClick={onClick}
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-        active
-          ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
-          : 'border-gray-200 bg-white text-gray-400 hover:border-indigo-300 hover:text-indigo-600'
-      }`}
-    >
-      {active ? '✓' : ''}
-    </button>
+    <div ref={ref} className="relative">
+      <label className="block text-[10px] font-medium text-gray-600 mb-1">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-left hover:border-indigo-300"
+      >
+        <span className="truncate text-gray-900">{summary}</span>
+        <span className="text-gray-400 shrink-0">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full min-w-[12rem] rounded-md border border-gray-200 bg-white shadow-lg max-h-60 overflow-y-auto">
+          <label className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 hover:bg-gray-50 cursor-pointer font-medium text-xs">
+            <input
+              type="checkbox"
+              className="rounded border-gray-300 text-indigo-600"
+              checked={allSelected}
+              onChange={() => (allSelected ? onClearAll() : onSelectAll())}
+            />
+            <span>Select all</span>
+          </label>
+          {options.map((o) => (
+            <label
+              key={o.key}
+              className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-50 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                className="rounded border-gray-300 text-indigo-600"
+                checked={selectedKeys.includes(o.key)}
+                onChange={() => onToggle(o.key)}
+              />
+              <span className={hasDataKeys.has(o.key) ? 'text-gray-900' : 'text-gray-400'}>{o.label}</span>
+              {hasDataKeys.has(o.key) ? (
+                <span className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" title="Has data" />
+              ) : null}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MonthCompareDropdown({
+  label,
+  options,
+  selectedKey,
+  disabledKeys,
+  hasDataKeys,
+  onSelect,
+}: {
+  label: string;
+  options: MonthOption[];
+  selectedKey: string;
+  disabledKeys: Set<string>;
+  hasDataKeys: Set<string>;
+  onSelect: (key: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => setOpen(false), open);
+
+  const summary = selectedKey
+    ? (options.find((o) => o.key === selectedKey)?.label ?? 'Compare month')
+    : 'None';
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="block text-[10px] font-medium text-gray-600 mb-1">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-left hover:border-indigo-300"
+      >
+        <span className="truncate text-gray-900">{summary}</span>
+        <span className="text-gray-400 shrink-0">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full min-w-[12rem] rounded-md border border-gray-200 bg-white shadow-lg max-h-60 overflow-y-auto">
+          <label className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 hover:bg-gray-50 cursor-pointer text-xs">
+            <input
+              type="checkbox"
+              className="rounded border-gray-300 text-indigo-600"
+              checked={!selectedKey}
+              onChange={() => onSelect('')}
+            />
+            <span className="text-gray-600">None</span>
+          </label>
+          {options.map((o) => {
+            const disabled = disabledKeys.has(o.key);
+            const checked = selectedKey === o.key;
+            return (
+              <label
+                key={o.key}
+                className={`flex items-center gap-2 px-3 py-2 text-xs ${
+                  disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300 text-indigo-600"
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => {
+                    if (disabled) return;
+                    onSelect(checked ? '' : o.key);
+                  }}
+                />
+                <span className={hasDataKeys.has(o.key) ? 'text-gray-900' : 'text-gray-400'}>{o.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -243,38 +389,13 @@ export default function B2CFusedOverviewAnalytics() {
   const ymWithDataSet = useMemo(() => new Set(allYmWithData.map((o) => o.key)), [allYmWithData]);
 
   const allFyMonthKeys = useMemo(() => fyMonthOptions.map((o) => o.key), [fyMonthOptions]);
-  const allMonthsSelected =
-    allFyMonthKeys.length > 0 && allFyMonthKeys.every((k) => focusYmKeys.includes(k));
-
-  const focusLabel = useMemo(() => {
-    if (focusYmKeys.length === 0) return 'No month selected';
-    if (focusYmKeys.length === 1) {
-      const f = parseYmKey(focusYmKeys[0]);
-      return `${monthNameFromCalMonth(f.calMonth)} ${f.year}`;
-    }
-    if (allMonthsSelected) {
-      const fyLabel = FISCAL_YEAR_OPTIONS.find((f) => f.id === fiscalYear)?.label ?? fiscalYear;
-      return `All months (${fyLabel})`;
-    }
-    return `${focusYmKeys.length} months selected`;
-  }, [focusYmKeys, allMonthsSelected, fiscalYear]);
-
   const primaryFocus = parseYmKey(focusYmKeys[0] ?? defaultFocusYmKey());
+  const focusDisabledForCompare = useMemo(() => new Set(focusYmKeys), [focusYmKeys]);
 
   const comparePeriod = useMemo(
     () => comparisonPeriodKeys(primaryFocus.year, primaryFocus.calMonth, compareMode, comparePickYm || null),
     [primaryFocus.year, primaryFocus.calMonth, compareMode, comparePickYm],
   );
-
-  const toggleSelectAllMonths = () => {
-    if (allMonthsSelected) {
-      const todayKey = defaultFocusYmKey();
-      const inToday = fyMonthOptions.find((o) => o.key === todayKey);
-      setFocusYmKeys([inToday?.key ?? fyMonthOptions[0]?.key ?? todayKey]);
-    } else {
-      setFocusYmKeys(allFyMonthKeys);
-    }
-  };
 
   const toggleFocusMonth = (key: string) => {
     setFocusYmKeys((prev) => {
@@ -348,87 +469,40 @@ export default function B2CFusedOverviewAnalytics() {
           </select>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between gap-2 mb-2 pr-1">
-            <span className="text-[10px] font-medium text-gray-600">Select month</span>
-            <div className="flex items-center gap-4 text-[10px] font-medium text-gray-500">
-              <button
-                type="button"
-                onClick={toggleSelectAllMonths}
-                className="min-w-[4.5rem] text-center font-semibold text-indigo-600 hover:text-indigo-800"
-              >
-                {allMonthsSelected ? 'Clear all' : 'Select all'}
-              </button>
-              <span className="w-7 text-center">View</span>
-              <span className="w-7 text-center">Compare</span>
-            </div>
-          </div>
-          <ul className="max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
-            {fyMonthOptions.map((o) => {
-              const hasData = ymWithDataSet.has(o.key);
-              const isFocus = focusYmKeys.includes(o.key);
-              const isCompare = comparePickYm === o.key;
-              return (
-                <li
-                  key={o.key}
-                  className={`flex items-center justify-between gap-2 px-2 py-1.5 ${isFocus ? 'bg-indigo-50/80' : ''}`}
-                >
-                  <span
-                    className={`text-xs min-w-0 truncate ${hasData ? 'text-gray-900 font-medium' : 'text-gray-400'}`}
-                  >
-                    {o.label}
-                    {hasData ? (
-                      <span
-                        className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle"
-                        title="Has data"
-                      />
-                    ) : null}
-                  </span>
-                  <div className="flex items-center gap-4 shrink-0">
-                    <MonthTick
-                      active={isFocus}
-                      title="Include this month in analytics"
-                      onClick={() => toggleFocusMonth(o.key)}
-                    />
-                    <MonthTick
-                      active={isCompare}
-                      title="Compare to this month"
-                      disabled={isFocus}
-                      onClick={() => {
-                        if (isFocus) return;
-                        setComparePickYm(isCompare ? '' : o.key);
-                      }}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="text-[10px] text-gray-500 mt-2">
-            Use <span className="font-medium">Select all</span> or tick <span className="font-medium">View</span> per month;
-            tick <span className="font-medium">Compare</span> on another month for % change (tap again to clear).
-          </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <MonthMultiSelectDropdown
+            label="Select month"
+            options={fyMonthOptions}
+            selectedKeys={focusYmKeys}
+            allKeys={allFyMonthKeys}
+            hasDataKeys={ymWithDataSet}
+            onToggle={toggleFocusMonth}
+            onSelectAll={() => setFocusYmKeys(allFyMonthKeys)}
+            onClearAll={() => {
+              const todayKey = defaultFocusYmKey();
+              const inToday = fyMonthOptions.find((o) => o.key === todayKey);
+              setFocusYmKeys([inToday?.key ?? fyMonthOptions[0]?.key ?? todayKey]);
+            }}
+          />
+          <MonthCompareDropdown
+            label="Compare to"
+            options={fyMonthOptions}
+            selectedKey={comparePickYm}
+            disabledKeys={focusDisabledForCompare}
+            hasDataKeys={ymWithDataSet}
+            onSelect={setComparePickYm}
+          />
         </div>
+
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700">
-        <span className="font-semibold text-gray-900">Viewing:</span> {focusLabel}
-        {compareMode !== 'none' && compareTotals && (
-          <>
-            {' '}
-            <span className="text-gray-400">vs</span> {comparePeriod.label}
-          </>
-        )}
-      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
           <div className="text-[10px] uppercase tracking-wide text-gray-500">Total orders</div>
           <div className="text-lg font-bold text-gray-900 mt-0.5">{focusTotals.orders.toLocaleString()}</div>
           {compareTotals && (
-            <div className="text-[10px] text-gray-500 mt-0.5">
-              vs {compareTotals.orders.toLocaleString()} ({comparePeriod.label})
-            </div>
+            <div className="text-[10px] text-gray-500 mt-0.5">vs {compareTotals.orders.toLocaleString()}</div>
           )}
         </div>
         <div className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
@@ -454,7 +528,7 @@ export default function B2CFusedOverviewAnalytics() {
         </div>
       )}
 
-      <Card title="Location performance — orders" subtitle={focusLabel} className="text-sm">
+      <Card title="Location performance — orders" className="text-sm">
         {ordersChart.length === 0 ? (
           <div className="text-sm text-gray-500">No data for selected month(s).</div>
         ) : (
@@ -472,7 +546,7 @@ export default function B2CFusedOverviewAnalytics() {
         )}
       </Card>
 
-      <Card title="Location performance — revenue" subtitle={focusLabel} className="text-sm">
+      <Card title="Location performance — revenue" className="text-sm">
         {ordersChart.length === 0 ? (
           <div className="text-sm text-gray-500">No data for selected month(s).</div>
         ) : (
@@ -490,7 +564,7 @@ export default function B2CFusedOverviewAnalytics() {
         )}
       </Card>
 
-      <Card title="Per city KPIs" subtitle={focusLabel} className="text-sm">
+      <Card title="Per city KPIs" className="text-sm">
         <PerCityTable rows={focusLocs} />
       </Card>
 
@@ -502,7 +576,7 @@ export default function B2CFusedOverviewAnalytics() {
       </div>
 
       {compareMode !== 'none' && compareLocs.length > 0 && (
-        <Card title="Comparison period totals by city" subtitle={comparePeriod.label} className="text-sm">
+        <Card title="Comparison period totals by city" className="text-sm">
           <PerCityTable rows={compareLocs.sort((a, b) => b.sale_value - a.sale_value)} />
         </Card>
       )}

@@ -20,8 +20,8 @@ export type B2cFyMonthName = (typeof B2C_FY_MONTHS)[number];
 export type FiscalYearId = 'FY25-26' | 'FY26-27';
 
 export const FISCAL_YEAR_OPTIONS: { id: FiscalYearId; label: string; startYear: number; endYear: number }[] = [
-  { id: 'FY25-26', label: 'FY 2025-26 (workbook: Apr 2025 – Mar 2026)', startYear: 2025, endYear: 2026 },
-  { id: 'FY26-27', label: 'FY 2026-27 (daily entries: Apr 2026 – Mar 2027)', startYear: 2026, endYear: 2027 },
+  { id: 'FY25-26', label: 'FY 2025-26', startYear: 2025, endYear: 2026 },
+  { id: 'FY26-27', label: 'FY 2026-27', startYear: 2026, endYear: 2027 },
 ];
 
 export type CompareMode =
