@@ -435,7 +435,7 @@ export default function TicketsPage() {
                 {groupTickets(ticketsFiltered).map((g) => (
                   <div
                     key={g.id}
-                    className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm"
+                    className="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm min-w-0"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-medium text-gray-900">
@@ -479,13 +479,13 @@ export default function TicketsPage() {
                         return (
                           <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
                             <div className="flex justify-between items-start gap-2">
-                              <div>
+                              <div className="min-w-0 flex-1">
                                 <div className="font-medium text-gray-800">{item.product_name}</div>
-                                <div className="text-[10px] text-gray-500">
-                                  {item.reason.length > 40 ? `${item.reason.slice(0, 40)}…` : item.reason}
+                                <div className="text-[10px] text-gray-500 whitespace-pre-wrap break-words">
+                                  {item.reason}
                                 </div>
                               </div>
-                              <div className="text-right">
+                              <div className="text-right shrink-0">
                                 <div>
                                   Qty:{' '}
                                   <span className="font-medium">
@@ -851,7 +851,7 @@ export default function TicketsPage() {
                     return (
                       <div
                         key={g.id}
-                        className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm"
+                        className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm min-w-0"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="text-sm font-medium text-gray-900">
@@ -871,15 +871,13 @@ export default function TicketsPage() {
                         <div className="mt-2 space-y-1 text-[11px] text-gray-600">
                           {g.items.map((item) => (
                             <div key={item.id} className="flex justify-between items-start gap-2">
-                              <div>
+                              <div className="min-w-0 flex-1">
                                 <div>{item.product_name}</div>
-                                <div className="text-[10px] text-gray-500">
-                                  {item.reason.length > 40
-                                    ? `${item.reason.slice(0, 40)}…`
-                                    : item.reason}
+                                <div className="text-[10px] text-gray-500 whitespace-pre-wrap break-words">
+                                  {item.reason}
                                 </div>
                               </div>
-                              <div className="text-right">
+                              <div className="text-right shrink-0">
                                 <div>
                                   Qty:{' '}
                                   <span className="font-medium">
@@ -1216,7 +1214,7 @@ export default function TicketsPage() {
                     return (
                       <div
                         key={g.id}
-                        className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm"
+                        className="rounded-lg border border-gray-100 bg-white px-3 py-2.5 shadow-sm min-w-0"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="text-sm font-medium text-gray-900">
@@ -1236,15 +1234,13 @@ export default function TicketsPage() {
                         <div className="mt-2 space-y-1 text-[11px] text-gray-600">
                           {g.items.map((item) => (
                             <div key={item.id} className="flex justify-between items-start gap-2">
-                              <div>
+                              <div className="min-w-0 flex-1">
                                 <div>{item.product_name}</div>
-                                <div className="text-[10px] text-gray-500">
-                                  {item.reason.length > 40
-                                    ? `${item.reason.slice(0, 40)}…`
-                                    : item.reason}
+                                <div className="text-[10px] text-gray-500 whitespace-pre-wrap break-words">
+                                  {item.reason}
                                 </div>
                               </div>
-                              <div className="text-right">
+                              <div className="text-right shrink-0">
                                 <div>
                                   Qty: <span className="font-medium">{qtyWithUom(item.quantity, item.uom)}</span>
                                 </div>

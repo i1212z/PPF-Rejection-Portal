@@ -286,7 +286,7 @@ export default function ApprovalsPage() {
                 entry.kind === 'ticket' ? (
                   <div
                     key={entry.group.key}
-                    className="rounded-2xl border border-gray-100 bg-white px-3 py-3 shadow-sm"
+                    className="rounded-2xl border border-gray-100 bg-white px-3 py-3 shadow-sm min-w-0"
                   >
                     <div className="text-sm font-medium text-gray-900">{entry.displayId}</div>
                     <div className="mt-0.5 text-[11px] text-gray-500">
@@ -297,7 +297,7 @@ export default function ApprovalsPage() {
                       {entry.group.items.map((item) => (
                         <div
                           key={item.id}
-                          className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2"
+                          className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 min-w-0"
                         >
                           <div className="text-[11px] font-medium text-gray-700">
                             {item.product_name}
@@ -305,7 +305,7 @@ export default function ApprovalsPage() {
                           <div className="text-[11px] text-gray-600">
                             Qty: {item.quantity} {item.uom ?? 'EA'}
                           </div>
-                          <div className="text-[11px] text-gray-500 truncate" title={item.reason}>
+                          <div className="text-[11px] text-gray-500 whitespace-pre-wrap break-words min-w-0">
                             {item.reason}
                           </div>
                           <div className="mt-2 flex gap-2">
@@ -334,7 +334,7 @@ export default function ApprovalsPage() {
                 ) : (
                   <div
                     key={entry.note.id}
-                    className="rounded-2xl border border-gray-100 bg-white px-3 py-3 shadow-sm"
+                    className="rounded-2xl border border-gray-100 bg-white px-3 py-3 shadow-sm min-w-0"
                   >
                     <div className="text-sm font-medium text-gray-900">{entry.displayId}</div>
                     <div className="mt-0.5 text-[11px] text-gray-500">
@@ -417,7 +417,7 @@ export default function ApprovalsPage() {
                               <div className="text-gray-600">
                                 Qty: {item.quantity} {item.uom ?? 'EA'}
                               </div>
-                              <div className="text-gray-500 max-w-[220px]" title={item.reason}>
+                              <div className="text-gray-500 min-w-0 max-w-xl whitespace-pre-wrap break-words">
                                 {item.reason}
                               </div>
                             </div>
