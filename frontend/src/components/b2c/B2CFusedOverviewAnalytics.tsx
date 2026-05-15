@@ -171,7 +171,7 @@ export default function B2CFusedOverviewAnalytics() {
   const [error, setError] = useState<string | null>(null);
 
   const [fiscalYear, setFiscalYear] = useState<FiscalYearId>(() => fiscalYearForDate(new Date()));
-  const [focusYm, setFocusYm] = useState(() => defaultFocusYmKey());
+  const [focusYmKeys, setFocusYmKeys] = useState<string[]>(() => [defaultFocusYmKey()]);
   const [comparePickYm, setComparePickYm] = useState<string>('');
   const compareMode = comparePickYm ? ('pick_month' as const) : ('none' as const);
 
@@ -230,27 +230,67 @@ export default function B2CFusedOverviewAnalytics() {
   }, [merged]);
 
   useEffect(() => {
-    const inFy = fyMonthOptions.some((o) => o.key === focusYm);
-    if (!inFy && fyMonthOptions.length) {
+    const valid = focusYmKeys.filter((k) => fyMonthOptions.some((o) => o.key === k));
+    if (valid.length === 0 && fyMonthOptions.length) {
       const todayKey = defaultFocusYmKey();
       const inToday = fyMonthOptions.find((o) => o.key === todayKey);
-      setFocusYm(inToday?.key ?? fyMonthOptions[fyMonthOptions.length - 1]?.key ?? todayKey);
+      setFocusYmKeys([inToday?.key ?? fyMonthOptions[0].key]);
+    } else if (valid.length !== focusYmKeys.length) {
+      setFocusYmKeys(valid.length ? valid : [fyMonthOptions[0].key]);
     }
-  }, [fiscalYear, fyMonthOptions, focusYm]);
+  }, [fiscalYear, fyMonthOptions, focusYmKeys]);
 
   const ymWithDataSet = useMemo(() => new Set(allYmWithData.map((o) => o.key)), [allYmWithData]);
 
-  const focus = parseYmKey(focusYm);
-  const focusLabel = `${monthNameFromCalMonth(focus.calMonth)} ${focus.year}`;
+  const allFyMonthKeys = useMemo(() => fyMonthOptions.map((o) => o.key), [fyMonthOptions]);
+  const allMonthsSelected =
+    allFyMonthKeys.length > 0 && allFyMonthKeys.every((k) => focusYmKeys.includes(k));
+
+  const focusLabel = useMemo(() => {
+    if (focusYmKeys.length === 0) return 'No month selected';
+    if (focusYmKeys.length === 1) {
+      const f = parseYmKey(focusYmKeys[0]);
+      return `${monthNameFromCalMonth(f.calMonth)} ${f.year}`;
+    }
+    if (allMonthsSelected) {
+      const fyLabel = FISCAL_YEAR_OPTIONS.find((f) => f.id === fiscalYear)?.label ?? fiscalYear;
+      return `All months (${fyLabel})`;
+    }
+    return `${focusYmKeys.length} months selected`;
+  }, [focusYmKeys, allMonthsSelected, fiscalYear]);
+
+  const primaryFocus = parseYmKey(focusYmKeys[0] ?? defaultFocusYmKey());
 
   const comparePeriod = useMemo(
-    () => comparisonPeriodKeys(focus.year, focus.calMonth, compareMode, comparePickYm || null),
-    [focus.year, focus.calMonth, compareMode, comparePickYm],
+    () => comparisonPeriodKeys(primaryFocus.year, primaryFocus.calMonth, compareMode, comparePickYm || null),
+    [primaryFocus.year, primaryFocus.calMonth, compareMode, comparePickYm],
   );
 
+  const toggleSelectAllMonths = () => {
+    if (allMonthsSelected) {
+      const todayKey = defaultFocusYmKey();
+      const inToday = fyMonthOptions.find((o) => o.key === todayKey);
+      setFocusYmKeys([inToday?.key ?? fyMonthOptions[0]?.key ?? todayKey]);
+    } else {
+      setFocusYmKeys(allFyMonthKeys);
+    }
+  };
+
+  const toggleFocusMonth = (key: string) => {
+    setFocusYmKeys((prev) => {
+      const has = prev.includes(key);
+      if (has) {
+        const next = prev.filter((k) => k !== key);
+        return next.length > 0 ? next : prev;
+      }
+      if (comparePickYm === key) setComparePickYm('');
+      return [...prev, key];
+    });
+  };
+
   const focusLocs = useMemo(
-    () => aggregateByLocation(merged, [focusYm]).sort((a, b) => b.sale_value - a.sale_value),
-    [merged, focusYm],
+    () => aggregateByLocation(merged, focusYmKeys).sort((a, b) => b.sale_value - a.sale_value),
+    [merged, focusYmKeys],
   );
 
   const compareLocs = useMemo(
@@ -261,7 +301,7 @@ export default function B2CFusedOverviewAnalytics() {
     [merged, comparePeriod.keys],
   );
 
-  const focusTotals = useMemo(() => totalsForYmKeys(merged, [focusYm]), [merged, focusYm]);
+  const focusTotals = useMemo(() => totalsForYmKeys(merged, focusYmKeys), [merged, focusYmKeys]);
   const compareTotals = useMemo(
     () => (comparePeriod.keys.length ? totalsForYmKeys(merged, comparePeriod.keys) : null),
     [merged, comparePeriod.keys],
@@ -290,8 +330,13 @@ export default function B2CFusedOverviewAnalytics() {
           <select
             value={fiscalYear}
             onChange={(e) => {
-              setFiscalYear(e.target.value as FiscalYearId);
+              const fy = e.target.value as FiscalYearId;
+              setFiscalYear(fy);
               setComparePickYm('');
+              const opts = fyMonthKeysForYear(fy);
+              const todayKey = defaultFocusYmKey();
+              const pick = opts.find((o) => o.key === todayKey) ?? opts[0];
+              setFocusYmKeys(pick ? [pick.key] : []);
             }}
             className="w-full max-w-xs rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
           >
@@ -305,8 +350,15 @@ export default function B2CFusedOverviewAnalytics() {
 
         <div>
           <div className="flex items-center justify-between gap-2 mb-2 pr-1">
-            <span className="text-[10px] font-medium text-gray-600">Months</span>
+            <span className="text-[10px] font-medium text-gray-600">Select month</span>
             <div className="flex items-center gap-4 text-[10px] font-medium text-gray-500">
+              <button
+                type="button"
+                onClick={toggleSelectAllMonths}
+                className="min-w-[4.5rem] text-center font-semibold text-indigo-600 hover:text-indigo-800"
+              >
+                {allMonthsSelected ? 'Clear all' : 'Select all'}
+              </button>
               <span className="w-7 text-center">View</span>
               <span className="w-7 text-center">Compare</span>
             </div>
@@ -314,7 +366,7 @@ export default function B2CFusedOverviewAnalytics() {
           <ul className="max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
             {fyMonthOptions.map((o) => {
               const hasData = ymWithDataSet.has(o.key);
-              const isFocus = focusYm === o.key;
+              const isFocus = focusYmKeys.includes(o.key);
               const isCompare = comparePickYm === o.key;
               return (
                 <li
@@ -335,11 +387,8 @@ export default function B2CFusedOverviewAnalytics() {
                   <div className="flex items-center gap-4 shrink-0">
                     <MonthTick
                       active={isFocus}
-                      title="Show analytics for this month"
-                      onClick={() => {
-                        setFocusYm(o.key);
-                        if (comparePickYm === o.key) setComparePickYm('');
-                      }}
+                      title="Include this month in analytics"
+                      onClick={() => toggleFocusMonth(o.key)}
                     />
                     <MonthTick
                       active={isCompare}
@@ -356,8 +405,8 @@ export default function B2CFusedOverviewAnalytics() {
             })}
           </ul>
           <p className="text-[10px] text-gray-500 mt-2">
-            Tick <span className="font-medium">View</span> for the month to analyze; tick{' '}
-            <span className="font-medium">Compare</span> on another month for % change (tap again to clear).
+            Use <span className="font-medium">Select all</span> or tick <span className="font-medium">View</span> per month;
+            tick <span className="font-medium">Compare</span> on another month for % change (tap again to clear).
           </p>
         </div>
       </div>
@@ -407,7 +456,7 @@ export default function B2CFusedOverviewAnalytics() {
 
       <Card title="Location performance — orders" subtitle={focusLabel} className="text-sm">
         {ordersChart.length === 0 ? (
-          <div className="text-sm text-gray-500">No data for this month.</div>
+          <div className="text-sm text-gray-500">No data for selected month(s).</div>
         ) : (
           <div style={{ width: '100%', height: 260 }}>
             <ResponsiveContainer>
@@ -425,7 +474,7 @@ export default function B2CFusedOverviewAnalytics() {
 
       <Card title="Location performance — revenue" subtitle={focusLabel} className="text-sm">
         {ordersChart.length === 0 ? (
-          <div className="text-sm text-gray-500">No data for this month.</div>
+          <div className="text-sm text-gray-500">No data for selected month(s).</div>
         ) : (
           <div style={{ width: '100%', height: 260 }}>
             <ResponsiveContainer>
