@@ -2,23 +2,9 @@ import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Legend,
-  Line,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import { apiClient } from '../api/client';
-import B2CDailyOverviewAnalyticsPanel from '../components/b2c/B2CDailyOverviewAnalytics';
+import B2CFusedOverviewAnalytics from '../components/b2c/B2CFusedOverviewAnalytics';
+import { extractMonthlyPoints } from '../lib/b2cWorkbookParse';
 import { Card } from '../components/ui/Card';
 
 const B2C_LOCATION_OPTIONS = [
@@ -32,23 +18,6 @@ const B2C_LOCATION_OPTIONS = [
   'Kottayam',
   'Nilambur',
 ] as const;
-const MONTHS = [
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-  'January',
-  'February',
-  'March',
-] as const;
-const CHART_COLORS = ['#4f46e5', '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6', '#f97316'];
-
-type MonthName = (typeof MONTHS)[number];
 type Subsection = 'daily' | 'overview';
 
 interface B2CDailyEntry {
@@ -81,25 +50,10 @@ interface B2CWorkbookScanDetail {
   sheets: B2CWorkbookSheet[];
 }
 
-interface MonthlyPoint {
-  sheet: string;
-  location: string;
-  month: MonthName;
-  orders: number;
-  amount: number;
-  avgBillValue: number;
-}
-
 function fileSizeLabel(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function compactNumber(value: number): string {
-  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return `${Math.round(value)}`;
 }
 
 function formatSheetLabel(name: string): string {
@@ -115,17 +69,6 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function normalizeCell(s: string): string {
-  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function parseNum(raw: string | undefined): number | null {
-  const text = (raw ?? '').replace(/,/g, '').replace(/[^\d.-]/g, '').trim();
-  if (!text) return null;
-  const n = Number(text);
-  return Number.isFinite(n) ? n : null;
-}
-
 function isBlankRow(row: string[]): boolean {
   return row.every((c) => {
     const normalized = String(c || '')
@@ -138,95 +81,7 @@ function isBlankRow(row: string[]): boolean {
 
 function compactSheetRows(rows: string[][]): string[][] {
   if (!rows.length) return [];
-  const nonEmpty = rows.filter((r) => !isBlankRow(r));
-  return nonEmpty;
-}
-
-function isLikelyTotalLabel(value: string): boolean {
-  const v = value.trim().toLowerCase();
-  return v === 'total' || v === 'grand total' || v === 'totals';
-}
-
-function extractMonthlyPoints(sheet: B2CWorkbookSheet): MonthlyPoint[] {
-  const rows = sheet.rows ?? [];
-  if (rows.length === 0) return [];
-
-  let monthHeaderIdx = -1;
-  for (let r = 0; r < Math.min(rows.length, 30); r += 1) {
-    const cells = rows[r] ?? [];
-    const seen = new Set<MonthName>();
-    for (const cell of cells) {
-      const n = normalizeCell(cell);
-      for (const m of MONTHS) {
-        if (n.includes(m.toLowerCase())) seen.add(m);
-      }
-    }
-    if (seen.size >= 4) {
-      monthHeaderIdx = r;
-      break;
-    }
-  }
-  if (monthHeaderIdx < 0) return [];
-
-  const monthHeader = rows[monthHeaderIdx] ?? [];
-  const subHeader = rows[monthHeaderIdx + 1] ?? [];
-  const monthPositions: Array<{ month: MonthName; col: number }> = [];
-  MONTHS.forEach((m) => {
-    const idx = monthHeader.findIndex((c) => normalizeCell(c).includes(m.toLowerCase()));
-    if (idx >= 0) monthPositions.push({ month: m, col: idx });
-  });
-  monthPositions.sort((a, b) => a.col - b.col);
-  if (monthPositions.length === 0) return [];
-
-  const findByKeyword = (cells: string[], keyword: string): number =>
-    cells.findIndex((c) => normalizeCell(c).includes(keyword));
-
-  let locationCol = findByKeyword(subHeader, 'location');
-  if (locationCol < 0) locationCol = findByKeyword(monthHeader, 'location');
-  if (locationCol < 0) locationCol = 0;
-
-  let avgBillCol = findByKeyword(subHeader, 'avgbill');
-  if (avgBillCol < 0) avgBillCol = findByKeyword(monthHeader, 'avgbill');
-  if (avgBillCol < 0 && rows[monthHeaderIdx + 2]) {
-    avgBillCol = findByKeyword(rows[monthHeaderIdx + 2], 'avgbill');
-  }
-
-  const points: MonthlyPoint[] = [];
-  const dataStart = monthHeaderIdx + 2;
-  for (let r = dataStart; r < rows.length; r += 1) {
-    const row = rows[r] ?? [];
-    const location = (row[locationCol] ?? row[0] ?? '').trim();
-    if (!location || isLikelyTotalLabel(location)) continue;
-
-    monthPositions.forEach((entry, idx) => {
-      const endCol = idx < monthPositions.length - 1 ? monthPositions[idx + 1].col - 1 : row.length - 1;
-      let orderCol = -1;
-      let amountCol = -1;
-      for (let c = entry.col; c <= endCol; c += 1) {
-        const sh = normalizeCell(subHeader[c] ?? '');
-        if (orderCol < 0 && sh.includes('order')) orderCol = c;
-        if (amountCol < 0 && sh.includes('amount')) amountCol = c;
-      }
-      if (orderCol < 0 && entry.col + 1 <= endCol) orderCol = entry.col + 1;
-      if (amountCol < 0 && entry.col + 2 <= endCol) amountCol = entry.col + 2;
-
-      const orders = orderCol >= 0 ? parseNum(row[orderCol]) : null;
-      const amount = amountCol >= 0 ? parseNum(row[amountCol]) : null;
-      if (orders === null && amount === null) return;
-
-      const avgRaw = avgBillCol >= 0 ? parseNum(row[avgBillCol]) : null;
-      const avg = avgRaw ?? (orders && orders > 0 && amount !== null ? amount / orders : 0);
-      points.push({
-        sheet: sheet.name,
-        location,
-        month: entry.month,
-        orders: Number(orders ?? 0),
-        amount: Number(amount ?? 0),
-        avgBillValue: Number(avg ?? 0),
-      });
-    });
-  }
-  return points;
+  return rows.filter((r) => !isBlankRow(r));
 }
 
 function B2COverviewScannerSection() {
@@ -239,21 +94,6 @@ function B2COverviewScannerSection() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState<string>('all');
-  const [selectedSheet, setSelectedSheet] = useState<string>('all');
-  const [selectedMetrics, setSelectedMetrics] = useState<{ orders: boolean; amount: boolean; avgBill: boolean }>({
-    orders: true,
-    amount: true,
-    avgBill: false,
-  });
-  const [isMobile, setIsMobile] = useState<boolean>(typeof window !== 'undefined' ? window.innerWidth < 640 : false);
-
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 640);
-    onResize();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
 
   const loadScans = useCallback(async () => {
     try {
@@ -384,14 +224,6 @@ function B2COverviewScannerSection() {
     }
   };
 
-  const toggleMetric = (key: 'orders' | 'amount' | 'avgBill') => {
-    setSelectedMetrics((prev) => {
-      const next = { ...prev, [key]: !prev[key] };
-      if (!next.orders && !next.amount && !next.avgBill) return prev;
-      return next;
-    });
-  };
-
   const activeSheet = useMemo(() => {
     if (!scanDetail) return null;
     return scanDetail.sheets[activeSheetIndex] ?? null;
@@ -402,91 +234,15 @@ function B2COverviewScannerSection() {
     [scanDetail],
   );
 
-  const locationOptions = useMemo(
-    () => Array.from(new Set(monthlyPoints.map((p) => p.location))).sort((a, b) => a.localeCompare(b)),
-    [monthlyPoints],
-  );
-
-  const filteredPoints = useMemo(() => {
-    return monthlyPoints.filter((p) => {
-      if (selectedLocation !== 'all' && p.location !== selectedLocation) return false;
-      if (selectedSheet !== 'all' && p.sheet !== selectedSheet) return false;
-      return true;
-    });
-  }, [monthlyPoints, selectedLocation, selectedSheet]);
-
-  const locationSummary = useMemo(() => {
-    const map = new Map<string, { orders: number; amount: number }>();
-    filteredPoints.forEach((p) => {
-      const prev = map.get(p.location) ?? { orders: 0, amount: 0 };
-      prev.orders += p.orders;
-      prev.amount += p.amount;
-      map.set(p.location, prev);
-    });
-    return Array.from(map.entries())
-      .map(([location, v]) => ({
-        location,
-        orders: v.orders,
-        amount: v.amount,
-        avgBillValue: v.orders > 0 ? v.amount / v.orders : 0,
-      }))
-      .filter((r) => {
-        const n = r.location.trim().toLowerCase();
-        return !!n && !n.includes('total') && !n.includes('share');
-      })
-      .sort((a, b) => b.amount - a.amount);
-  }, [filteredPoints]);
-
-  const locationSummaryForCharts = useMemo(
-    () => locationSummary.slice(0, isMobile ? 6 : 10),
-    [locationSummary, isMobile],
-  );
-  const pieMetric: 'orders' | 'amount' = selectedMetrics.amount ? 'amount' : 'orders';
-  const locationBarMetric: 'orders' | 'amount' | 'avgBillValue' = selectedMetrics.orders
-    ? 'orders'
-    : selectedMetrics.amount
-      ? 'amount'
-      : 'avgBillValue';
-
-  const monthSummary = useMemo(() => {
-    const base = MONTHS.map((m) => ({ month: m, orders: 0, amount: 0 }));
-    const index = new Map<MonthName, number>();
-    MONTHS.forEach((m, i) => index.set(m, i));
-    filteredPoints.forEach((p) => {
-      const idx = index.get(p.month);
-      if (idx == null) return;
-      base[idx].orders += p.orders;
-      base[idx].amount += p.amount;
-    });
-    return base.map((r) => ({
-      ...r,
-      avgBillValue: r.orders > 0 ? r.amount / r.orders : 0,
-    }));
-  }, [filteredPoints]);
-
   const exportPowerBIWorkbook = () => {
     if (!monthlyPoints.length) return;
     const wb = XLSX.utils.book_new();
-
     const datasetRows = [
       ['Sheet', 'Location', 'Month', 'Orders', 'Amount', 'Avg Bill Value'],
-      ...filteredPoints.map((p) => [p.sheet, p.location, p.month, p.orders, p.amount, p.avgBillValue]),
+      ...monthlyPoints.map((p) => [p.sheet, p.location, p.month, p.orders, p.amount, p.avgBillValue]),
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(datasetRows), 'dataset');
-
-    const locRows = [
-      ['Location', 'Orders', 'Amount', 'Avg Bill Value'],
-      ...locationSummary.map((r) => [r.location, r.orders, r.amount, r.avgBillValue]),
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(locRows), 'location_summary');
-
-    const monthRows = [
-      ['Month', 'Orders', 'Amount', 'Avg Bill Value'],
-      ...monthSummary.map((r) => [r.month, r.orders, r.amount, r.avgBillValue]),
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(monthRows), 'month_summary');
-
-    XLSX.writeFile(wb, `b2c-powerbi-analytics-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `b2c-workbook-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
@@ -506,6 +262,14 @@ function B2COverviewScannerSection() {
               className="hidden"
             />
           </label>
+          <button
+            type="button"
+            disabled={!monthlyPoints.length}
+            onClick={exportPowerBIWorkbook}
+            className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+          >
+            Export parsed data
+          </button>
           <button
             type="button"
             onClick={() => setShowHistory((v) => !v)}
@@ -666,210 +430,6 @@ function B2COverviewScannerSection() {
         )}
       </Card>
 
-      <Card title="Analytics op" subtitle="Monthly Order vs Amount and Location wise item output">
-        {!monthlyPoints.length ? (
-          <div className="text-sm text-gray-500">
-            No monthly matrix detected yet. Expected columns like April..March with Orders/Amount (and optional Avg bill Value).
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-            <div className="xl:col-span-1 rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
-              <div>
-                <div className="text-[11px] font-semibold uppercase text-gray-500 mb-1">Filters</div>
-                <label className="text-xs text-gray-600">Location</label>
-                <select
-                  value={selectedLocation}
-                  onChange={(e) => setSelectedLocation(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
-                >
-                  <option value="all">All locations</option>
-                  {locationOptions.map((loc) => (
-                    <option key={loc} value={loc}>
-                      {loc}
-                    </option>
-                  ))}
-                </select>
-                <label className="mt-2 block text-xs text-gray-600">Sheet</label>
-                <select
-                  value={selectedSheet}
-                  onChange={(e) => setSelectedSheet(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs"
-                >
-                  <option value="all">All sheets</option>
-                  {(scanDetail?.sheets ?? []).map((s) => (
-                    <option key={s.name} value={s.name}>
-                      {formatSheetLabel(s.name)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="text-[11px] font-semibold uppercase text-gray-500 mb-1">Variables</div>
-                <label className="flex items-center gap-2 text-xs text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={selectedMetrics.orders}
-                    onChange={() => toggleMetric('orders')}
-                    className="rounded border-gray-300"
-                  />
-                  Orders
-                </label>
-                <label className="mt-1 flex items-center gap-2 text-xs text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={selectedMetrics.amount}
-                    onChange={() => toggleMetric('amount')}
-                    className="rounded border-gray-300"
-                  />
-                  Amount
-                </label>
-                <label className="mt-1 flex items-center gap-2 text-xs text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={selectedMetrics.avgBill}
-                    onChange={() => toggleMetric('avgBill')}
-                    className="rounded border-gray-300"
-                  />
-                  Avg bill value
-                </label>
-              </div>
-              <button
-                type="button"
-                onClick={exportPowerBIWorkbook}
-                className="w-full rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
-              >
-                Download Power BI workbook
-              </button>
-            </div>
-
-            <div className="xl:col-span-4 space-y-4">
-              {filteredPoints.length === 0 ? (
-                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                  No data for selected filters. Change sheet/location filters to see output.
-                </div>
-              ) : (
-                <>
-                  <div className="h-80 rounded-md border border-gray-200 p-2">
-                    <div className="text-[11px] text-gray-600 mb-2">Monthly Order Vs Amount</div>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={monthSummary}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="month"
-                          interval={isMobile ? 1 : 0}
-                          angle={isMobile ? 0 : -20}
-                          textAnchor={isMobile ? 'middle' : 'end'}
-                          height={isMobile ? 40 : 70}
-                          tick={{ fontSize: isMobile ? 10 : 11 }}
-                          tickFormatter={(v) => (isMobile ? String(v).slice(0, 3) : String(v))}
-                        />
-                        <YAxis yAxisId="left" tickFormatter={(v) => compactNumber(Number(v))} />
-                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => compactNumber(Number(v))} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px' }} />
-                        {selectedMetrics.orders && <Bar yAxisId="left" dataKey="orders" name="Orders" fill="#3b82f6" />}
-                        {selectedMetrics.amount && (
-                          <Line yAxisId="right" type="monotone" dataKey="amount" name="Amount" stroke="#ef4444" strokeWidth={2} />
-                        )}
-                        {selectedMetrics.avgBill && (
-                          <Line yAxisId="right" type="monotone" dataKey="avgBillValue" name="Avg bill" stroke="#a855f7" strokeWidth={2} />
-                        )}
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div className="h-72 rounded-md border border-gray-200 p-2">
-                      <div className="text-[11px] text-gray-600 mb-2">
-                        Location wise item ({pieMetric === 'amount' ? 'amount share' : 'orders share'})
-                      </div>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={locationSummaryForCharts} dataKey={pieMetric} nameKey="location" outerRadius={95} innerRadius={40}>
-                            {locationSummaryForCharts.map((_, idx) => (
-                              <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                        {!isMobile && (
-                          <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: '11px' }} />
-                        )}
-                        </PieChart>
-                      </ResponsiveContainer>
-                    {isMobile && (
-                      <div className="mt-2 text-[10px] text-gray-600 flex flex-wrap gap-x-3 gap-y-1">
-                        {locationSummaryForCharts.map((item, idx) => (
-                          <span key={item.location} className="inline-flex items-center gap-1">
-                            <span
-                              className="inline-block h-2 w-2 rounded-full"
-                              style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}
-                            />
-                            <span>{item.location.length > 14 ? `${item.location.slice(0, 14)}…` : item.location}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    </div>
-                    <div className="h-72 rounded-md border border-gray-200 p-2">
-                      <div className="text-[11px] text-gray-600 mb-2">Location wise item ({locationBarMetric})</div>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={locationSummaryForCharts}
-                          layout="vertical"
-                      margin={{ top: 8, right: 10, left: isMobile ? 10 : 50, bottom: 8 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis type="number" tickFormatter={(v) => compactNumber(Number(v))} />
-                      <YAxis
-                        type="category"
-                        dataKey="location"
-                        width={isMobile ? 78 : 125}
-                        tick={{ fontSize: isMobile ? 9 : 10 }}
-                        tickFormatter={(v) => {
-                          const t = String(v);
-                          return isMobile && t.length > 10 ? `${t.slice(0, 10)}…` : t;
-                        }}
-                      />
-                          <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px' }} />
-                          <Bar
-                            dataKey={locationBarMetric}
-                            name={locationBarMetric === 'avgBillValue' ? 'Avg bill value' : locationBarMetric}
-                            fill="#22c55e"
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  <div className="w-full overflow-x-auto">
-                    <table className="min-w-full text-xs">
-                      <thead className="bg-gray-50 text-[11px] uppercase text-gray-500">
-                        <tr>
-                          <th className="px-3 py-2 text-left">Location</th>
-                          <th className="px-3 py-2 text-right">Orders</th>
-                          <th className="px-3 py-2 text-right">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {locationSummary.map((r) => (
-                          <tr key={r.location}>
-                            <td className="px-3 py-2">{r.location}</td>
-                            <td className="px-3 py-2 text-right">{r.orders.toLocaleString()}</td>
-                            <td className="px-3 py-2 text-right">
-                              {r.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </Card>
     </div>
   );
 }
@@ -982,13 +542,13 @@ export default function B2CSalesEntryPage({ startSection = 'daily' }: { startSec
       {subsection === 'overview' ? (
         <>
           <div className="md:hidden">
-            <Card title="B2C analytics" subtitle="Location performance from daily entries (current month)">
-              <B2CDailyOverviewAnalyticsPanel />
+            <Card title="B2C analytics" subtitle="FY workbook + daily entries — pick month & compare">
+              <B2CFusedOverviewAnalytics />
             </Card>
           </div>
           <div className="hidden md:block space-y-4">
-            <Card title="B2C analytics" subtitle="Location performance from daily entries (current month)">
-              <B2CDailyOverviewAnalyticsPanel />
+            <Card title="B2C analytics" subtitle="FY workbook + daily entries — pick month & compare">
+              <B2CFusedOverviewAnalytics />
             </Card>
             <B2COverviewScannerSection />
           </div>
